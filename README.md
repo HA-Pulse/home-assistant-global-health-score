@@ -6,7 +6,7 @@
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/d-n91/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/d-n91/home-assistant-global-health-score/releases)
 ![Integration Usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Integration%20usage&suffix=%2B%20Installs&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)
-[![GitHub Stars](https://img.shields.io/github/stars/D-N91/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/D-N91/home-assistant-global-health-score/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/d-n91/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/D-N91/home-assistant-global-health-score/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support%20my%20work-yellow?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/DN91)
 ![AI-Assisted](https://img.shields.io/badge/AI-Assisted-blue?style=for-the-badge)
 
