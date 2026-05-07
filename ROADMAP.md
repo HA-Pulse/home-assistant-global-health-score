@@ -44,6 +44,19 @@ Same pattern should be applied to the RAM and I/O recommendation strings for con
 
 **Scope:** Backend only (`__init__.py` + `const.py` + `strings.json`). No scoring logic changes, no breaking changes to sensor attributes.
 
+### Smarter Zombie Grace Period for Battery-Class Sensors (#62)
+
+**Problem:** Battery sensors (`device_class: battery`) and operating voltage sensors
+(e.g., Homematic *Betriebsspannungspegel*) go `unavailable` when a Zigbee or Homematic
+coordinator restarts.
+
+**Solution:** Apply a separate, extended grace period for entities with
+`device_class: battery` and measurement-type voltage sensors. Candidates:
+- Increase the grace period to 60 minutes for `device_class: battery` entities.
+
+**Scope:** `__init__.py` (`_calc_zombies()`). No attribute renames, no scoring formula
+changes.
+
 ---
 
 ## Declined
