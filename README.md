@@ -23,10 +23,11 @@ As Home Assistant matures into a mission-critical Smart Home OS, the need for a 
 
 ---
 ### Featured In
-- [How-To Geek](https://www.howtogeek.com/this-tool-gave-my-home-assistant-server-a-rating-and-told-me-how-to-improve-it/) — *"This tool gave my Home Assistant server a rating (and told me how to improve it)"*
-- [XDA Developers](https://www.xda-developers.com/tool-graded-home-assistant-server-told-how-make-better/) — *"This tool graded my Home Assistant server and told me how to make it better"*
-- [SmartHütte Podcast](https://www.youtube.com/watch?v=G892ii7YTL8&t=48s) — Episode 30, at 0:48 (German)
-- [HomeTech.fm Podcast](https://www.youtube.com/watch?v=IrIW2VR7qic&t=3676s) — Episode 569, at 1:01:16 (English)
+- [How-To Geek](https://www.howtogeek.com/this-tool-gave-my-home-assistant-server-a-rating-and-told-me-how-to-improve-it/) - *"This tool gave my Home Assistant server a rating (and told me how to improve it)"*
+- [XDA Developers](https://www.xda-developers.com/tool-graded-home-assistant-server-told-how-make-better/) - *"This tool graded my Home Assistant server and told me how to make it better"*
+- [SmartHütte Podcast](https://www.youtube.com/watch?v=G892ii7YTL8&t=48s) - Episode 30, at 0:48 (German)
+- [HomeTech.fm Podcast](https://www.youtube.com/watch?v=IrIW2VR7qic&t=3676s) - Episode 569, at 1:01:16 (English)
+- [Simon42 Youtube Video](https://www.youtube.com/watch?v=btd66ndsUuA) - Interview with D-N91, creator of HAGHS (German)
 ---
 
 ### Important: Upgrading from v2.1.x to v2.2+ (Migration Error)
