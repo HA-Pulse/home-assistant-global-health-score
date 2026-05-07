@@ -8,6 +8,28 @@ This document outlines planned features and improvements for the Home Assistant 
 
 Auto-detect under-voltage conditions on Raspberry Pi devices via `binary_sensor.rpi_power_status`. A `Problem` state applies a flat 20-point penalty to the hardware score. No configuration needed — the check is skipped automatically on non-RPi hardware.
 
+### Bug Fix: Unregistered Ghost Zombie Entities (#61)
+
+**Problem:** Entities that exist in HA's state machine but have no entry in the entity registry are correctly detected as zombies but are completely invisible in the HA UI. Users cannot identify or resolve them, and there is no indication in the `zombie_entities` attribute that these entities are unregistered.
+
+**Solution:**
+- Mark unregistered zombie entities with an `[unregistered]` prefix in the `zombie_entities` attribute.
+- Emit a `WARNING` log entry so users can locate the entity ID via Settings > System > Logs.
+
+**Scope:** `__init__.py` (`_calc_zombies()`). No attribute renames, no scoring changes.
+
+### Bug Fix: Config Bonus Masking Zombie Penalty (#61)
+
+**Problem:** The recorder configuration bonus (`config_bonus`, up to +10 pts) can fully negate the ratio-based zombie penalty on large instances. Result: a score of 100 is returned even when zombies are detected — violating the accuracy principle.
+
+**Example:** 3 zombies / 300 total entities → p_zombie = 7 → app_score = min(100, 100 − 7 + 10) = 100.
+
+**Solution:** Enforce a hard cap: when `zombie_count > 0`, `app_final` is capped at 99. Score 100 is only achievable with zero detected issues.
+
+**Scope:** `__init__.py` (`_async_calc_application()`). One additional line after the existing `app_final` calculation.
+
+---
+
 ## Planned
 
 ### PSI-Aware Recommendation Text
@@ -34,4 +56,4 @@ Same pattern should be applied to the RAM and I/O recommendation strings for con
 
 ---
 
-*Last updated: 2026-04-09*
+*Last updated: 2026-05-07*
