@@ -57,6 +57,14 @@ coordinator restarts.
 **Scope:** `__init__.py` (`_calc_zombies()`). No attribute renames, no scoring formula
 changes.
 
+### Update Grace Period (7 Days)
+
+**Problem:** The `update_count` penalty deducts 5 points per pending update entity immediately when an update becomes available. This penalises normal user behaviour — most updates are installed within a few days — and causes score fluctuations that do not reflect a genuine health issue.
+
+**Solution:** Introduce a 7-day grace period for `update_count`. An update entity only contributes to the penalty if it has been in the `available` state for more than 7 days. This requires persisting the first-seen timestamp per update entity across coordinator runs (e.g., in `hass.data`). The `p_core_lag` penalty (20 pts for HA Core ≥ 3 minor versions behind) is unaffected.
+
+**Scope:** `__init__.py` (`_calc_updates()`). Persistent timestamp tracking in coordinator state. No changes to scoring formula, thresholds, or attributes.
+
 ---
 
 ## Declined
