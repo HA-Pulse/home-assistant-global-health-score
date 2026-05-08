@@ -29,15 +29,10 @@ STORAGE_TYPES: list[str] = ["sd-card", "ssd", "emmc"]
 REC_CPU_LOAD = "\u26a1 Optimization: CPU load is impacting score ({cpu_pct:.1f}%)."
 REC_RAM_PRESSURE = "\u26a1 Optimization: Memory pressure is impacting score ({ram_pct:.1f}%)."
 REC_IO_PRESSURE = "\u26a1 Optimization: I/O pressure is impacting score ({io_pct:.1f}%)."
-REC_DISK_SD_LOW = (
-    "\u26a0\ufe0f Disk Space: Only {free_gb:.1f} GB free on {storage_type}!"
-)
-REC_DISK_SSD_LOW = (
-    "\u26a0\ufe0f Disk Space: Less than 10% free ({free_gb:.1f} GB)!"
-)
+REC_DISK_SD_LOW = "\u26a0\ufe0f Disk Space: Only {free_gb:.1f} GB free on {storage_type}!"
+REC_DISK_SSD_LOW = "\u26a0\ufe0f Disk Space: Less than 10% free ({free_gb:.1f} GB)!"
 REC_DB_OVER_LIMIT = (
-    "\U0001f5c4\ufe0f Database: DB ({db_gb:.1f} GB) exceeds "
-    "dynamic limit ({limit_gb:.1f} GB)."
+    "\U0001f5c4\ufe0f Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB)."
 )
 REC_BACKUP_STALE = "\U0001f6a8 Security: Stale backup detected!"
 REC_UPDATES_PENDING = "\U0001f4e6 Maintenance: {count} update(s) pending."

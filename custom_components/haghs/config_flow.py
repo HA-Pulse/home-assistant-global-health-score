@@ -39,22 +39,16 @@ def _schema_with_psi(psi_available: bool) -> vol.Schema:
 
 FALLBACK_SENSORS_SCHEMA = {
     CONF_CPU_SENSOR: selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            filter=(selector.EntityFilterSelectorConfig(domain="sensor"))
-        )
+        selector.EntitySelectorConfig(filter=(selector.EntityFilterSelectorConfig(domain="sensor")))
     ),
     CONF_RAM_SENSOR: selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            filter=(selector.EntityFilterSelectorConfig(domain="sensor"))
-        )
+        selector.EntitySelectorConfig(filter=(selector.EntityFilterSelectorConfig(domain="sensor")))
     ),
 }
 
 
 _BASE_SCHEMA = {
-    vol.Required(
-        CONF_STORAGE_TYPE, default=DEFAULT_STORAGE_TYPE
-    ): selector.SelectSelector(
+    vol.Required(CONF_STORAGE_TYPE, default=DEFAULT_STORAGE_TYPE): selector.SelectSelector(
         selector.SelectSelectorConfig(
             options=STORAGE_TYPES,
             mode=selector.SelectSelectorMode.DROPDOWN,
@@ -62,9 +56,7 @@ _BASE_SCHEMA = {
     ),
     vol.Optional(CONF_IGNORE_LABEL): selector.LabelSelector(),
     vol.Optional(CONF_DB_SENSOR): selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            filter=selector.EntityFilterSelectorConfig(domain="sensor")
-        )
+        selector.EntitySelectorConfig(filter=selector.EntityFilterSelectorConfig(domain="sensor"))
     ),
 }
 
@@ -106,9 +98,7 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             return self.async_create_entry(title="Global Health Score", data=user_input)
-        psi = await self.hass.async_add_executor_job(
-            HaghsDataUpdateCoordinator._read_psi_sync
-        )
+        psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
         schema = _schema_with_psi(psi.available)
 
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -130,9 +120,7 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Current values: options take priority, then data, then defaults
         current = {**self._config_entry.data, **self._config_entry.options}
-        psi = await self.hass.async_add_executor_job(
-            HaghsDataUpdateCoordinator._read_psi_sync
-        )
+        psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
         schema = _schema_with_psi(psi.available).extend(_EXTRA_OPTIONS_SCHEMA)
 
         return self.async_show_form(

@@ -33,9 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     config = {**entry.data, **entry.options}
     psi = await hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
-    if not psi.available and not (
-        CONF_CPU_SENSOR in config and CONF_RAM_SENSOR in config
-    ):
+    if not psi.available and not (CONF_CPU_SENSOR in config and CONF_RAM_SENSOR in config):
         ir.async_create_issue(
             hass,
             DOMAIN,

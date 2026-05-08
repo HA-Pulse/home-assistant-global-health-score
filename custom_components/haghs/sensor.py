@@ -1,4 +1,5 @@
 """HAGHS Sensor — CoordinatorEntity backed by HaghsDataUpdateCoordinator."""
+
 from __future__ import annotations
 
 from typing import Any

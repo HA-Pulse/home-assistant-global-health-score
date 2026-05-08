@@ -383,9 +383,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if psi.io is not None:
             hardware_final = max(
                 0.0,
-                min(
-                    100.0, (score_cpu + score_ram + score_io + score_disk) / 4 - p_power
-                ),
+                min(100.0, (score_cpu + score_ram + score_io + score_disk) / 4 - p_power),
             )
         else:
             hardware_final = max(
@@ -510,9 +508,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_get_disk_usage(self) -> Any | None:
         """Return full psutil disk_usage result, or None on failure."""
         try:
-            return await self.hass.async_add_executor_job(
-                psutil.disk_usage, self._config_dir
-            )
+            return await self.hass.async_add_executor_job(psutil.disk_usage, self._config_dir)
         except (OSError, FileNotFoundError):
             _LOGGER.warning(
                 "HAGHS: Could not read disk usage for %s — assuming healthy",
@@ -536,9 +532,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         db_mb, p_db, db_limit_mb = await self._async_calc_maintenance()
 
         # D. UPDATES
-        p_backup, update_count, p_updates, p_core_lag, pending_updates = (
-            self._calc_updates()
-        )
+        p_backup, update_count, p_updates, p_core_lag, pending_updates = self._calc_updates()
 
         # E. CONFIG AUDIT — bonus for good recorder configuration
         config_bonus = self._calc_config_audit()
@@ -547,13 +541,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             0,
             min(
                 100,
-                100
-                - p_zombie
-                - p_integration
-                - p_backup
-                - p_updates
-                - p_db
-                + config_bonus,
+                100 - p_zombie - p_integration - p_backup - p_updates - p_db + config_bonus,
             ),
         )
 
@@ -691,9 +679,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Default: local SQLite file
         try:
-            size_bytes: int = await self.hass.async_add_executor_job(
-                os.path.getsize, self._db_path
-            )
+            size_bytes: int = await self.hass.async_add_executor_job(os.path.getsize, self._db_path)
             return size_bytes / (1024 * 1024)
         except OSError:
             _LOGGER.debug(
