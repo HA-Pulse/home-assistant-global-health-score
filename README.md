@@ -166,13 +166,31 @@ Changes apply immediately, no restart required.
 
 If you use an **external database** (MariaDB, PostgreSQL) instead of the built-in SQLite, HAGHS cannot auto-detect the database size. To enable database monitoring for your setup:
 
-1. Create a sensor that reports your external database size **in MB** (e.g., via the SQL integration, a REST sensor, or a custom component).
-2. Go to **Settings > Integrations > HAGHS > Configure**.
-3. Select your database size sensor in the **"Database size sensor (optional)"** field.
+**1. Create a SQL sensor (no YAML needed):**
 
-**Examples of compatible sensors:**
-* `sensor.mariadb_size` - MariaDB database size via SQL integration
-* `sensor.postgres_db_size` - PostgreSQL database size via SQL integration
+Go to **Settings > Devices & Services > Add Integration > search "SQL"** and fill in:
+
+- **Database URL:** `mysql://USER:PASSWORD@IP_ADDRESS/homeassistant?charset=utf8mb4`
+  *(Leave empty if MariaDB is already configured as your Recorder database)*
+- **Name:** `MariaDB Size`
+- **Query:**
+  ```sql
+  SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb
+  FROM information_schema.tables
+  WHERE table_schema = 'homeassistant';
+  ```
+  *(Replace `homeassistant` with your actual database name)*
+- **Column:** `size_mb`
+
+In **Advanced Options:**
+
+- **Unit of Measurement:** `MB`
+- **Device Class:** `Data size`
+- **State Class:** `Measurement`
+
+**2. Select the sensor in HAGHS:**
+
+Go to **Settings > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
 
 > **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. If you use an external database and do not provide a sensor, the database score will simply be neutral (no penalty, no monitoring). The sensor must report the value in **MB**, not bytes, not GB.
 
