@@ -190,7 +190,7 @@ In **Advanced Options:**
 
 **2. Select the sensor in HAGHS:**
 
-Go to **Settings > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
+Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
 
 > **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. If you use an external database and do not provide a sensor, the database score will simply be neutral (no penalty, no monitoring). The sensor must report the value in **MB**, not bytes, not GB.
 
@@ -446,7 +446,7 @@ Each pending update costs **5 pts**. A Core version lag (≥3 months behind) add
 Entities that just became `unavailable` or `unknown` are ignored for 15 minutes. This prevents your score from dropping during brief network hiccups or device reboots. After 15 minutes, they count as zombies.
 
 **Can I change the update interval?**
-Yes. Go to **Settings > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
+Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
 
 **What happens if a sub-calculation fails?**
 HAGHS uses a safety net: if any pillar calculation times out or throws an error, it falls back to a neutral score (100 / no penalty) and logs a warning. The sensor never crashes.
