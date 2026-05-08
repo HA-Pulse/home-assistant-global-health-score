@@ -1,0 +1,84 @@
+name: Collect Analytics
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Run daily at midnight UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Fetch analytics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import requests
+          import json
+          import os
+          from datetime import datetime
+          
+          token = os.getenv('GITHUB_TOKEN')
+          headers = {"Authorization": f"token {token}"}
+          
+          print("Fetching clone data...")
+          clones_response = requests.get(
+            "https://api.github.com/repos/D-N91/home-assistant-global-health-score/traffic/clones",
+            headers=headers
+          )
+          
+          print("Fetching views data...")
+          views_response = requests.get(
+            "https://api.github.com/repos/D-N91/home-assistant-global-health-score/traffic/views",
+            headers=headers
+          )
+          
+          if clones_response.status_code != 200:
+            print(f"Clone fetch failed: {clones_response.status_code}")
+            clones = None
+          else:
+            clones = clones_response.json()
+          
+          if views_response.status_code != 200:
+            print(f"Views fetch failed: {views_response.status_code}")
+            views = None
+          else:
+            views = views_response.json()
+          
+          data = {
+            "timestamp": datetime.now().isoformat(),
+            "clones": clones,
+            "views": views
+          }
+          
+          history = []
+          if os.path.exists('analytics_history.json'):
+            with open('analytics_history.json') as f:
+              history = json.load(f)
+          
+          history.append(data)
+          
+          with open('analytics_history.json', 'w') as f:
+            json.dump(history, f, indent=2)
+          
+          if clones:
+            print(f"✓ Clones: {clones.get('count', 'N/A')}")
+          if views:
+            print(f"✓ Visitors: {views.get('count', 'N/A')}")
+          print(f"✓ Data saved to analytics_history.json")
+          EOF
+      
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add analytics_history.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: update analytics data" && git push)
