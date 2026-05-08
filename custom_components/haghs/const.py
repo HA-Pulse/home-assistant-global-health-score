@@ -1,5 +1,8 @@
 """Constants for the HAGHS integration."""
 
+from dataclasses import dataclass
+from enum import StrEnum
+
 DOMAIN = "haghs"
 
 # Config Keys
@@ -12,7 +15,6 @@ CONF_UPDATE_INTERVAL = "update_interval"
 
 # Defaults
 DEFAULT_NAME = "System: HA - Global Health Score"
-DEFAULT_IGNORE_LABEL = "haghs_ignore"
 DEFAULT_STORAGE_TYPE = "sd-card"
 DEFAULT_UPDATE_INTERVAL = 60  # seconds
 
@@ -46,3 +48,20 @@ REC_ALL_CLEAR = "\u2705 System optimized"
 
 # Fallback text for empty lists in state attributes
 ATTR_NONE = "None"
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class VersionInformation:
+    """Version information."""
+
+    def __repr__(self) -> str:
+        return f"{self.major}.{self.minor}"
+
+    major: int
+    minor: int
+
+
+class IssueIds(StrEnum):
+    """Issue ids."""
+
+    FALLBACK_MISSING = "fallback_missing"

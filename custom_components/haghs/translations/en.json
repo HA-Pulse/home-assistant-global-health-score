@@ -12,11 +12,38 @@
           "db_sensor": "Database size sensor (optional)"
         },
         "data_description": {
-          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
-          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
+          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
+          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
           "ignore_label": "Select a label from your Home Assistant labels. Entities and devices with this label are excluded from zombie detection and update penalties. Create the label first under Settings → Labels if it does not exist yet.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size')."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "fallback_missing": {
+      "message": "PSI is unavailable, and CPU and RAM fallback sensors are not configured."
+    }
+  },
+  "issues": {
+    "fallback_missing": {
+      "title": "PSI is unavailable and fallback sensors are missing",
+      "description": "HAGHS cannot start because Linux PSI data is unavailable and CPU/RAM fallback sensors are not configured. Provide both sensors to recover without restarting Home Assistant.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Configure CPU and RAM fallback sensors",
+            "description": "Select both fallback sensors and submit to update this integration entry.",
+            "data": {
+              "cpu_sensor": "CPU usage sensor",
+              "ram_sensor": "RAM usage sensor"
+            },
+            "data_description": {
+              "cpu_sensor": "Select the sensor that reports CPU usage in percent.",
+              "ram_sensor": "Select the sensor that reports memory usage in percent."
+            }
+          }
         }
       }
     }
@@ -35,8 +62,8 @@
           "update_interval": "Update interval"
         },
         "data_description": {
-          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
-          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
+          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
+          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
           "ignore_label": "Select a label from your Home Assistant labels. Entities and devices with this label are excluded from zombie detection and update penalties. Create the label first under Settings → Labels if it does not exist yet.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size').",
