@@ -50,12 +50,48 @@ Same pattern should be applied to the RAM and I/O recommendation strings for con
 (e.g., Homematic *Betriebsspannungspegel*) go `unavailable` when a Zigbee or Homematic
 coordinator restarts.
 
+Additionally, a user reported (2026-05-08) that battery sensors reappear in the zombie list after a system restart even when the `haghs_ignore` label is correctly assigned. The relationship between this and the grace period fix is still under investigation.
+
 **Solution:** Apply a separate, extended grace period for entities with
 `device_class: battery` and measurement-type voltage sensors. Candidates:
 - Increase the grace period to 60 minutes for `device_class: battery` entities.
 
 **Scope:** `__init__.py` (`_calc_zombies()`). No attribute renames, no scoring formula
 changes.
+
+### Bug Fix: Denominator in `_calc_zombies`
+
+**Problem:** `hass.states.async_all()` returns all states, including `automation`, `script`, `person`, `zone`, `input_boolean` etc., which can never be zombies. The zombie detection only runs over `ZOMBIE_DOMAINS` (9 specific domains), but the total entity count used as the denominator includes all domains.
+
+**Result:** An artificially small ratio — an instance with many automations and few sensor entities is penalized far less for the same number of zombies compared to a pure sensor setup.
+
+**Solution:** Count only entities from `ZOMBIE_DOMAINS` as the denominator, consistent with zombie detection logic.
+
+**Scope:** `__init__.py` (`_calc_zombies()`).
+
+### Bug Fix: HA Restart and `last_changed` (Zombie Grace Period)
+
+**Problem:** After a HA restart, states are restored from the recorder database including their historical `last_changed` timestamp. An entity that was `unavailable` for 2 hours before shutdown will have `last_changed = "2+ hours ago"` after restart — HAGHS counts it as a zombie immediately instead of waiting for the 15-minute grace period.
+
+**Solution:** Apply an extended grace period after a HA restart, since `last_changed` timestamps restored from the database are historical and cannot be used as a reliable baseline.
+
+**Scope:** `__init__.py` (`_calc_zombies()`).
+
+### Recommendation Flags as Boolean Attributes
+
+**Problem:** Dashboard cards and external integrations must parse the `recommendations` string to react to specific advisor states. This is brittle and version-sensitive.
+
+**Solution:** Expose individual boolean attributes alongside the existing `recommendations` string:
+
+```
+rec_backup_stale: true
+rec_updates_pending: true
+rec_zombie: false
+```
+
+Cards and automations can check `state_attr(e, 'rec_backup_stale')` directly. Intended as the interface standard for all HA Pulse integrations.
+
+**Scope:** `__init__.py` + sensor attribute definitions. No changes to existing attributes.
 
 ### Update Grace Period (7 Days)
 
@@ -75,6 +111,12 @@ changes.
 
 **Reasoning:** CPU temperature is a predictive hardware metric, not a current health indicator. If thermal throttling occurs, it already surfaces through elevated PSI stall values, which HAGHS captures. Adding temperature as a scoring component would dilute the existing hardware score without adding actionable health information. The required user configuration (sensor selection, threshold definition per hardware platform) conflicts with the pragmatism principle.
 
+### Check Entities URL Filtering
+
+**Status:** Not implementable within HAGHS.
+
+**Reasoning:** HA does not support URL-based filtering of the entity list by status. `/config/entities/edit/ENTITY_ID` is not a valid route. The `?domain=` URL parameter is ignored by HA's entity configuration page. Markdown links inside HTML `<summary>` tags are not rendered as clickable links. This would require a feature request to HA Core.
+
 ---
 
-*Last updated: 2026-05-07*
+*Last updated: 2026-05-08*
