@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.const import DOMAIN
+from custom_components.haghs.const import DATA_BOOT_TIME, DOMAIN
 from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
 
 
@@ -22,6 +22,28 @@ def _make_zombie(hass: HomeAssistant, entity_id: str, age_minutes: int = 30) -> 
     hass.states.async_set(entity_id, STATE_UNAVAILABLE)
     state = hass.states.get(entity_id)
     state.last_changed = dt_util.utcnow() - timedelta(minutes=age_minutes)
+
+
+def _coordinator_with_boot_age(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    boot_age_minutes: int = 60,
+) -> HaghsDataUpdateCoordinator:
+    """Create a coordinator with a boot-time baseline N minutes in the past.
+
+    By default we simulate "HA booted an hour ago" so any state with
+    last_changed in the last hour is treated as post-boot and the natural
+    15-minute grace period applies.
+    """
+    hass.data.setdefault(DOMAIN, {})[DATA_BOOT_TIME] = dt_util.utcnow() - timedelta(
+        minutes=boot_age_minutes
+    )
+    return HaghsDataUpdateCoordinator(hass, entry)
+
+
+# ============================================================================
+# Denominator semantics (#9)
+# ============================================================================
 
 
 async def test_denominator_uses_zombie_domains_only(hass: HomeAssistant) -> None:
@@ -39,7 +61,7 @@ async def test_denominator_uses_zombie_domains_only(hass: HomeAssistant) -> None
     for i in range(50):
         hass.states.async_set(f"automation.test_{i}", "on")
 
-    coordinator = HaghsDataUpdateCoordinator(hass, entry)
+    coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
 
     assert zombie_count == 1
@@ -58,7 +80,7 @@ async def test_denominator_zero_when_no_zombie_domain_states(
     for i in range(10):
         hass.states.async_set(f"script.y_{i}", "off")
 
-    coordinator = HaghsDataUpdateCoordinator(hass, entry)
+    coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
 
     assert zombie_count == 0
@@ -75,7 +97,7 @@ async def test_denominator_ignores_non_zombie_domains(hass: HomeAssistant) -> No
     _make_zombie(hass, "sensor.zombie_one")
     _make_zombie(hass, "sensor.zombie_two")
 
-    coordinator = HaghsDataUpdateCoordinator(hass, entry)
+    coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, p_zombie_baseline, zombie_count = coordinator._calc_zombies()
 
     assert zombie_count == 2
@@ -90,6 +112,11 @@ async def test_denominator_ignores_non_zombie_domains(hass: HomeAssistant) -> No
     assert p_zombie_after == p_zombie_baseline
 
 
+# ============================================================================
+# Grace periods (#10 + existing 15-minute window)
+# ============================================================================
+
+
 async def test_grace_period_still_active(hass: HomeAssistant) -> None:
     """Entities unavailable for less than 15 minutes are still ignored."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
@@ -99,8 +126,84 @@ async def test_grace_period_still_active(hass: HomeAssistant) -> None:
         hass.states.async_set(f"sensor.healthy_{i}", "100")
     _make_zombie(hass, "sensor.recent", age_minutes=5)
 
-    coordinator = HaghsDataUpdateCoordinator(hass, entry)
+    coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
+
+
+async def test_restart_grace_skips_recently_restored_state(
+    hass: HomeAssistant,
+) -> None:
+    """A 2-hour-old last_changed is ignored within 15 min of HA boot.
+
+    Reproduces #10: after a restart, last_changed is restored from the
+    recorder and predates the boot. Without this fix the entity would be
+    flagged as a zombie immediately.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(5):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+    _make_zombie(hass, "sensor.restored", age_minutes=120)
+
+    coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=5)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+    assert p_zombie == 0
+
+
+async def test_restart_grace_releases_after_15_minutes(hass: HomeAssistant) -> None:
+    """After 15 min post-boot, restored zombies are flagged again."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(5):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+    _make_zombie(hass, "sensor.restored", age_minutes=120)
+
+    coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=30)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert p_zombie > 0
+
+
+async def test_post_boot_grace_uses_last_changed(hass: HomeAssistant) -> None:
+    """For entities that went unavailable after boot, last_changed wins."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(5):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+    # HA booted 60 min ago, sensor went unavailable 5 min ago. Effective
+    # baseline is the (newer) last_changed, so the standard grace applies.
+    _make_zombie(hass, "sensor.recent_after_boot", age_minutes=5)
+
+    coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=60)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+    assert p_zombie == 0
+
+
+# ============================================================================
+# hass.data persistence
+# ============================================================================
+
+
+async def test_boot_time_persists_across_coordinator_reloads(
+    hass: HomeAssistant,
+) -> None:
+    """Reloading the integration must not reset the boot-time baseline."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    first = HaghsDataUpdateCoordinator(hass, entry)
+    second = HaghsDataUpdateCoordinator(hass, entry)
+
+    assert first._boot_time == second._boot_time
+    assert hass.data[DOMAIN][DATA_BOOT_TIME] == first._boot_time

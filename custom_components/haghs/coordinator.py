@@ -31,6 +31,7 @@ from .const import (
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
+    DATA_BOOT_TIME,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -173,6 +174,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Recorder info — populated on each update cycle (Phase 3 ready)
         self.recorder_info: _RecorderInfo = _RecorderInfo()
+
+        # Boot-time baseline for zombie grace. Stored in hass.data so it
+        # survives integration reloads and reflects the actual HA boot rather
+        # than the latest reload. setdefault preserves an existing value.
+        hass_data = hass.data.setdefault(DOMAIN, {})
+        self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
 
     # ------------------------------------------------------------------
     # Main update — orchestrates sub-calculations with safety net
@@ -586,8 +593,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
 
-            # Grace period: skip entities that changed < 15 min ago
-            if (now - state.last_changed).total_seconds() < 900:
+            # Grace period: skip entities that changed < 15 min ago.
+            # last_changed values older than the recorded boot time were
+            # restored from the recorder and are not a reliable baseline,
+            # so treat boot time as the floor.
+            effective_seen = max(state.last_changed, self._boot_time)
+            if (now - effective_seen).total_seconds() < 900:
                 continue
 
             entity_id = state.entity_id

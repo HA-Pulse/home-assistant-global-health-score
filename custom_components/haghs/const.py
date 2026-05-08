@@ -21,6 +21,10 @@ DEFAULT_UPDATE_INTERVAL = 60  # seconds
 # Storage type choices for the config flow dropdown
 STORAGE_TYPES: list[str] = ["sd-card", "ssd", "emmc"]
 
+# Internal hass.data key holding the boot-time baseline used by zombie
+# detection to ignore last_changed values restored from the recorder.
+DATA_BOOT_TIME = "_boot_time"
+
 # ---------------------------------------------------------------------------
 # Recommendation templates (i18n-ready — mirrored in strings.json)
 #
