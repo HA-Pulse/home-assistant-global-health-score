@@ -101,6 +101,16 @@ Cards and automations can check `state_attr(e, 'rec_backup_stale')` directly. In
 
 **Scope:** `__init__.py` (`_calc_updates()`). Persistent timestamp tracking in coordinator state. No changes to scoring formula, thresholds, or attributes.
 
+### Config Audit Bonus Visibility
+
+**Problem:** Users with a score below 100 and no active Advisor warnings have no way to understand why their score is not higher. The Advisor only flags active health issues, not missed bonus opportunities.
+
+**Example (#67):** Application score 90, no warnings. Cause: no entity filter active (missing +5), purge threshold possibly not met (missing +5). No explanation in the card.
+
+**Solution:** A separate "Tips" section in the dashboard card (visually distinct from warnings) that explains which Config Audit bonus points are not being earned. E.g.: "Enable entity filters in your recorder configuration to earn +5 bonus points."
+
+**Scope:** Dashboard card template only. No backend changes required.
+
 ---
 
 ## Declined
