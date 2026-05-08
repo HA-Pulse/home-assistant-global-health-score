@@ -50,7 +50,7 @@ Same pattern should be applied to the RAM and I/O recommendation strings for con
 (e.g., Homematic *Betriebsspannungspegel*) go `unavailable` when a Zigbee or Homematic
 coordinator restarts.
 
-Additionally, a user reported (2026-05-08) that battery sensors reappear in the zombie list after a system restart even when the `haghs_ignore` label is correctly assigned. The relationship between this and the grace period fix is still under investigation.
+Additionally, a user reported (2026-05-08) that battery sensors reappear in the zombie list after a full system restart even when the `haghs_ignore` label is correctly assigned. Likely cause: HAGHS evaluates zombie entities at startup before Home Assistant has fully loaded the entity registry, meaning labels are not yet available at the time of the first scan. This is a separate issue from the grace period fix.
 
 **Solution:** Apply a separate, extended grace period for entities with
 `device_class: battery` and measurement-type voltage sensors. Candidates:
