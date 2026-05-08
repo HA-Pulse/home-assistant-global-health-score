@@ -574,10 +574,15 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
+        # Denominator only counts entities that could ever be flagged as zombies,
+        # so an instance with many automations/scripts/etc. is not artificially
+        # diluted. Counted in the same pass as detection.
+        zombie_domain_total = 0
 
         for state in self.hass.states.async_all():
             if state.domain not in ZOMBIE_DOMAINS:
                 continue
+            zombie_domain_total += 1
             if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
 
@@ -604,11 +609,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         zombie_count = len(zombie_list)
 
-        # Ratio-based penalty: percentage of zombies relative to total entities
-        # Factor 7 + ceil ensures zombies are visible on all instance sizes
-        total_entities = len(self.hass.states.async_all())
-        if total_entities > 0:
-            zombie_ratio_pct = (zombie_count / total_entities) * 100
+        # Ratio-based penalty: percentage of zombies relative to entities in
+        # ZOMBIE_DOMAINS only. Factor 7 + ceil ensures zombies are visible on
+        # all instance sizes.
+        if zombie_domain_total > 0:
+            zombie_ratio_pct = (zombie_count / zombie_domain_total) * 100
             p_zombie = min(20, math.ceil(zombie_ratio_pct * 7))
         else:
             p_zombie = 0
