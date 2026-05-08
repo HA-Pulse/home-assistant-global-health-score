@@ -48,6 +48,11 @@ REC_ALL_CLEAR = "\u2705 System optimized"
 # Fallback text for empty lists in state attributes
 ATTR_NONE = "None"
 
+# Marker prefix for zombie entities that exist in the state machine but
+# have no entity registry entry. Surfaces these "ghost" entities in the
+# zombie_entities attribute so users can locate them in HA logs.
+ATTR_UNREGISTERED_PREFIX = "[unregistered] "
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class VersionInformation:

@@ -6,10 +6,15 @@ from datetime import timedelta
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE
 from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.const import DATA_BOOT_TIME, DOMAIN
+from custom_components.haghs.const import (
+    ATTR_UNREGISTERED_PREFIX,
+    DATA_BOOT_TIME,
+    DOMAIN,
+)
 from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
 
 
@@ -249,6 +254,82 @@ async def test_registries_ready_immediately_when_already_running(
     coordinator = _coordinator_with_boot_age(hass, entry)
 
     assert coordinator._registries_ready is True
+
+
+# ============================================================================
+# Ghost marker (#6)
+# ============================================================================
+
+
+async def test_unregistered_zombie_gets_prefix(hass: HomeAssistant) -> None:
+    """Zombies without an entity-registry entry are tagged in the list."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.ghost", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.ghost"]
+
+
+async def test_registered_zombie_has_no_prefix(hass: HomeAssistant) -> None:
+    """Zombies that have an entity-registry entry keep their plain id."""
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        "sensor",
+        "test_platform",
+        "unique_id_1",
+        suggested_object_id="real",
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.real", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert zombie_list == ["sensor.real"]
+
+
+async def test_ghost_warning_logged_once_per_entity(hass: HomeAssistant, caplog) -> None:
+    """The 'unregistered zombie' warning is emitted at most once per id."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.ghost_one", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+
+    with caplog.at_level("WARNING"):
+        coordinator._calc_zombies()
+        coordinator._calc_zombies()
+        coordinator._calc_zombies()
+
+    occurrences = caplog.text.count("Detected unregistered zombie entity")
+    assert occurrences == 1
+
+
+async def test_ghost_warning_logged_per_distinct_entity(hass: HomeAssistant, caplog) -> None:
+    """Distinct ghost entities each produce one warning."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.ghost_a", age_minutes=60)
+    _make_zombie(hass, "sensor.ghost_b", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+
+    with caplog.at_level("WARNING"):
+        coordinator._calc_zombies()
+
+    assert "sensor.ghost_a" in caplog.text
+    assert "sensor.ghost_b" in caplog.text
 
 
 # ============================================================================

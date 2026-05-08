@@ -29,6 +29,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ATTR_UNREGISTERED_PREFIX,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABEL,
@@ -184,6 +185,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # than the latest reload. setdefault preserves an existing value.
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
+
+        # Track ghost zombies (no entity-registry entry) so we warn at most
+        # once per entity per coordinator instance instead of every refresh.
+        self._logged_ghost_entities: set[str] = set()
 
         # Registry-race guard: if HAGHS first runs while HA is still in the
         # 'starting' state, the entity registry (and therefore label
@@ -644,7 +649,22 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     is_ignored = True
 
             if not is_ignored:
-                zombie_list.append(entity_id)
+                if entity_entry is None:
+                    # Ghost zombie: exists in the state machine but has no
+                    # entity registry entry, so it cannot be managed in the
+                    # HA UI. Surface it explicitly and warn once per id (#6).
+                    if entity_id not in self._logged_ghost_entities:
+                        _LOGGER.warning(
+                            "HAGHS: Detected unregistered zombie entity '%s'. "
+                            "It exists in the state machine but has no entity "
+                            "registry entry, so it cannot be managed via the "
+                            "HA UI. Check the integration that created it.",
+                            entity_id,
+                        )
+                        self._logged_ghost_entities.add(entity_id)
+                    zombie_list.append(f"{ATTR_UNREGISTERED_PREFIX}{entity_id}")
+                else:
+                    zombie_list.append(entity_id)
 
         zombie_count = len(zombie_list)
 
