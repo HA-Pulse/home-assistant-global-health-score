@@ -11,6 +11,9 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support%20my%20work-yellow?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/DN91)
 ![AI-Assisted](https://img.shields.io/badge/AI-Assisted-blue?style=for-the-badge)
 
+---
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/22d138d764884b0380033fb33d7c1875)](https://app.codacy.com/gh/D-N91/home-assistant-global-health-score?utm_source=github.com&utm_medium=referral&utm_content=D-N91/home-assistant-global-health-score&utm_campaign=Badge_Grade)
+
 ## Abstract
 As Home Assistant matures into a mission-critical Smart Home OS, the need for a unified stability metric becomes paramount. **HAGHS** is a fully local, open-scoring framework designed to provide an objective **Health Score (0-100)**. It differentiates between transient hardware load and chronic maintenance neglect, providing users with a "North Star" for instance optimization. All scoring logic is fully visible in the codebase, no hidden penalties, no black boxes.
 
