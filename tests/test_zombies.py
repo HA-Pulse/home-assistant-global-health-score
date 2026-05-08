@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -188,6 +188,67 @@ async def test_post_boot_grace_uses_last_changed(hass: HomeAssistant) -> None:
 
     assert zombie_count == 0
     assert p_zombie == 0
+
+
+# ============================================================================
+# Registry-race fix (#13)
+# ============================================================================
+
+
+async def test_zombies_skipped_during_startup(hass: HomeAssistant) -> None:
+    """During HA startup, zombie detection returns empty even with matches."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(3):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+    _make_zombie(hass, "sensor.battery", age_minutes=60)
+
+    hass.set_state(CoreState.starting)
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+    assert p_zombie == 0
+    assert coordinator._registries_ready is False
+
+
+async def test_zombies_detected_after_started_event(hass: HomeAssistant) -> None:
+    """After EVENT_HOMEASSISTANT_STARTED fires, zombie detection resumes."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(3):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+    _make_zombie(hass, "sensor.battery", age_minutes=60)
+
+    hass.set_state(CoreState.starting)
+    coordinator = _coordinator_with_boot_age(hass, entry)
+
+    _zombie_list, _p, count_pre = coordinator._calc_zombies()
+    assert count_pre == 0
+
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+
+    assert coordinator._registries_ready is True
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+    assert zombie_count == 1
+    assert p_zombie > 0
+
+
+async def test_registries_ready_immediately_when_already_running(
+    hass: HomeAssistant,
+) -> None:
+    """If HA is already running at coordinator init, no listener is needed."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    # The hass fixture is in CoreState.running by default.
+    coordinator = _coordinator_with_boot_age(hass, entry)
+
+    assert coordinator._registries_ready is True
 
 
 # ============================================================================

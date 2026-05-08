@@ -13,8 +13,12 @@ from typing import Any
 
 import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import (
     device_registry as dr,
 )
@@ -180,6 +184,23 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # than the latest reload. setdefault preserves an existing value.
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
+
+        # Registry-race guard: if HAGHS first runs while HA is still in the
+        # 'starting' state, the entity registry (and therefore label
+        # assignments) may not yet be loaded from storage, which would cause
+        # labelled-but-unavailable entities to be misreported as zombies on
+        # the first refresh after boot.
+        self._registries_ready: bool = hass.is_running
+        if not self._registries_ready:
+            hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED,
+                self._async_registries_ready,
+            )
+
+    @callback
+    def _async_registries_ready(self, _event: Event) -> None:
+        """Mark registries as loaded once HA finishes startup."""
+        self._registries_ready = True
 
     # ------------------------------------------------------------------
     # Main update — orchestrates sub-calculations with safety net
@@ -577,6 +598,13 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         zombie_list is capped to 20 entries for state attributes;
         zombie_count always reflects the full number.
         """
+        # Defer detection until HA is fully running. Otherwise the entity
+        # registry may not yet be loaded from storage and ignore labels would
+        # be missing, producing false positives right after boot (#13).
+        if not self._registries_ready:
+            _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
+            return [], 0, 0
+
         ent_reg = er.async_get(self.hass)
         dev_reg = dr.async_get(self.hass)
         now = dt_util.utcnow()
