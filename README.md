@@ -146,7 +146,7 @@ After adding it, navigate to its entity list and **manually enable** the followi
 
 ### 2. Installation & Setup
 1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
-2.  Go to **Settings > Integrations > Add Integration** and search for **HAGHS**.
+2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask:
     * Select your **CPU** and **RAM** sensors (PSI fallback).
     * Choose your **Storage Type** (SD-Card / SSD / eMMC, default: SD-Card).
@@ -154,7 +154,7 @@ After adding it, navigate to its entity list and **manually enable** the followi
     * Optionally select a **Database Size Sensor** for external databases (see below).
 
 ### 3. Options Flow (Runtime Settings)
-After setup, go to **Settings > Integrations > HAGHS > Configure** to adjust:
+After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust:
 * CPU / RAM sensors
 * Storage type
 * Ignore label
