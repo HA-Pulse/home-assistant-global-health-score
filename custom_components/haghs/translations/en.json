@@ -29,12 +29,11 @@
   "issues": {
     "fallback_missing": {
       "title": "PSI is unavailable and fallback sensors are missing",
-      "description": "HAGHS cannot start because Linux PSI data is unavailable and CPU/RAM fallback sensors are not configured. Provide both sensors to recover without restarting Home Assistant.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Configure CPU and RAM fallback sensors",
-            "description": "Select both fallback sensors and submit to update this integration entry.",
+            "description": "HAGHS cannot start because Linux PSI data is unavailable and CPU/RAM fallback sensors are not configured. Select both sensors below and submit to recover without restarting Home Assistant.",
             "data": {
               "cpu_sensor": "CPU usage sensor",
               "ram_sensor": "RAM usage sensor"
