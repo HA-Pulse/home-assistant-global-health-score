@@ -11,6 +11,8 @@ env:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4.1.7
       
@@ -21,7 +23,7 @@ jobs:
       
       - name: Fetch analytics
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           python3 << 'EOF'
           import requests
