@@ -278,8 +278,9 @@ cards:
       {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s) — [Check
       Entities]({{ _ent }}) {% endif %}
 
-      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %} {%
-      else %} --- ✅ System healthy. No recommendations. {% endif %}
+      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
+      {{ rec }}
+      {% else %} --- ✅ System healthy. No recommendations. {% endif %}
 
       **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
       hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
