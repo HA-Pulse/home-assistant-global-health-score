@@ -258,11 +258,22 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> bool:
         """Return True if an entity should be excluded from health checks.
 
-        Three exclusion sources, checked in cheapest-first order:
-          1. Glob patterns on entity_id (no registry lookup required)
-          2. ignore_label on the entity's registry entry
-          3. ignore_label on the entity's device
+        Four exclusion sources, checked in cheapest-first order:
+          1. Disabled in the entity registry (user clicked "Disable entity"
+             or the integration disabled it). Clear user-intent signal that
+             takes precedence over the other checks.
+          2. Glob patterns on entity_id (no registry lookup required)
+          3. ignore_label on the entity's registry entry
+          4. ignore_label on the entity's device
+
+        Note: ``hidden_by`` is intentionally not treated as ignore. Hidden
+        entities are still functional; the user only hid them from
+        auto-generated dashboards. To exclude them from HAGHS the user
+        should disable the entity or apply the ignore label.
         """
+        if entity_entry is not None and entity_entry.disabled_by is not None:
+            return True
+
         if self._ignore_patterns and any(p.match(entity_id) for p in self._ignore_patterns):
             return True
 

@@ -181,3 +181,44 @@ async def test_fresh_backup_yields_no_penalty(hass: HomeAssistant) -> None:
     p_backup, *_ = coordinator._calc_updates()
 
     assert p_backup == 0
+
+
+async def test_disabled_update_entity_is_excluded(hass: HomeAssistant) -> None:
+    """A disabled update entity is excluded from count, pending and tracking.
+
+    Reproduces the community report applied to updates: disabling the
+    entity in the registry must be enough to silence the penalty, no
+    haghs_ignore label required. Also matches the intent of #70
+    (wontfix for a global firmware-update flag) for individual entities.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    entity_registry = er.async_get(hass)
+    disabled = entity_registry.async_get_or_create(
+        "update",
+        "device_platform",
+        "unique_disabled_update",
+        suggested_object_id="device_firmware",
+    )
+    entity_registry.async_update_entity(
+        disabled.entity_id,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    enabled = entity_registry.async_get_or_create(
+        "update",
+        "device_platform",
+        "unique_enabled_update",
+        suggested_object_id="core",
+    )
+
+    coordinator = _coordinator(hass)
+    hass.states.async_set(disabled.entity_id, "on", {"friendly_name": "Firmware"})
+    hass.states.async_set(enabled.entity_id, "on", {"friendly_name": "Core"})
+    _set_first_seen(hass, disabled.entity_id, days_ago=UPDATE_GRACE_DAYS + 1)
+    _set_first_seen(hass, enabled.entity_id, days_ago=UPDATE_GRACE_DAYS + 1)
+
+    _p_backup, update_count, _p_updates, _p_core_lag, pending = coordinator._calc_updates()
+
+    assert update_count == 1
+    assert pending == ["Core"]
+    assert disabled.entity_id not in coordinator._update_first_seen

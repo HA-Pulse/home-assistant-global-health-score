@@ -519,3 +519,64 @@ async def test_non_battery_zombie_still_uses_15min_window(
 
     assert zombie_count == 1
     assert p_zombie > 0
+
+
+# ============================================================================
+# Disabled entity exclusion (community feedback)
+# ============================================================================
+
+
+async def test_disabled_entity_is_not_a_zombie(hass: HomeAssistant) -> None:
+    """An entity disabled via the registry is excluded without needing a label.
+
+    Reproduces the community report: disabling an entity in
+    'Settings > Devices & Services' should be enough; users should not
+    have to also add the haghs_ignore label.
+    """
+    entity_registry = er.async_get(hass)
+    entry_obj = entity_registry.async_get_or_create(
+        "sensor",
+        "test_platform",
+        "unique_disabled",
+        suggested_object_id="disabled_sensor",
+    )
+    entity_registry.async_update_entity(
+        entry_obj.entity_id,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, entry_obj.entity_id, age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+    assert p_zombie == 0
+
+
+async def test_hidden_entity_is_still_tracked(hass: HomeAssistant) -> None:
+    """hidden_by is intentionally NOT an ignore signal — only disabled_by is."""
+    entity_registry = er.async_get(hass)
+    entry_obj = entity_registry.async_get_or_create(
+        "sensor",
+        "test_platform",
+        "unique_hidden",
+        suggested_object_id="hidden_sensor",
+    )
+    entity_registry.async_update_entity(
+        entry_obj.entity_id,
+        hidden_by=er.RegistryEntryHider.USER,
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, entry_obj.entity_id, age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
