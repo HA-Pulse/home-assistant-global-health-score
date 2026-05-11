@@ -204,6 +204,19 @@ To prevent false positives from sleeping tablets or seasonal devices:
     * **Pro Tip:** Assigning the label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
 
+### Pattern-Based Ignore (for entities without a unique ID)
+
+Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. HAGHS would otherwise flag them as zombies as soon as they go unavailable.
+
+Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from both zombie detection and update penalties.
+
+Examples:
+- `sensor.docker_*` — every Docker monitor sensor
+- `sensor.torque_*` — every Torque OBD sensor
+- `binary_sensor.test_?` — `binary_sensor.test_1` through `binary_sensor.test_9`
+
+Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are logged as a `WARNING` and skipped, so a single typo never disables the rest of the list.
+
 ---
 
 ## Sensor Attributes
@@ -222,6 +235,16 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`) |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag) |
+| `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
+| `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
+| `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
+| `rec_disk_low` | bool | Disk free space is below the storage-type threshold |
+| `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
+| `rec_power_unstable` | bool | RPi under-voltage detected |
+| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
+| `rec_updates_pending` | bool | At least one non-ignored update entity is pending |
+| `rec_zombie` | bool | At least one zombie entity is reported |
+| `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
 
 ---
 
