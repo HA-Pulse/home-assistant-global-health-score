@@ -230,7 +230,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `zombie_count` | int | Total number of zombie entities |
 | `zombie_entities` | list | Entity IDs of zombies (capped at 20) |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
-| `psi_available` | bool | Whether PSI metrics are active (CPU + RAM + I/O). When `false`, only classic sensors are used (CPU + RAM, no I/O) |
+| `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`) |

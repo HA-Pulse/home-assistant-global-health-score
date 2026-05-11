@@ -10,8 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HaghsDataUpdateCoordinator
 from .const import DEFAULT_NAME, DOMAIN, REC_FLAG_KEYS
+from .coordinator import HaghsDataUpdateCoordinator
 
 
 async def async_setup_entry(
