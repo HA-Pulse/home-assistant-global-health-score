@@ -9,7 +9,7 @@ import math
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import psutil
@@ -31,6 +31,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_UNREGISTERED_PREFIX,
+    BATTERY_GRACE_SECONDS,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABEL,
@@ -39,6 +40,7 @@ from .const import (
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
     DATA_BOOT_TIME,
+    DATA_UPDATE_FIRST_SEEN,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -56,6 +58,8 @@ from .const import (
     REC_RAM_PRESSURE_PSI,
     REC_UPDATES_PENDING,
     REC_ZOMBIES,
+    UPDATE_GRACE_DAYS,
+    ZOMBIE_GRACE_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -217,6 +221,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # than the latest reload. setdefault preserves an existing value.
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
+
+        # First-seen timestamps for pending update entities (#26). Stored in
+        # hass.data so they survive integration reloads. Reset on HA restart,
+        # which is desired: a fresh boot effectively gives all current updates
+        # a new grace window.
+        self._update_first_seen: dict[str, datetime] = hass_data.setdefault(
+            DATA_UPDATE_FIRST_SEEN, {}
+        )
 
         # Track ghost zombies (no entity-registry entry) so we warn at most
         # once per entity per coordinator instance instead of every refresh.
@@ -697,12 +709,19 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
 
-            # Grace period: skip entities that changed < 15 min ago.
-            # last_changed values older than the recorded boot time were
-            # restored from the recorder and are not a reliable baseline,
-            # so treat boot time as the floor.
+            # Grace period: skip entities that changed less than the window
+            # ago. last_changed values older than the recorded boot time were
+            # restored from the recorder and are not a reliable baseline, so
+            # treat boot time as the floor. Battery-class entities get an
+            # extended window because Zigbee/Homematic coordinators routinely
+            # take longer than 15 minutes to re-poll them (#62).
             effective_seen = max(state.last_changed, self._boot_time)
-            if (now - effective_seen).total_seconds() < 900:
+            grace_seconds = (
+                BATTERY_GRACE_SECONDS
+                if state.attributes.get("device_class") == "battery"
+                else ZOMBIE_GRACE_SECONDS
+            )
+            if (now - effective_seen).total_seconds() < grace_seconds:
                 continue
 
             entity_id = state.entity_id
@@ -820,24 +839,40 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Calculate backup, update and core-lag penalties.
 
         Returns (p_backup, update_count, p_updates, p_core_lag, pending_updates).
-        Update entities with the ignore label are excluded from counting and penalties.
-        Core lag threshold: >= 3 months behind.
+        Update entities with the ignore label or matching an ignore pattern
+        are excluded from counting and penalties. Pending updates appear in
+        pending_updates immediately but only contribute to update_count after
+        UPDATE_GRACE_DAYS (#26). Core lag threshold: >= 3 months behind.
         """
         backup_state = self.hass.states.get("binary_sensor.backups_stale")
         p_backup = 30 if (backup_state and backup_state.state == "on") else 0
 
         ent_reg = er.async_get(self.hass)
+        now = dt_util.utcnow()
+        grace = timedelta(days=UPDATE_GRACE_DAYS)
         update_count = 0
         pending_updates: list[str] = []
+        currently_pending: set[str] = set()
 
         for state in self.hass.states.async_all():
-            if state.domain == "update" and state.state == "on":
-                entity_entry = ent_reg.async_get(state.entity_id)
-                if self._is_ignored(state.entity_id, entity_entry):
-                    continue
+            if state.domain != "update" or state.state != "on":
+                continue
+            entity_entry = ent_reg.async_get(state.entity_id)
+            if self._is_ignored(state.entity_id, entity_entry):
+                continue
+
+            currently_pending.add(state.entity_id)
+            first_seen = self._update_first_seen.setdefault(state.entity_id, now)
+            name = state.attributes.get("friendly_name", state.entity_id)
+            pending_updates.append(name)
+            if now - first_seen >= grace:
                 update_count += 1
-                name = state.attributes.get("friendly_name", state.entity_id)
-                pending_updates.append(name)
+
+        # Prune entries for updates that are no longer pending so installed
+        # updates don't keep a stale timestamp around.
+        for stale_id in list(self._update_first_seen):
+            if stale_id not in currently_pending:
+                del self._update_first_seen[stale_id]
 
         p_core_lag = 0
         core_entity_id = self._detect_core_update_entity()

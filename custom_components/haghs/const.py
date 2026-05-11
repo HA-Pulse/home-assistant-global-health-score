@@ -26,6 +26,20 @@ STORAGE_TYPES: list[str] = ["sd-card", "ssd", "emmc"]
 # detection to ignore last_changed values restored from the recorder.
 DATA_BOOT_TIME = "_boot_time"
 
+# Grace period (seconds) before an unavailable entity becomes a zombie.
+# Battery-class entities use the extended window because Zigbee/Homematic
+# coordinators routinely take longer than 15 minutes to re-poll low-priority
+# devices after a restart (#62).
+ZOMBIE_GRACE_SECONDS = 15 * 60
+BATTERY_GRACE_SECONDS = 60 * 60
+
+# Internal hass.data key holding the per-entity first-seen timestamps for
+# pending updates (#26). Only updates that have been available longer than
+# UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
+# punishing normal user behaviour (most updates land within a few days).
+DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
+UPDATE_GRACE_DAYS = 7
+
 # ---------------------------------------------------------------------------
 # Recommendation templates (i18n-ready — mirrored in strings.json)
 #

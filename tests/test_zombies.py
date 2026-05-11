@@ -22,13 +22,21 @@ from custom_components.haghs.coordinator import (
 )
 
 
-def _make_zombie(hass: HomeAssistant, entity_id: str, age_minutes: int = 30) -> None:
+def _make_zombie(
+    hass: HomeAssistant,
+    entity_id: str,
+    age_minutes: int = 30,
+    *,
+    device_class: str | None = None,
+) -> None:
     """Set an entity to STATE_UNAVAILABLE with last_changed in the past.
 
     The grace period in _calc_zombies skips entities changed less than 15
-    minutes ago, so age_minutes must exceed 15 for the entity to be counted.
+    minutes ago (60 minutes for device_class=battery), so age_minutes must
+    exceed the relevant window for the entity to be counted.
     """
-    hass.states.async_set(entity_id, STATE_UNAVAILABLE)
+    attrs = {"device_class": device_class} if device_class is not None else {}
+    hass.states.async_set(entity_id, STATE_UNAVAILABLE, attrs)
     state = hass.states.get(entity_id)
     state.last_changed = dt_util.utcnow() - timedelta(minutes=age_minutes)
 
@@ -454,3 +462,60 @@ async def test_boot_time_persists_across_coordinator_reloads(
 
     assert first._boot_time == second._boot_time
     assert hass.data[DOMAIN][DATA_BOOT_TIME] == first._boot_time
+
+
+# ============================================================================
+# Battery grace (#62)
+# ============================================================================
+
+
+async def test_battery_zombie_within_60min_window_skipped(
+    hass: HomeAssistant,
+) -> None:
+    """A battery-class sensor unavailable for 30 min is still inside its grace.
+
+    Reproduces #62: Zigbee/Homematic battery devices often re-poll on a
+    multi-minute cycle, so the standard 15 min window flagged them as zombies.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.battery_30m", age_minutes=30, device_class="battery")
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+    assert p_zombie == 0
+
+
+async def test_battery_zombie_after_60min_window_counted(
+    hass: HomeAssistant,
+) -> None:
+    """After the extended battery window expires, the entity is flagged."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.battery_61m", age_minutes=61, device_class="battery")
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert p_zombie > 0
+
+
+async def test_non_battery_zombie_still_uses_15min_window(
+    hass: HomeAssistant,
+) -> None:
+    """The extended window applies only to device_class=battery."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.temp_30m", age_minutes=30, device_class="temperature")
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert p_zombie > 0
