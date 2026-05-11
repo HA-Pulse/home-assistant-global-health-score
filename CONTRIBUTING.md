@@ -84,6 +84,11 @@ closed.
 - `translations/en.json` must mirror `strings.json` 1:1.
 - Translation keys used at runtime must match exactly — mismatches are a
   blocker, not a nit.
+- For repair issues, the schema marks `issues.<id>.description` and
+  `issues.<id>.fix_flow` as mutually exclusive (`vol.Exclusive("fixable")`).
+  A fixable issue uses **only** `fix_flow` plus its inner step description;
+  putting both at the same level fails hassfest with the cryptic message
+  *"two or more values in the same group of exclusion 'fixable'"*.
 
 ### Code quality
 
@@ -93,20 +98,53 @@ closed.
 
 ## Tests
 
-Once the test infrastructure lands (see the test-bootstrap tracking issue),
-the following are required:
+The test suite lives under `tests/`. Bootstrap, migration coverage and the
+first per-pillar test landed in v2.3 (issue #54).
 
-- New scoring logic: unit tests with known input/output pairs.
+**Required for every PR that changes integration code:**
+
+- New scoring logic: unit tests with known input/output pairs. See
+  `tests/test_hardware_power.py` for the pilot pillar pattern and
+  `tests/test_zombies.py` for ratio/grace-period coverage.
 - Migration logic: tests for every branch (value present / absent, label
-  exists / doesn't exist, race conditions).
+  exists / doesn't exist, idempotency at the current version). See
+  `tests/test_migration.py`.
 
-Until then, describe your manual validation steps in the PR description
-under "Test plan".
+**Run locally:**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_test.txt
+pytest
+pytest --cov=custom_components.haghs --cov-report=term-missing
+```
+
+`pytest-asyncio` is configured in `auto` mode in `pyproject.toml`, so async
+tests do not need a per-test marker.
+
+Manual validation steps still belong in the PR description under
+"Test plan" — they complement unit tests, not replace them.
+
+## Checks That Must Pass
+
+Three GitHub Actions workflows run on every push and PR. All must be green
+before merge:
+
+- **Hassfest** (`.github/workflows/hassfest.yaml`) — Home Assistant manifest,
+  `strings.json` / `translations` schema, integration metadata.
+- **HACS Validation** (`.github/workflows/hacs_validation.yaml`) — HACS
+  packaging and naming rules.
+- **CI** (`.github/workflows/ci.yml`) — `ruff check`, `ruff format --check`
+  and `pytest` with coverage scoped to `custom_components/haghs`.
+
+If one of these fails on your PR, fix the underlying issue rather than
+disabling the check.
 
 ## Review Process
 
 - Maintainer is `@D-N91`.
-- Responses in English only,
+- Responses in English only.
 - Expect at least one review round before merge. Don't force-push during an
   active review — append commits; the maintainer may squash on merge.
 
