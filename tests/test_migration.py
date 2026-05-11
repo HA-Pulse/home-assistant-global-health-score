@@ -12,7 +12,7 @@ from custom_components.haghs import (
     _migrate_ignore_label_value,
     async_migrate_entry,
 )
-from custom_components.haghs.const import CONF_IGNORE_LABEL, DOMAIN
+from custom_components.haghs.const import _CONFIG_VERSION, CONF_IGNORE_LABEL, DOMAIN
 
 
 def _mock_registry(
@@ -143,7 +143,7 @@ def test_create_raises_second_lookup_misses_pops_value(caplog) -> None:
 async def test_migrate_from_v2_0_bumps_version_and_rewrites_label(
     hass: HomeAssistant,
 ) -> None:
-    """v2.0 entry is migrated to (3, 2) and the label is converted to its ID."""
+    """v2.0 entry is migrated to the current version and label is converted."""
     label_registry = lr.async_get(hass)
     label = label_registry.async_create("Legacy Label")
 
@@ -157,15 +157,15 @@ async def test_migrate_from_v2_0_bumps_version_and_rewrites_label(
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 3
-    assert entry.minor_version == 2
+    assert entry.version == _CONFIG_VERSION.major
+    assert entry.minor_version == _CONFIG_VERSION.minor
     assert entry.data[CONF_IGNORE_LABEL] == label.label_id
 
 
 async def test_migrate_from_v3_1_only_touches_label_field(
     hass: HomeAssistant,
 ) -> None:
-    """v3.1 entry is bumped to (3, 2); unrelated fields are preserved."""
+    """v3.1 entry is bumped to the current version; other fields are preserved."""
     label_registry = lr.async_get(hass)
     label = label_registry.async_create("Older Label")
 
@@ -183,21 +183,17 @@ async def test_migrate_from_v3_1_only_touches_label_field(
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 3
-    assert entry.minor_version == 2
+    assert entry.version == _CONFIG_VERSION.major
+    assert entry.minor_version == _CONFIG_VERSION.minor
     assert entry.data[CONF_IGNORE_LABEL] == label.label_id
     assert entry.data["cpu_sensor"] == "sensor.cpu_use"
     assert entry.data["storage_type"] == "ssd"
 
 
-async def test_migrate_at_current_version_does_not_corrupt_data(
+async def test_migrate_from_v3_2_bumps_to_current_without_label_work(
     hass: HomeAssistant,
 ) -> None:
-    """B2 regression: an already-migrated v3.2 entry is left untouched.
-
-    Without the idempotency guard, the migration would create a duplicate
-    label whose name equals the existing label's ID.
-    """
+    """v3.2 entry already holds a label_id and only needs the version bump."""
     label_registry = lr.async_get(hass)
     label = label_registry.async_create("Ignore Me")
 
@@ -211,12 +207,32 @@ async def test_migrate_at_current_version_does_not_corrupt_data(
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.version == 3
-    assert entry.minor_version == 2
+    assert entry.version == _CONFIG_VERSION.major
+    assert entry.minor_version == _CONFIG_VERSION.minor
     assert entry.data[CONF_IGNORE_LABEL] == label.label_id
 
-    # No second label was created whose name equals the existing label's ID.
+    # B2 regression: no second label was created whose name equals the ID.
     assert label_registry.async_get_label_by_name(label.label_id) is None
+
+
+async def test_migrate_at_current_version_is_noop(hass: HomeAssistant) -> None:
+    """An entry already at _CONFIG_VERSION returns early without touching data."""
+    label_registry = lr.async_get(hass)
+    label = label_registry.async_create("Already Done")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=_CONFIG_VERSION.major,
+        minor_version=_CONFIG_VERSION.minor,
+        data={CONF_IGNORE_LABEL: label.label_id},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.version == _CONFIG_VERSION.major
+    assert entry.minor_version == _CONFIG_VERSION.minor
+    assert entry.data[CONF_IGNORE_LABEL] == label.label_id
 
 
 async def test_migrate_handles_data_and_options_independently(

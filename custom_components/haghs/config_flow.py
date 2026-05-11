@@ -10,9 +10,11 @@ from homeassistant.const import UnitOfTime
 from homeassistant.helpers import selector
 
 from .const import (
+    _CONFIG_VERSION,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABEL,
+    CONF_IGNORE_PATTERNS,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
@@ -20,7 +22,6 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     STORAGE_TYPES,
-    VersionInformation,
 )
 from .coordinator import HaghsDataUpdateCoordinator
 
@@ -55,6 +56,9 @@ _BASE_SCHEMA = {
         )
     ),
     vol.Optional(CONF_IGNORE_LABEL): selector.LabelSelector(),
+    vol.Optional(CONF_IGNORE_PATTERNS): selector.TextSelector(
+        selector.TextSelectorConfig(multiple=True)
+    ),
     vol.Optional(CONF_DB_SENSOR): selector.EntitySelector(
         selector.EntitySelectorConfig(filter=selector.EntityFilterSelectorConfig(domain="sensor"))
     ),
@@ -74,8 +78,6 @@ _EXTRA_OPTIONS_SCHEMA = {
         )
     )
 }
-
-_CONFIG_VERSION = VersionInformation(major=3, minor=2)
 
 
 class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

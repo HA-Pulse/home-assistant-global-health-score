@@ -14,6 +14,7 @@ from homeassistant.helpers import (
 )
 
 from .const import (
+    _CONFIG_VERSION,
     CONF_CPU_SENSOR,
     CONF_IGNORE_LABEL,
     CONF_RAM_SENSOR,
@@ -77,10 +78,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate old entry."""
+    """Migrate old entry to the current _CONFIG_VERSION.
+
+    Migration steps so far:
+      <= (3, 2): convert legacy text ignore-label values into label IDs.
+      (3, 3):    no data change, only a version bump for the new ignore
+                 patterns option, which is backward-compatible.
+    """
     entry_version = VersionInformation(major=entry.version, minor=entry.minor_version)
 
-    _LOGGER.info("Migrating configuration from version %s", entry_version)
+    if entry_version >= _CONFIG_VERSION:
+        return True
+
+    _LOGGER.info("Migrating HAGHS configuration from version %s", entry_version)
+
+    data = dict(entry.data)
+    options = dict(entry.options)
 
     label_change_version = VersionInformation(major=3, minor=2)
     if entry_version <= label_change_version:
@@ -88,24 +101,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await lr.async_load(hass)
 
         label_registry = lr.async_get(hass)
+        _migrate_ignore_label_value(label_registry, data)
+        _migrate_ignore_label_value(label_registry, options)
 
-        data = dict(entry.data)
-        options = dict(entry.options)
-        data_changed = _migrate_ignore_label_value(label_registry, data)
-        options_changed = _migrate_ignore_label_value(label_registry, options)
+    hass.config_entries.async_update_entry(
+        entry,
+        data=data,
+        options=options,
+        version=_CONFIG_VERSION.major,
+        minor_version=_CONFIG_VERSION.minor,
+    )
 
-        if data_changed or options_changed:
-            _LOGGER.info("HAGHS: Migrated ignore label to label ID")
-
-        hass.config_entries.async_update_entry(
-            entry,
-            data=data,
-            options=options,
-            version=label_change_version.major,
-            minor_version=label_change_version.minor,
-        )
-
-    _LOGGER.info("Migration to version %s successful", entry_version)
+    _LOGGER.info("HAGHS migrated to version %s", _CONFIG_VERSION)
     return True
 
 

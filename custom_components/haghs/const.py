@@ -10,6 +10,7 @@ CONF_CPU_SENSOR = "cpu_sensor"
 CONF_RAM_SENSOR = "ram_sensor"
 CONF_DB_SENSOR = "db_sensor"
 CONF_IGNORE_LABEL = "ignore_label"
+CONF_IGNORE_PATTERNS = "ignore_patterns"
 CONF_STORAGE_TYPE = "storage_type"
 CONF_UPDATE_INTERVAL = "update_interval"
 
@@ -69,3 +70,9 @@ class IssueIds(StrEnum):
     """Issue ids."""
 
     FALLBACK_MISSING = "fallback_missing"
+
+
+# Current config entry version. Bumped whenever entry.data/options need
+# migration. Keep this in const.py so both config_flow and the migration
+# logic in __init__.py reference the same source of truth.
+_CONFIG_VERSION = VersionInformation(major=3, minor=3)

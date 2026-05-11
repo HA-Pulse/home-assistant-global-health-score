@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import logging
 import math
 import os
@@ -33,6 +34,7 @@ from .const import (
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABEL,
+    CONF_IGNORE_PATTERNS,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
@@ -152,6 +154,29 @@ class _RecorderInfo:
     available: bool = False
 
 
+def _compile_patterns(raw: list[str] | None) -> list[re.Pattern[str]]:
+    """Translate user-supplied glob patterns to compiled regex objects.
+
+    Invalid patterns are dropped with a warning rather than raising — a single
+    typo must not break zombie or update detection for the whole instance.
+    """
+    if not raw:
+        return []
+    compiled: list[re.Pattern[str]] = []
+    for pattern in raw:
+        if not pattern:
+            continue
+        try:
+            compiled.append(re.compile(fnmatch.translate(pattern)))
+        except re.error as err:
+            _LOGGER.warning(
+                "HAGHS: Invalid ignore pattern %r (%s) — skipping",
+                pattern,
+                err,
+            )
+    return compiled
+
+
 class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that calculates the Global Health Score."""
 
@@ -171,6 +196,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
         self.ignore_label: str | None = opts.get(CONF_IGNORE_LABEL)
+        self._ignore_patterns: list[re.Pattern[str]] = _compile_patterns(
+            opts.get(CONF_IGNORE_PATTERNS)
+        )
         self._storage_type: str = opts.get(CONF_STORAGE_TYPE, DEFAULT_STORAGE_TYPE)
 
         # Paths for auto-detection (resolved once at init)
@@ -206,6 +234,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _async_registries_ready(self, _event: Event) -> None:
         """Mark registries as loaded once HA finishes startup."""
         self._registries_ready = True
+
+    def _is_ignored(
+        self,
+        entity_id: str,
+        entity_entry: er.RegistryEntry | None,
+    ) -> bool:
+        """Return True if an entity should be excluded from health checks.
+
+        Three exclusion sources, checked in cheapest-first order:
+          1. Glob patterns on entity_id (no registry lookup required)
+          2. ignore_label on the entity's registry entry
+          3. ignore_label on the entity's device
+        """
+        if self._ignore_patterns and any(p.match(entity_id) for p in self._ignore_patterns):
+            return True
+
+        if self.ignore_label is None or entity_entry is None:
+            return False
+
+        if self.ignore_label in (entity_entry.labels or set()):
+            return True
+
+        if entity_entry.device_id:
+            dev_reg = dr.async_get(self.hass)
+            device_entry = dev_reg.async_get(entity_entry.device_id)
+            if device_entry and self.ignore_label in (device_entry.labels or set()):
+                return True
+
+        return False
 
     # ------------------------------------------------------------------
     # Main update — orchestrates sub-calculations with safety net
@@ -611,7 +668,6 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return [], 0, 0
 
         ent_reg = er.async_get(self.hass)
-        dev_reg = dr.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
         # Denominator only counts entities that could ever be flagged as zombies,
@@ -638,33 +694,26 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if "integration_health" in entity_id:
                 continue
 
-            is_ignored = False
             entity_entry = ent_reg.async_get(entity_id)
-            if entity_entry and self.ignore_label in (entity_entry.labels or set()):
-                is_ignored = True
+            if self._is_ignored(entity_id, entity_entry):
+                continue
 
-            if not is_ignored and entity_entry and entity_entry.device_id:
-                device_entry = dev_reg.async_get(entity_entry.device_id)
-                if device_entry and self.ignore_label in (device_entry.labels or set()):
-                    is_ignored = True
-
-            if not is_ignored:
-                if entity_entry is None:
-                    # Ghost zombie: exists in the state machine but has no
-                    # entity registry entry, so it cannot be managed in the
-                    # HA UI. Surface it explicitly and warn once per id (#6).
-                    if entity_id not in self._logged_ghost_entities:
-                        _LOGGER.warning(
-                            "HAGHS: Detected unregistered zombie entity '%s'. "
-                            "It exists in the state machine but has no entity "
-                            "registry entry, so it cannot be managed via the "
-                            "HA UI. Check the integration that created it.",
-                            entity_id,
-                        )
-                        self._logged_ghost_entities.add(entity_id)
-                    zombie_list.append(f"{ATTR_UNREGISTERED_PREFIX}{entity_id}")
-                else:
-                    zombie_list.append(entity_id)
+            if entity_entry is None:
+                # Ghost zombie: exists in the state machine but has no entity
+                # registry entry, so it cannot be managed in the HA UI.
+                # Surface it explicitly and warn once per id (#6).
+                if entity_id not in self._logged_ghost_entities:
+                    _LOGGER.warning(
+                        "HAGHS: Detected unregistered zombie entity '%s'. "
+                        "It exists in the state machine but has no entity "
+                        "registry entry, so it cannot be managed via the "
+                        "HA UI. Check the integration that created it.",
+                        entity_id,
+                    )
+                    self._logged_ghost_entities.add(entity_id)
+                zombie_list.append(f"{ATTR_UNREGISTERED_PREFIX}{entity_id}")
+            else:
+                zombie_list.append(entity_id)
 
         zombie_count = len(zombie_list)
 
@@ -768,9 +817,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         for state in self.hass.states.async_all():
             if state.domain == "update" and state.state == "on":
-                # Check ignore label on update entity
                 entity_entry = ent_reg.async_get(state.entity_id)
-                if entity_entry and self.ignore_label in (entity_entry.labels or set()):
+                if self._is_ignored(state.entity_id, entity_entry):
                     continue
                 update_count += 1
                 name = state.attributes.get("friendly_name", state.entity_id)

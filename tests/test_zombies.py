@@ -12,10 +12,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.haghs.const import (
     ATTR_UNREGISTERED_PREFIX,
+    CONF_IGNORE_PATTERNS,
     DATA_BOOT_TIME,
     DOMAIN,
 )
-from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
+from custom_components.haghs.coordinator import (
+    HaghsDataUpdateCoordinator,
+    _compile_patterns,
+)
 
 
 def _make_zombie(hass: HomeAssistant, entity_id: str, age_minutes: int = 30) -> None:
@@ -330,6 +334,107 @@ async def test_ghost_warning_logged_per_distinct_entity(hass: HomeAssistant, cap
 
     assert "sensor.ghost_a" in caplog.text
     assert "sensor.ghost_b" in caplog.text
+
+
+# ============================================================================
+# Pattern-based ignore (#64)
+# ============================================================================
+
+
+def test_compile_patterns_returns_empty_for_none_or_empty() -> None:
+    """An absent or empty pattern list compiles to an empty list."""
+    assert _compile_patterns(None) == []
+    assert _compile_patterns([]) == []
+    assert _compile_patterns([""]) == []
+
+
+def test_compile_patterns_translates_glob() -> None:
+    """Valid glob patterns compile to regex objects that match entity ids."""
+    compiled = _compile_patterns(["sensor.docker_*", "binary_sensor.test_?"])
+    assert len(compiled) == 2
+    assert compiled[0].match("sensor.docker_cpu")
+    assert compiled[0].match("sensor.docker_mem")
+    assert not compiled[0].match("sensor.other_cpu")
+    assert compiled[1].match("binary_sensor.test_1")
+    assert not compiled[1].match("binary_sensor.test_12")
+
+
+def test_compile_patterns_skips_invalid_with_warning(caplog) -> None:
+    """An invalid pattern is logged but does not break the rest."""
+    with caplog.at_level("WARNING"):
+        compiled = _compile_patterns(["sensor.[unclosed", "sensor.ok_*"])
+
+    assert len(compiled) == 1
+    assert compiled[0].match("sensor.ok_one")
+    assert "Invalid ignore pattern" in caplog.text
+
+
+async def test_pattern_match_excludes_zombie(hass: HomeAssistant) -> None:
+    """An entity matching a configured glob is not counted as a zombie."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_IGNORE_PATTERNS: ["sensor.docker_*"]},
+    )
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.docker_cpu", age_minutes=60)
+    _make_zombie(hass, "sensor.docker_mem", age_minutes=60)
+    _make_zombie(hass, "sensor.other", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.other"]
+
+
+async def test_pattern_match_excludes_registered_entity(hass: HomeAssistant) -> None:
+    """Patterns also work for registered entities (no label needed)."""
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        "sensor", "docker_platform", "unique_1", suggested_object_id="docker_cpu"
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_IGNORE_PATTERNS: ["sensor.docker_*"]},
+    )
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.docker_cpu", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+
+
+async def test_label_and_pattern_combined(hass: HomeAssistant) -> None:
+    """Label + pattern are evaluated together; either match excludes."""
+    entity_registry = er.async_get(hass)
+    label_entry = entity_registry.async_get_or_create(
+        "sensor", "p", "labelled", suggested_object_id="labelled"
+    )
+    entity_registry.async_update_entity(label_entry.entity_id, labels={"haghs_ignore"})
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "ignore_label": "haghs_ignore",
+            CONF_IGNORE_PATTERNS: ["sensor.torque_*"],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.labelled", age_minutes=60)
+    _make_zombie(hass, "sensor.torque_speed", age_minutes=60)
+    _make_zombie(hass, "sensor.real", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.real"]
 
 
 # ============================================================================
