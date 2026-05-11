@@ -282,6 +282,14 @@ cards:
       {{ rec }}
       {% else %} --- ✅ System healthy. No recommendations. {% endif %}
 
+      {% set keep = state_attr(e, 'recorder_keep_days') %}
+      {% set filter = state_attr(e, 'recorder_filter_active') | default(false, true) %}
+      {% if keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score:
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      {% endif %}
+
       **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
       hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
       Disk) — hardware score uses 3 components{% endif %}
@@ -363,6 +371,13 @@ cards:
 
 
         {{ 'Entity filter active' if filter else 'No entity filter' }}
+
+
+        {% if keep in [none, 'unknown'] or not filter %}
+        💡 Tips to improve your score:
+        {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+        {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+        {% endif %}
 
 
         ---
