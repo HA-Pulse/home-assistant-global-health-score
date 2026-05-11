@@ -5,8 +5,9 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.const import DOMAIN, REC_ALL_CLEAR
+from custom_components.haghs.const import DOMAIN, REC_ALL_CLEAR, REC_FLAG_KEYS
 from custom_components.haghs.coordinator import (
+    _GB,
     HaghsDataUpdateCoordinator,
     _ApplicationResult,
     _HardwareResult,
@@ -113,3 +114,90 @@ async def test_no_advice_when_all_clear(hass: HomeAssistant) -> None:
     assert advice == []
     # Smoke check the all-clear constant is still importable + non-empty.
     assert REC_ALL_CLEAR
+
+
+# ============================================================================
+# Boolean recommendation flags (#11)
+# ============================================================================
+
+
+async def test_all_flags_false_for_empty_result(hass: HomeAssistant) -> None:
+    """A clean hardware/application result yields every rec_* flag as False."""
+    coordinator = _coordinator(hass)
+    flags = coordinator._build_rec_flags(_HardwareResult(), _ApplicationResult())
+
+    assert set(flags.keys()) == set(REC_FLAG_KEYS)
+    assert all(value is False for value in flags.values())
+
+
+async def test_flag_keys_match_const(hass: HomeAssistant) -> None:
+    """REC_FLAG_KEYS in const.py mirrors the keys produced at runtime."""
+    coordinator = _coordinator(hass)
+    flags = coordinator._build_rec_flags(_HardwareResult(), _ApplicationResult())
+
+    assert tuple(flags.keys()) == REC_FLAG_KEYS
+
+
+async def test_hardware_flags_fire_on_penalty(hass: HomeAssistant) -> None:
+    """CPU, RAM, IO and power flags are True exactly when their penalty fires."""
+    coordinator = _coordinator(hass)
+    hw = _HardwareResult(p_cpu=10, p_ram=15, p_io=5, p_power=20)
+    flags = coordinator._build_rec_flags(hw, _ApplicationResult())
+
+    assert flags["rec_cpu_load"] is True
+    assert flags["rec_ram_pressure"] is True
+    assert flags["rec_io_pressure"] is True
+    assert flags["rec_power_unstable"] is True
+
+
+async def test_application_flags_fire_on_penalty(hass: HomeAssistant) -> None:
+    """DB, backup, updates, zombie and core-lag flags reflect their conditions."""
+    coordinator = _coordinator(hass)
+    app = _ApplicationResult(
+        db_mb=2000.0,
+        db_limit_mb=1500.0,
+        p_backup=30,
+        update_count=3,
+        zombie_count=2,
+        p_core_lag=20,
+    )
+    flags = coordinator._build_rec_flags(_HardwareResult(), app)
+
+    assert flags["rec_db_over_limit"] is True
+    assert flags["rec_backup_stale"] is True
+    assert flags["rec_updates_pending"] is True
+    assert flags["rec_zombie"] is True
+    assert flags["rec_core_lag"] is True
+
+
+async def test_disk_low_flag_sd_card(hass: HomeAssistant) -> None:
+    """rec_disk_low fires for SD-card storage with less than 5 GB free."""
+    coordinator = _coordinator(hass)
+    coordinator._storage_type = "sd-card"
+    hw = _HardwareResult(disk_total=64 * _GB, disk_free=3 * _GB)
+
+    flags = coordinator._build_rec_flags(hw, _ApplicationResult())
+
+    assert flags["rec_disk_low"] is True
+
+
+async def test_disk_low_flag_ssd(hass: HomeAssistant) -> None:
+    """rec_disk_low fires for SSD storage with less than 10 % free."""
+    coordinator = _coordinator(hass)
+    coordinator._storage_type = "ssd"
+    hw = _HardwareResult(disk_total=1000 * _GB, disk_free=80 * _GB)
+
+    flags = coordinator._build_rec_flags(hw, _ApplicationResult())
+
+    assert flags["rec_disk_low"] is True
+
+
+async def test_disk_low_flag_clear_when_plenty_of_space(hass: HomeAssistant) -> None:
+    """rec_disk_low stays False when both SD and SSD thresholds are clear."""
+    coordinator = _coordinator(hass)
+    coordinator._storage_type = "ssd"
+    hw = _HardwareResult(disk_total=1000 * _GB, disk_free=500 * _GB)
+
+    flags = coordinator._build_rec_flags(hw, _ApplicationResult())
+
+    assert flags["rec_disk_low"] is False

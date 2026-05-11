@@ -300,6 +300,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         advice = self._build_recommendations(hw, app)
+        rec_flags = self._build_rec_flags(hw, app)
 
         return {
             "global_score": int(global_score),
@@ -313,6 +314,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "pending_updates": app.pending_updates,
             "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
+            **rec_flags,
         }
 
     async def _safe_calc(
@@ -955,21 +957,15 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice.append(ram_tpl.format(ram_pct=hw.ram))
         if hw.p_io > 0:
             advice.append(REC_IO_PRESSURE.format(io_pct=hw.io))
-        if (
-            self._storage_type in ("sd-card", "emmc")
-            and hw.disk_free < 5 * _GB
-            and hw.disk_total > 0
-        ):
+        if self._is_disk_low_sd(hw):
             advice.append(
                 REC_DISK_SD_LOW.format(
                     free_gb=hw.disk_free / _GB,
                     storage_type=self._storage_type,
                 )
             )
-        elif self._storage_type == "ssd" and hw.disk_total > 0:
-            free_pct = (hw.disk_free / hw.disk_total) * 100
-            if free_pct < 10:
-                advice.append(REC_DISK_SSD_LOW.format(free_gb=hw.disk_free / _GB))
+        elif self._is_disk_low_ssd(hw):
+            advice.append(REC_DISK_SSD_LOW.format(free_gb=hw.disk_free / _GB))
         if app.db_mb > app.db_limit_mb:
             advice.append(
                 REC_DB_OVER_LIMIT.format(
@@ -988,6 +984,44 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if app.p_core_lag > 0:
             advice.append(REC_CORE_LAG)
         return advice
+
+    def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
+        """Return True if the SD-card / eMMC low-disk threshold is met."""
+        return (
+            self._storage_type in ("sd-card", "emmc")
+            and hw.disk_total > 0
+            and hw.disk_free < 5 * _GB
+        )
+
+    def _is_disk_low_ssd(self, hw: _HardwareResult) -> bool:
+        """Return True if the SSD low-disk threshold (<10 % free) is met."""
+        if self._storage_type != "ssd" or hw.disk_total <= 0:
+            return False
+        return (hw.disk_free / hw.disk_total) * 100 < 10
+
+    def _build_rec_flags(
+        self,
+        hw: _HardwareResult,
+        app: _ApplicationResult,
+    ) -> dict[str, bool]:
+        """Mirror _build_recommendations as a flat dict of boolean attributes.
+
+        Dashboards and external integrations should read these via state_attr
+        instead of parsing the rendered recommendations string. Keep the keys
+        in sync with REC_FLAG_KEYS in const.py.
+        """
+        return {
+            "rec_cpu_load": hw.p_cpu > 0,
+            "rec_ram_pressure": hw.p_ram > 0,
+            "rec_io_pressure": hw.p_io > 0,
+            "rec_disk_low": self._is_disk_low_sd(hw) or self._is_disk_low_ssd(hw),
+            "rec_db_over_limit": app.db_mb > app.db_limit_mb,
+            "rec_power_unstable": hw.p_power > 0,
+            "rec_backup_stale": app.p_backup > 0,
+            "rec_updates_pending": app.update_count > 0,
+            "rec_zombie": app.zombie_count > 0,
+            "rec_core_lag": app.p_core_lag > 0,
+        }
 
     # ------------------------------------------------------------------
     # Helpers

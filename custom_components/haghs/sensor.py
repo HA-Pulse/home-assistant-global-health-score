@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import HaghsDataUpdateCoordinator
-from .const import DEFAULT_NAME, DOMAIN
+from .const import DEFAULT_NAME, DOMAIN, REC_FLAG_KEYS
 
 
 async def async_setup_entry(
@@ -63,4 +63,5 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "recorder_filter_active": data["recorder_filter_active"],
             "pending_updates": data["pending_updates"],
             "recommendations": data["recommendations"],
+            **{k: data[k] for k in REC_FLAG_KEYS},
         }

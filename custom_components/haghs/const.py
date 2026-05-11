@@ -60,6 +60,24 @@ ATTR_NONE = "None"
 # zombie_entities attribute so users can locate them in HA logs.
 ATTR_UNREGISTERED_PREFIX = "[unregistered] "
 
+# Boolean recommendation flags exposed as state attributes alongside the
+# existing 'recommendations' string. Dashboards and external integrations
+# (e.g. HA Pulse) read these via state_attr(sensor, 'rec_*') instead of
+# parsing the rendered text. Keep this in sync with _build_rec_flags() in
+# coordinator.py.
+REC_FLAG_KEYS: tuple[str, ...] = (
+    "rec_cpu_load",
+    "rec_ram_pressure",
+    "rec_io_pressure",
+    "rec_disk_low",
+    "rec_db_over_limit",
+    "rec_power_unstable",
+    "rec_backup_stale",
+    "rec_updates_pending",
+    "rec_zombie",
+    "rec_core_lag",
+)
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class VersionInformation:
