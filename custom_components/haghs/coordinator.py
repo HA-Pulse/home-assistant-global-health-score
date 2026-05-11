@@ -635,6 +635,13 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
         )
 
+        # Hard cap: a perfect 100 must always reflect zero detected issues.
+        # On large instances the ratio-based p_zombie can be small enough
+        # that config_bonus fully offsets it, which would otherwise hide
+        # existing zombies behind a 100 score.
+        if zombie_count > 0:
+            app_final = min(99, app_final)
+
         return _ApplicationResult(
             app_score=app_final,
             zombie_count=zombie_count,
