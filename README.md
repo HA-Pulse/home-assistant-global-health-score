@@ -365,7 +365,7 @@ cards:
 
 ```
 
-### HAGHS Pro v1.1 (Command Center)
+### HAGHS Pro v1.2 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
