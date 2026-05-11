@@ -31,8 +31,14 @@ DATA_BOOT_TIME = "_boot_time"
 #
 # Templates use str.format() placeholders so translations can reorder them.
 # ---------------------------------------------------------------------------
-REC_CPU_LOAD = "\u26a1 Optimization: CPU load is impacting score ({cpu_pct:.1f}%)."
-REC_RAM_PRESSURE = "\u26a1 Optimization: Memory pressure is impacting score ({ram_pct:.1f}%)."
+REC_CPU_LOAD_PSI = "\u26a1 Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%)."
+REC_CPU_LOAD_CLASSIC = "\u26a1 Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%)."
+REC_RAM_PRESSURE_PSI = (
+    "\u26a1 Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%)."
+)
+REC_RAM_PRESSURE_CLASSIC = (
+    "\u26a1 Optimization: Memory utilization is impacting score ({ram_pct:.1f}%)."
+)
 REC_IO_PRESSURE = "\u26a1 Optimization: I/O pressure is impacting score ({io_pct:.1f}%)."
 REC_DISK_SD_LOW = "\u26a0\ufe0f Disk Space: Only {free_gb:.1f} GB free on {storage_type}!"
 REC_DISK_SSD_LOW = "\u26a0\ufe0f Disk Space: Less than 10% free ({free_gb:.1f} GB)!"

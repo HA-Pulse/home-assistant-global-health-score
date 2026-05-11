@@ -45,13 +45,15 @@ from .const import (
     REC_ALL_CLEAR,
     REC_BACKUP_STALE,
     REC_CORE_LAG,
-    REC_CPU_LOAD,
+    REC_CPU_LOAD_CLASSIC,
+    REC_CPU_LOAD_PSI,
     REC_DB_OVER_LIMIT,
     REC_DISK_SD_LOW,
     REC_DISK_SSD_LOW,
     REC_IO_PRESSURE,
     REC_POWER_UNSTABLE,
-    REC_RAM_PRESSURE,
+    REC_RAM_PRESSURE_CLASSIC,
+    REC_RAM_PRESSURE_PSI,
     REC_UPDATES_PENDING,
     REC_ZOMBIES,
 )
@@ -126,6 +128,8 @@ class _HardwareResult:
     p_io: int = 0
     p_power: int = 0
     psi_available: bool = False
+    cpu_used_psi: bool = False
+    ram_used_psi: bool = False
 
 
 @dataclass
@@ -504,6 +508,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_io=p_io,
             p_power=p_power,
             psi_available=use_psi,
+            cpu_used_psi=psi.cpu is not None,
+            ram_used_psi=psi.memory is not None,
         )
 
     # -- CPU penalty tiers -------------------------------------------------
@@ -942,9 +948,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         advice: list[str] = []
         if hw.p_cpu > 0:
-            advice.append(REC_CPU_LOAD.format(cpu_pct=hw.cpu))
+            cpu_tpl = REC_CPU_LOAD_PSI if hw.cpu_used_psi else REC_CPU_LOAD_CLASSIC
+            advice.append(cpu_tpl.format(cpu_pct=hw.cpu))
         if hw.p_ram > 0:
-            advice.append(REC_RAM_PRESSURE.format(ram_pct=hw.ram))
+            ram_tpl = REC_RAM_PRESSURE_PSI if hw.ram_used_psi else REC_RAM_PRESSURE_CLASSIC
+            advice.append(ram_tpl.format(ram_pct=hw.ram))
         if hw.p_io > 0:
             advice.append(REC_IO_PRESSURE.format(io_pct=hw.io))
         if (
