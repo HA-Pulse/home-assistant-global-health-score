@@ -10,9 +10,15 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.haghs import (
     _migrate_ignore_label_value,
+    _migrate_label_to_labels,
     async_migrate_entry,
 )
-from custom_components.haghs.const import _CONFIG_VERSION, CONF_IGNORE_LABEL, DOMAIN
+from custom_components.haghs.const import (
+    _CONFIG_VERSION,
+    CONF_IGNORE_LABEL,
+    CONF_IGNORE_LABELS,
+    DOMAIN,
+)
 
 
 def _mock_registry(
@@ -143,7 +149,11 @@ def test_create_raises_second_lookup_misses_pops_value(caplog) -> None:
 async def test_migrate_from_v2_0_bumps_version_and_rewrites_label(
     hass: HomeAssistant,
 ) -> None:
-    """v2.0 entry is migrated to the current version and label is converted."""
+    """v2.0 entry is migrated to the current version and label is converted.
+
+    The label first gets rewritten to its label_id (3.2 step) and then
+    promoted into the new CONF_IGNORE_LABELS list (3.4 step).
+    """
     label_registry = lr.async_get(hass)
     label = label_registry.async_create("Legacy Label")
 
@@ -159,7 +169,8 @@ async def test_migrate_from_v2_0_bumps_version_and_rewrites_label(
     assert await async_migrate_entry(hass, entry) is True
     assert entry.version == _CONFIG_VERSION.major
     assert entry.minor_version == _CONFIG_VERSION.minor
-    assert entry.data[CONF_IGNORE_LABEL] == label.label_id
+    assert CONF_IGNORE_LABEL not in entry.data
+    assert entry.data[CONF_IGNORE_LABELS] == [label.label_id]
 
 
 async def test_migrate_from_v3_1_only_touches_label_field(
@@ -185,15 +196,16 @@ async def test_migrate_from_v3_1_only_touches_label_field(
     assert await async_migrate_entry(hass, entry) is True
     assert entry.version == _CONFIG_VERSION.major
     assert entry.minor_version == _CONFIG_VERSION.minor
-    assert entry.data[CONF_IGNORE_LABEL] == label.label_id
+    assert CONF_IGNORE_LABEL not in entry.data
+    assert entry.data[CONF_IGNORE_LABELS] == [label.label_id]
     assert entry.data["cpu_sensor"] == "sensor.cpu_use"
     assert entry.data["storage_type"] == "ssd"
 
 
-async def test_migrate_from_v3_2_bumps_to_current_without_label_work(
+async def test_migrate_from_v3_2_promotes_label_to_labels_list(
     hass: HomeAssistant,
 ) -> None:
-    """v3.2 entry already holds a label_id and only needs the version bump."""
+    """v3.2 entry skips the label-id rewrite and is promoted to the new list."""
     label_registry = lr.async_get(hass)
     label = label_registry.async_create("Ignore Me")
 
@@ -209,10 +221,32 @@ async def test_migrate_from_v3_2_bumps_to_current_without_label_work(
     assert await async_migrate_entry(hass, entry) is True
     assert entry.version == _CONFIG_VERSION.major
     assert entry.minor_version == _CONFIG_VERSION.minor
-    assert entry.data[CONF_IGNORE_LABEL] == label.label_id
+    assert CONF_IGNORE_LABEL not in entry.data
+    assert entry.data[CONF_IGNORE_LABELS] == [label.label_id]
 
     # B2 regression: no second label was created whose name equals the ID.
     assert label_registry.async_get_label_by_name(label.label_id) is None
+
+
+async def test_migrate_from_v3_3_promotes_label_only(hass: HomeAssistant) -> None:
+    """v3.3 entry uses only the 3.4 label-list promotion, nothing else."""
+    label_registry = lr.async_get(hass)
+    label = label_registry.async_create("Existing")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=3,
+        minor_version=3,
+        data={CONF_IGNORE_LABEL: label.label_id},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.version == _CONFIG_VERSION.major
+    assert entry.minor_version == _CONFIG_VERSION.minor
+    assert CONF_IGNORE_LABEL not in entry.data
+    assert entry.data[CONF_IGNORE_LABELS] == [label.label_id]
 
 
 async def test_migrate_at_current_version_is_noop(hass: HomeAssistant) -> None:
@@ -224,7 +258,7 @@ async def test_migrate_at_current_version_is_noop(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         version=_CONFIG_VERSION.major,
         minor_version=_CONFIG_VERSION.minor,
-        data={CONF_IGNORE_LABEL: label.label_id},
+        data={CONF_IGNORE_LABELS: [label.label_id]},
         options={},
     )
     entry.add_to_hass(hass)
@@ -232,7 +266,8 @@ async def test_migrate_at_current_version_is_noop(hass: HomeAssistant) -> None:
     assert await async_migrate_entry(hass, entry) is True
     assert entry.version == _CONFIG_VERSION.major
     assert entry.minor_version == _CONFIG_VERSION.minor
-    assert entry.data[CONF_IGNORE_LABEL] == label.label_id
+    assert entry.data[CONF_IGNORE_LABELS] == [label.label_id]
+    assert CONF_IGNORE_LABEL not in entry.data
 
 
 async def test_migrate_handles_data_and_options_independently(
@@ -253,5 +288,46 @@ async def test_migrate_handles_data_and_options_independently(
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry) is True
-    assert entry.data[CONF_IGNORE_LABEL] == data_label.label_id
-    assert entry.options[CONF_IGNORE_LABEL] == options_label.label_id
+    assert CONF_IGNORE_LABEL not in entry.data
+    assert CONF_IGNORE_LABEL not in entry.options
+    assert entry.data[CONF_IGNORE_LABELS] == [data_label.label_id]
+    assert entry.options[CONF_IGNORE_LABELS] == [options_label.label_id]
+
+
+# ============================================================================
+# _migrate_label_to_labels — direct unit tests
+# ============================================================================
+
+
+def test_label_to_labels_no_legacy_key() -> None:
+    """Absent CONF_IGNORE_LABEL leaves the dict untouched."""
+    config: dict = {}
+    assert _migrate_label_to_labels(config) is False
+    assert config == {}
+
+
+def test_label_to_labels_empty_value_drops_key() -> None:
+    """Empty / falsy legacy value still has the key removed for cleanliness."""
+    config = {CONF_IGNORE_LABEL: ""}
+    assert _migrate_label_to_labels(config) is False
+    assert CONF_IGNORE_LABEL not in config
+    assert CONF_IGNORE_LABELS not in config
+
+
+def test_label_to_labels_promotes_single_value() -> None:
+    """A single legacy label_id becomes a one-element list."""
+    config = {CONF_IGNORE_LABEL: "haghs_ignore"}
+    assert _migrate_label_to_labels(config) is True
+    assert CONF_IGNORE_LABEL not in config
+    assert config[CONF_IGNORE_LABELS] == ["haghs_ignore"]
+
+
+def test_label_to_labels_idempotent_when_coexisting() -> None:
+    """If both keys somehow coexist, the legacy value merges without duplicating."""
+    config = {
+        CONF_IGNORE_LABEL: "haghs_ignore",
+        CONF_IGNORE_LABELS: ["haghs_ignore", "vacation"],
+    }
+    assert _migrate_label_to_labels(config) is True
+    assert CONF_IGNORE_LABEL not in config
+    assert config[CONF_IGNORE_LABELS] == ["haghs_ignore", "vacation"]

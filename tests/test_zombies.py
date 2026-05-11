@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.haghs.const import (
     ATTR_UNREGISTERED_PREFIX,
+    CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
     DATA_BOOT_TIME,
     DOMAIN,
@@ -428,7 +429,7 @@ async def test_label_and_pattern_combined(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            "ignore_label": "haghs_ignore",
+            CONF_IGNORE_LABELS: ["haghs_ignore"],
             CONF_IGNORE_PATTERNS: ["sensor.torque_*"],
         },
     )
@@ -578,5 +579,60 @@ async def test_hidden_entity_is_still_tracked(hass: HomeAssistant) -> None:
 
     coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, _p_zombie, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+
+
+# ============================================================================
+# Multi-label support (Phase A)
+# ============================================================================
+
+
+async def test_multiple_ignore_labels_match_any(hass: HomeAssistant) -> None:
+    """An entity carrying any of the configured ignore labels is excluded."""
+    entity_registry = er.async_get(hass)
+    labelled_a = entity_registry.async_get_or_create(
+        "sensor", "p", "ml_a", suggested_object_id="ml_a"
+    )
+    entity_registry.async_update_entity(labelled_a.entity_id, labels={"haghs_ignore"})
+    labelled_b = entity_registry.async_get_or_create(
+        "sensor", "p", "ml_b", suggested_object_id="ml_b"
+    )
+    entity_registry.async_update_entity(labelled_b.entity_id, labels={"vacation"})
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_IGNORE_LABELS: ["haghs_ignore", "vacation"]},
+    )
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, labelled_a.entity_id, age_minutes=60)
+    _make_zombie(hass, labelled_b.entity_id, age_minutes=60)
+    _make_zombie(hass, "sensor.real", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    zombie_list, _p, zombie_count = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.real"]
+
+
+async def test_empty_ignore_labels_list_acts_as_no_label(
+    hass: HomeAssistant,
+) -> None:
+    """An empty ignore_labels list does not exclude anything."""
+    entity_registry = er.async_get(hass)
+    labelled = entity_registry.async_get_or_create(
+        "sensor", "p", "ml_empty", suggested_object_id="labelled"
+    )
+    entity_registry.async_update_entity(labelled.entity_id, labels={"haghs_ignore"})
+
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_IGNORE_LABELS: []})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, labelled.entity_id, age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count = coordinator._calc_zombies()
 
     assert zombie_count == 1

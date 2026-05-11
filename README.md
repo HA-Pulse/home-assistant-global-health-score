@@ -199,10 +199,53 @@ Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and s
 ## Label Configuration (Smart Whitelisting)
 To prevent false positives from sleeping tablets or seasonal devices:
 1.  Go to **Settings > Areas, labels & zones > Labels**.
-2.  Create a label named `haghs_ignore`.
-3.  Assign this label to any **Device**, **Entity**, or **Update Entity**.
-    * **Pro Tip:** Assigning the label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
+2.  Create one or more labels (e.g. `haghs_ignore`, `vacation`, `guest_mode`).
+3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
+4.  Assign any of those labels to any **Device**, **Entity**, or **Update Entity**.
+    * **Pro Tip:** Assigning a label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
+
+### Dynamic exclusions via automation
+
+Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
+native label services — HAGHS does not need its own service. List a label like
+`vacation` in the HAGHS *Ignore labels* field, then assign/remove it from
+automations:
+
+```yaml
+# Start ignoring vacation devices at 08:00 the day you leave
+- alias: HAGHS vacation start
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - service: label.assign
+      data:
+        label_id: vacation
+        target:
+          entity_id:
+            - light.terrace
+            - switch.coffee_machine
+            - vacuum.robot
+
+# Stop ignoring them when you are back
+- alias: HAGHS vacation end
+  trigger:
+    - platform: state
+      entity_id: input_boolean.vacation
+      to: "off"
+  action:
+    - service: label.remove
+      data:
+        label_id: vacation
+        target:
+          entity_id:
+            - light.terrace
+            - switch.coffee_machine
+            - vacuum.robot
+```
+
+HAGHS picks up the change automatically on its next refresh; no reload needed.
 
 ### Pattern-Based Ignore (for entities without a unique ID)
 

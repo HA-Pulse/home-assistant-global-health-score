@@ -13,7 +13,7 @@ from .const import (
     _CONFIG_VERSION,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
-    CONF_IGNORE_LABEL,
+    CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
@@ -55,7 +55,9 @@ _BASE_SCHEMA = {
             mode=selector.SelectSelectorMode.DROPDOWN,
         )
     ),
-    vol.Optional(CONF_IGNORE_LABEL): selector.LabelSelector(),
+    vol.Optional(CONF_IGNORE_LABELS): selector.LabelSelector(
+        selector.LabelSelectorConfig(multiple=True)
+    ),
     vol.Optional(CONF_IGNORE_PATTERNS): selector.TextSelector(
         selector.TextSelectorConfig(multiple=True)
     ),

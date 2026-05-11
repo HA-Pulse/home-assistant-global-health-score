@@ -17,6 +17,7 @@ from .const import (
     _CONFIG_VERSION,
     CONF_CPU_SENSOR,
     CONF_IGNORE_LABEL,
+    CONF_IGNORE_LABELS,
     CONF_RAM_SENSOR,
     DOMAIN,
     IssueIds,
@@ -82,8 +83,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     Migration steps so far:
       <= (3, 2): convert legacy text ignore-label values into label IDs.
-      (3, 3):    no data change, only a version bump for the new ignore
-                 patterns option, which is backward-compatible.
+      <= (3, 3): convert the single CONF_IGNORE_LABEL into the new
+                 CONF_IGNORE_LABELS list (one-element list when the legacy
+                 key holds a value, removed entirely when empty).
+      (3, 4):    current version, no further data shape changes.
     """
     entry_version = VersionInformation(major=entry.version, minor=entry.minor_version)
 
@@ -104,6 +107,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _migrate_ignore_label_value(label_registry, data)
         _migrate_ignore_label_value(label_registry, options)
 
+    labels_list_version = VersionInformation(major=3, minor=3)
+    if entry_version <= labels_list_version:
+        _migrate_label_to_labels(data)
+        _migrate_label_to_labels(options)
+
     hass.config_entries.async_update_entry(
         entry,
         data=data,
@@ -113,6 +121,25 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     _LOGGER.info("HAGHS migrated to version %s", _CONFIG_VERSION)
+    return True
+
+
+def _migrate_label_to_labels(config: dict[str, Any]) -> bool:
+    """Promote a single CONF_IGNORE_LABEL value into the CONF_IGNORE_LABELS list.
+
+    Idempotent: if the legacy key is absent the function is a no-op. If both
+    keys coexist (should not happen, but defensive), the legacy value is
+    merged into the list without duplicating.
+    """
+    legacy = config.pop(CONF_IGNORE_LABEL, None)
+    if not legacy:
+        return False
+
+    existing = config.get(CONF_IGNORE_LABELS, [])
+    if legacy in existing:
+        return True
+
+    config[CONF_IGNORE_LABELS] = [legacy, *existing]
     return True
 
 

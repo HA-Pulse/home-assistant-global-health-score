@@ -34,7 +34,7 @@ from .const import (
     BATTERY_GRACE_SECONDS,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
-    CONF_IGNORE_LABEL,
+    CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
@@ -203,7 +203,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.cpu_id: str | None = opts.get(CONF_CPU_SENSOR)
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
-        self.ignore_label: str | None = opts.get(CONF_IGNORE_LABEL)
+        self.ignore_labels: list[str] = list(opts.get(CONF_IGNORE_LABELS) or [])
         self._ignore_patterns: list[re.Pattern[str]] = _compile_patterns(
             opts.get(CONF_IGNORE_PATTERNS)
         )
@@ -263,13 +263,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
              or the integration disabled it). Clear user-intent signal that
              takes precedence over the other checks.
           2. Glob patterns on entity_id (no registry lookup required)
-          3. ignore_label on the entity's registry entry
-          4. ignore_label on the entity's device
+          3. Any of the configured ignore labels on the entity's registry entry
+          4. Any of the configured ignore labels on the entity's device
 
         Note: ``hidden_by`` is intentionally not treated as ignore. Hidden
         entities are still functional; the user only hid them from
         auto-generated dashboards. To exclude them from HAGHS the user
-        should disable the entity or apply the ignore label.
+        should disable the entity or apply one of the ignore labels.
+
+        Multiple ignore labels can be configured. Toggling them on/off at
+        runtime is done via Home Assistant's native ``label.assign`` and
+        ``label.remove`` service actions, not via a HAGHS-specific service.
         """
         if entity_entry is not None and entity_entry.disabled_by is not None:
             return True
@@ -277,17 +281,20 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._ignore_patterns and any(p.match(entity_id) for p in self._ignore_patterns):
             return True
 
-        if self.ignore_label is None or entity_entry is None:
+        if not self.ignore_labels or entity_entry is None:
             return False
 
-        if self.ignore_label in (entity_entry.labels or set()):
+        entity_labels = entity_entry.labels or set()
+        if any(label in entity_labels for label in self.ignore_labels):
             return True
 
         if entity_entry.device_id:
             dev_reg = dr.async_get(self.hass)
             device_entry = dev_reg.async_get(entity_entry.device_id)
-            if device_entry and self.ignore_label in (device_entry.labels or set()):
-                return True
+            if device_entry:
+                device_labels = device_entry.labels or set()
+                if any(label in device_labels for label in self.ignore_labels):
+                    return True
 
         return False
 
