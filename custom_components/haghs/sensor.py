@@ -57,6 +57,7 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "application_score": data["application_score"],
             "zombie_count": data["zombie_count"],
             "zombie_entities": data["zombie_entities"],
+            "zombie_count_per_domain": data["zombie_count_per_domain"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
             "recorder_keep_days": data["recorder_keep_days"],

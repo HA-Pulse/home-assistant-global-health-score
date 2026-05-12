@@ -60,6 +60,7 @@ from .const import (
     REC_ZOMBIES,
     UPDATE_GRACE_DAYS,
     ZOMBIE_GRACE_SECONDS,
+    ZOMBIE_LIST_CAP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,18 +84,38 @@ PSI_IO_PATH = "/proc/pressure/io"
 # Regex to extract 'some avg10=X.XX' from PSI files
 _PSI_SOME_AVG10_RE = re.compile(r"some\s+avg10=(\d+\.?\d*)")
 
-# Domains to check for zombie entities
+# Domains to check for zombie entities.
+#
+# Selection rule: any domain whose entities represent a physical device or
+# integration channel whose `unavailable` / `unknown` state signals a real
+# health problem. Helpers (input_*, counter, timer), user-defined logic
+# (automation, script, scene), HA-internal entities (person, zone, sun) and
+# domains whose default state is `unknown` until first interaction (button,
+# event) are intentionally excluded so they cannot trigger false positives.
 ZOMBIE_DOMAINS: frozenset[str] = frozenset(
     [
-        "sensor",
+        "alarm_control_panel",
         "binary_sensor",
-        "switch",
-        "light",
-        "fan",
-        "climate",
-        "media_player",
-        "vacuum",
         "camera",
+        "climate",
+        "cover",
+        "device_tracker",
+        "fan",
+        "humidifier",
+        "lawn_mower",
+        "light",
+        "lock",
+        "media_player",
+        "number",
+        "remote",
+        "select",
+        "sensor",
+        "siren",
+        "switch",
+        "text",
+        "vacuum",
+        "valve",
+        "water_heater",
     ]
 )
 
@@ -143,6 +164,7 @@ class _ApplicationResult:
     app_score: int = 100
     zombie_count: int = 0
     zombie_list: list[str] = field(default_factory=list)
+    zombie_per_domain: dict[str, int] = field(default_factory=dict)
     db_mb: float = 0.0
     db_limit_mb: float = 1000.0
     update_count: int = 0
@@ -338,6 +360,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "application_score": app.app_score,
             "zombie_count": app.zombie_count,
             "zombie_entities": app.zombie_list,
+            "zombie_count_per_domain": app.zombie_per_domain,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -651,7 +674,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_calc_application(self) -> _ApplicationResult:
         """Calculate the application pillar score."""
         # A. ZOMBIES
-        zombie_list, p_zombie, zombie_count = self._calc_zombies()
+        zombie_list, p_zombie, zombie_count, zombie_per_domain = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
         p_integration = self._calc_integration_health()
@@ -684,6 +707,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             app_score=app_final,
             zombie_count=zombie_count,
             zombie_list=zombie_list,
+            zombie_per_domain=zombie_per_domain,
             db_mb=db_mb,
             db_limit_mb=db_limit_mb,
             update_count=update_count,
@@ -698,23 +722,26 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Application sub-calculations
     # ------------------------------------------------------------------
 
-    def _calc_zombies(self) -> tuple[list[str], int, int]:
+    def _calc_zombies(self) -> tuple[list[str], int, int, dict[str, int]]:
         """Detect zombie entities, respecting ignore labels and grace period.
 
-        Returns (zombie_list_capped, p_zombie, zombie_count).
-        zombie_list is capped to 20 entries for state attributes;
-        zombie_count always reflects the full number.
+        Returns (zombie_list_capped, p_zombie, zombie_count, per_domain).
+        zombie_list is capped to ZOMBIE_LIST_CAP entries because the HA
+        state machine caps an attribute payload at 16 KB; zombie_count and
+        the per_domain dict always reflect the full count so users can see
+        the true scope even when the listing is truncated.
         """
         # Defer detection until HA is fully running. Otherwise the entity
         # registry may not yet be loaded from storage and ignore labels would
         # be missing, producing false positives right after boot (#13).
         if not self._registries_ready:
             _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
-            return [], 0, 0
+            return [], 0, 0, {}
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
+        zombie_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
         # so an instance with many automations/scripts/etc. is not artificially
         # diluted. Counted in the same pass as detection.
@@ -750,6 +777,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._is_ignored(entity_id, entity_entry):
                 continue
 
+            zombie_per_domain[state.domain] = zombie_per_domain.get(state.domain, 0) + 1
+
             if entity_entry is None:
                 # Ghost zombie: exists in the state machine but has no entity
                 # registry entry, so it cannot be managed in the HA UI.
@@ -778,8 +807,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             p_zombie = 0
 
-        # Cap the list for state attributes (count stays full)
-        return zombie_list[:20], p_zombie, zombie_count
+        # Cap the list for state attributes (count + per_domain stay full).
+        return zombie_list[:ZOMBIE_LIST_CAP], p_zombie, zombie_count, zombie_per_domain
 
     def _calc_integration_health(self) -> int:
         """Count unhealthy integrations via native ConfigEntry states.

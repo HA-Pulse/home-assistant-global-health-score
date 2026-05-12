@@ -36,6 +36,13 @@ DATA_BOOT_TIME = "_boot_time"
 ZOMBIE_GRACE_SECONDS = 15 * 60
 BATTERY_GRACE_SECONDS = 60 * 60
 
+# Maximum number of entity ids carried in the `zombie_entities` state
+# attribute. The Home Assistant state machine caps the entire attribute
+# payload at 16 KB; 100 entity ids (with the `[unregistered] ` prefix
+# accounted for) stay well below that. `zombie_count` and the per-domain
+# breakdown always reflect the full count, only the listing is capped.
+ZOMBIE_LIST_CAP = 100
+
 # Internal hass.data key holding the per-entity first-seen timestamps for
 # pending updates (#26). Only updates that have been available longer than
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
