@@ -472,10 +472,28 @@ cards:
         {% set ghosts = z_list | select('match', '^\\[unregistered\\]') | list %}
         {% set tracked = z_list | reject('match', '^\\[unregistered\\]') | list %}
         {% set grouped = expand(tracked) | groupby('domain') %}
-        {% set per_domain = state_attr(e, 'zombie_count_per_domain') | default({}, true) %}
 
-        {{ z_count }} zombie(s) across {{ per_domain | length }} domain(s)
-        {% if z_count > 100 %}*(showing first 100 — {{ z_count - 100 }} more hidden)*{% endif %}
+        {# Domain count: prefer the HAGHS v2.3+ attribute when present.
+           Fall back to extracting the distinct domains from z_list so the
+           card keeps working on older HAGHS versions that do not expose
+           zombie_count_per_domain. #}
+        {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
+        {% if per_domain %}
+          {% set domain_count = per_domain | length %}
+        {% else %}
+          {% set ns = namespace(seen=[]) %}
+          {% for entry in z_list %}
+            {% set dom = (entry | replace('[unregistered] ', '')).split('.')[0] %}
+            {% if dom not in ns.seen %}
+              {% set ns.seen = ns.seen + [dom] %}
+            {% endif %}
+          {% endfor %}
+          {% set domain_count = ns.seen | length %}
+        {% endif %}
+
+        {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
+        {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+        {% if z_count > z_list | length %}*(showing first {{ z_list | length }} — {{ z_count - z_list | length }} more hidden)*{% endif %}
 
         {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
