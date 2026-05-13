@@ -469,10 +469,13 @@ cards:
         {% else %}
           {% set z_list = z_raw | list %}
         {% endif %}
-        {% set grouped = expand(z_list) | groupby('domain') %}
+        {% set ghosts = z_list | select('match', '^\\[unregistered\\]') | list %}
+        {% set tracked = z_list | reject('match', '^\\[unregistered\\]') | list %}
+        {% set grouped = expand(tracked) | groupby('domain') %}
+        {% set per_domain = state_attr(e, 'zombie_count_per_domain') | default({}, true) %}
 
-        {{ z_count }} zombie(s) across {{ grouped | length }} domain(s)
-        {% if z_count > 20 %}*(showing first 20 — {{ z_count - 20 }} more hidden)*{% endif %}
+        {{ z_count }} zombie(s) across {{ per_domain | length }} domain(s)
+        {% if z_count > 100 %}*(showing first 100 — {{ z_count - 100 }} more hidden)*{% endif %}
 
         {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
@@ -484,6 +487,15 @@ cards:
         {% endfor %}
         </details>
         {% endfor %}
+
+        {% if ghosts | length > 0 %}
+        <details>
+        <summary>⚠️ Unregistered: {{ ghosts | length }}</summary>
+        {% for entry in ghosts %}
+        &nbsp;&nbsp; • `{{ entry | replace('[unregistered] ', '') }}`
+        {% endfor %}
+        </details>
+        {% endif %}
       {% endif %}
 
 ```
