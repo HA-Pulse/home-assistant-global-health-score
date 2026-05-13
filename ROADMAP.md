@@ -31,6 +31,34 @@ All work below is committed on `dev` and described in detail in
 - **7-day update grace period (#26)** — Pending updates only contribute
   to the penalty after `UPDATE_GRACE_DAYS = 7`; pending list is
   unaffected so users still see what is queued.
+- **Multi-label ignore + dynamic toggling** — `ignore_labels` accepts
+  multiple labels. Inclusion/exclusion is toggled at runtime via HA's
+  native `label.assign` / `label.remove` service actions, so automations
+  can flip exclusions (e.g. a `vacation` label) without reloading the
+  integration. Migration `(3,2)→(3,3)` converts the legacy single-label
+  setting transparently.
+- **Disabled-entity auto-ignore** — Entities marked
+  `disabled_by != None` in the entity registry are excluded from zombie
+  detection and update penalties without requiring a label. Removes the
+  community-flagged friction of having to label every disabled entity.
+- **ZOMBIE_DOMAINS expansion (9 → 22) + per-domain breakdown + cap
+  raise** — Scoring scope expanded to 22 physical/UI-relevant domains
+  (`alarm_control_panel`, `camera`, `climate`, `cover`,
+  `device_tracker`, `fan`, `humidifier`, `lawn_mower`, `light`, `lock`,
+  `media_player`, `number`, `remote`, `select`, `siren`, `switch`,
+  `text`, `vacuum`, `valve`, `water_heater` added; `button` / `event`
+  deliberately excluded — their default `unknown` would cause false
+  positives). New `zombie_count_per_domain` attribute exposes a
+  per-domain dict; `ZOMBIE_LIST_CAP` raised from 20 → 100 entries (the
+  count and per-domain map always carry full totals regardless of the
+  display cap).
+- **Configurable zombie + battery grace periods** — Two new Options
+  Flow fields: `zombie_grace_minutes` (1–240, default 15) and
+  `battery_grace_minutes` (1–240, default 60). Both periods are
+  independent (battery grace can be set below the general grace — this
+  intentionally disables the extension). Replaces the previous
+  hard-coded `ZOMBIE_GRACE_SECONDS` / `BATTERY_GRACE_SECONDS`
+  constants.
 
 ### Bug fixes
 
@@ -54,6 +82,15 @@ All work below is committed on `dev` and described in detail in
   `TextSelector` (special characters / case were silently ignored).
 - **Translation key alignment + Node.js 20 deprecation** — Fixed
   hassfest after PR #49 adoption.
+- **Pro-card improvements bundle** — Pending-updates list now renders
+  one item per line with a bullet prefix; zombie list separates tracked
+  entities (run through `expand()` for friendly names) from
+  `[unregistered]` ghosts (rendered as a separate `<details>` block so
+  ghost markers no longer get silently dropped); per-domain summary
+  reads from the new `zombie_count_per_domain` attribute with a
+  namespace-loop fallback for users still on v2.2.2; cap message
+  rewritten to use `z_count > z_list | length` instead of a hard-coded
+  "first 100".
 
 ### Documentation
 
@@ -115,4 +152,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-05-11*
+*Last updated: 2026-05-13*
