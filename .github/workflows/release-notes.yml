@@ -3,6 +3,11 @@ name: Augment Release Notes
 on:
   release:
     types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag of the (draft or published) release to augment'
+        required: true
 
 permissions:
   contents: write
@@ -10,11 +15,43 @@ permissions:
 jobs:
   augment:
     runs-on: ubuntu-latest
-    if: github.event.release.draft == false
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
+
+      - name: Resolve tag and current body
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_TAG"
+            # Look up draft or published release by tag via the full list
+            # (the /releases/tags/{tag} endpoint hides drafts).
+            BODY=$(gh api "repos/$GH_REPO/releases" \
+              --jq "[.[] | select(.tag_name == \"$TAG\")] | .[0].body // empty")
+            if [ -z "$BODY" ] && ! gh api "repos/$GH_REPO/releases" \
+                --jq "[.[] | select(.tag_name == \"$TAG\")] | length" \
+                | grep -q '^[1-9]'; then
+              echo "::error::No release (draft or published) found for tag $TAG"
+              exit 1
+            fi
+          else
+            TAG="$RELEASE_TAG"
+            BODY="$RELEASE_BODY"
+          fi
+          {
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+          # Pass body via file (avoids GITHUB_OUTPUT multi-line escaping).
+          printf '%s' "$BODY" > body.raw
 
       - name: Build augmented body
         id: build
@@ -22,8 +59,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           OWNER_LOGIN: ${{ github.repository_owner }}
-          TAG: ${{ github.event.release.tag_name }}
-          BODY_RAW: ${{ github.event.release.body }}
+          TAG: ${{ steps.resolve.outputs.tag }}
         run: |
           set -euo pipefail
 
@@ -31,9 +67,6 @@ jobs:
           COFFEE_END='<!-- haghs:auto-coffee:end -->'
           CONTRIB_START='<!-- haghs:auto-contributors:start -->'
           CONTRIB_END='<!-- haghs:auto-contributors:end -->'
-
-          # Write the original body to a file safely (no shell interpolation).
-          python3 -c 'import os,sys; sys.stdout.write(os.environ.get("BODY_RAW",""))' > body.raw
 
           # Strip any pre-existing auto-blocks so the workflow is idempotent.
           python3 - <<'PY' > body.stripped
@@ -119,5 +152,5 @@ jobs:
         if: steps.build.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.resolve.outputs.tag }}
         run: gh release edit "$TAG" --notes-file body.new
