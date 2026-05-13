@@ -339,7 +339,7 @@ cards:
       'psi_available') | default(false, true) %} {% set _upd =
       '/config/updates' %} {% set _ent = '/config/entities' %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending
       — [Open Updates]({{ _upd }}) {% endif %}
@@ -391,7 +391,7 @@ cards:
       state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
   - type: markdown
