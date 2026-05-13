@@ -425,9 +425,10 @@ cards:
         state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
         '/config/updates' %}
 
-        {% if updates | length > 0 %} {{ updates | length }} update(s) pending:
-        {% for u in updates %} &nbsp;&nbsp; • {{ u }} {% endfor %} [→ Open
-        Updates]({{ _upd }}) {% else %} ✅ All updates installed {% endif %}
+        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
+        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
+        [→ Open Updates]({{ _upd }})
+        {% else %} ✅ All updates installed {% endif %}
 
         <hr>
 
