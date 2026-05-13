@@ -11,6 +11,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     _CONFIG_VERSION,
+    CONF_BATTERY_GRACE_MINUTES,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
@@ -18,8 +19,11 @@ from .const import (
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
+    CONF_ZOMBIE_GRACE_MINUTES,
+    DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
     STORAGE_TYPES,
 )
@@ -78,7 +82,31 @@ _EXTRA_OPTIONS_SCHEMA = {
             unit_of_measurement=UnitOfTime.SECONDS,
             mode=selector.NumberSelectorMode.BOX,
         )
-    )
+    ),
+    vol.Optional(
+        CONF_ZOMBIE_GRACE_MINUTES,
+        default=DEFAULT_ZOMBIE_GRACE_MINUTES,
+    ): selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1,
+            max=240,
+            step=1,
+            unit_of_measurement=UnitOfTime.MINUTES,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    ),
+    vol.Optional(
+        CONF_BATTERY_GRACE_MINUTES,
+        default=DEFAULT_BATTERY_GRACE_MINUTES,
+    ): selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1,
+            max=240,
+            step=1,
+            unit_of_measurement=UnitOfTime.MINUTES,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    ),
 }
 
 

@@ -159,9 +159,12 @@ After adding it, navigate to its entity list and **manually enable** the followi
 After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust:
 * CPU / RAM sensors
 * Storage type
-* Ignore label
+* **Ignore labels** (multi-select)
+* **Ignore entity-id patterns** (glob list)
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
+* **Zombie grace period** (1–240 minutes, default: 15) — how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
+* **Battery-class grace period** (1–240 minutes, default: 60) — extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
 

@@ -31,7 +31,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_UNREGISTERED_PREFIX,
-    BATTERY_GRACE_SECONDS,
+    CONF_BATTERY_GRACE_MINUTES,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
@@ -39,10 +39,13 @@ from .const import (
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
+    CONF_ZOMBIE_GRACE_MINUTES,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
+    DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
     REC_ALL_CLEAR,
     REC_BACKUP_STALE,
@@ -59,7 +62,6 @@ from .const import (
     REC_UPDATES_PENDING,
     REC_ZOMBIES,
     UPDATE_GRACE_DAYS,
-    ZOMBIE_GRACE_SECONDS,
     ZOMBIE_LIST_CAP,
 )
 
@@ -230,6 +232,16 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             opts.get(CONF_IGNORE_PATTERNS)
         )
         self._storage_type: str = opts.get(CONF_STORAGE_TYPE, DEFAULT_STORAGE_TYPE)
+
+        # Grace windows are user-configurable in the Options Flow. Both
+        # values are stored in minutes for friendlier UX, multiplied to
+        # seconds here once at init so the hot path stays cheap.
+        self._zombie_grace_seconds: int = (
+            int(opts.get(CONF_ZOMBIE_GRACE_MINUTES, DEFAULT_ZOMBIE_GRACE_MINUTES)) * 60
+        )
+        self._battery_grace_seconds: int = (
+            int(opts.get(CONF_BATTERY_GRACE_MINUTES, DEFAULT_BATTERY_GRACE_MINUTES)) * 60
+        )
 
         # Paths for auto-detection (resolved once at init)
         self._db_path: str = hass.config.path(HA_DB_NAME)
@@ -757,14 +769,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Grace period: skip entities that changed less than the window
             # ago. last_changed values older than the recorded boot time were
             # restored from the recorder and are not a reliable baseline, so
-            # treat boot time as the floor. Battery-class entities get an
-            # extended window because Zigbee/Homematic coordinators routinely
-            # take longer than 15 minutes to re-poll them (#62).
+            # treat boot time as the floor. Battery-class entities use a
+            # separate, typically longer window (configurable in the Options
+            # Flow, defaults are 15 min for general and 60 min for battery).
             effective_seen = max(state.last_changed, self._boot_time)
             grace_seconds = (
-                BATTERY_GRACE_SECONDS
+                self._battery_grace_seconds
                 if state.attributes.get("device_class") == "battery"
-                else ZOMBIE_GRACE_SECONDS
+                else self._zombie_grace_seconds
             )
             if (now - effective_seen).total_seconds() < grace_seconds:
                 continue

@@ -726,3 +726,109 @@ async def test_per_domain_only_counts_actual_zombies(hass: HomeAssistant) -> Non
 
     assert zombie_count == 2
     assert per_domain == {"cover": 1, "lock": 1}
+
+
+# ============================================================================
+# Configurable grace periods
+# ============================================================================
+
+
+async def test_custom_zombie_grace_minutes_shortens_window(
+    hass: HomeAssistant,
+) -> None:
+    """A user-set 5-minute zombie grace flags a 10-min-old zombie."""
+    from custom_components.haghs.const import CONF_ZOMBIE_GRACE_MINUTES
+
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_ZOMBIE_GRACE_MINUTES: 5})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.aggressive", age_minutes=10)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+
+    assert zombie_count == 1
+
+
+async def test_custom_zombie_grace_minutes_extends_window(
+    hass: HomeAssistant,
+) -> None:
+    """A user-set 30-minute zombie grace skips a 20-min-old zombie."""
+    from custom_components.haghs.const import CONF_ZOMBIE_GRACE_MINUTES
+
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_ZOMBIE_GRACE_MINUTES: 30})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.tolerant", age_minutes=20)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+
+    assert zombie_count == 0
+
+
+async def test_custom_battery_grace_minutes_used_for_battery_class(
+    hass: HomeAssistant,
+) -> None:
+    """The battery grace knob applies to device_class=battery only."""
+    from custom_components.haghs.const import CONF_BATTERY_GRACE_MINUTES
+
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_BATTERY_GRACE_MINUTES: 120})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.battery_90m", age_minutes=90, device_class="battery")
+    _make_zombie(hass, "sensor.normal_90m", age_minutes=90)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+
+    # Battery sensor still inside its custom 120 min window; normal sensor
+    # passes the default 15 min window and is flagged.
+    assert zombie_count == 1
+
+
+async def test_default_grace_values_match_constants(
+    hass: HomeAssistant,
+) -> None:
+    """A coordinator with no overrides uses the documented default windows."""
+    from custom_components.haghs.const import (
+        DEFAULT_BATTERY_GRACE_MINUTES,
+        DEFAULT_ZOMBIE_GRACE_MINUTES,
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    coordinator = _coordinator_with_boot_age(hass, entry)
+
+    assert coordinator._zombie_grace_seconds == DEFAULT_ZOMBIE_GRACE_MINUTES * 60
+    assert coordinator._battery_grace_seconds == DEFAULT_BATTERY_GRACE_MINUTES * 60
+
+
+async def test_battery_grace_can_be_set_below_zombie_grace(
+    hass: HomeAssistant,
+) -> None:
+    """Option C: both knobs are independent. Battery < zombie is allowed."""
+    from custom_components.haghs.const import (
+        CONF_BATTERY_GRACE_MINUTES,
+        CONF_ZOMBIE_GRACE_MINUTES,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_ZOMBIE_GRACE_MINUTES: 60,
+            CONF_BATTERY_GRACE_MINUTES: 10,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    # 30 minutes is past battery (10) but inside zombie (60).
+    _make_zombie(hass, "sensor.battery_30m", age_minutes=30, device_class="battery")
+    _make_zombie(hass, "sensor.normal_30m", age_minutes=30)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+
+    # Only the battery sensor: 30 > 10, while normal sensor is still inside
+    # its 60 min window.
+    assert zombie_count == 1

@@ -16,6 +16,8 @@ CONF_IGNORE_LABELS = "ignore_labels"
 CONF_IGNORE_PATTERNS = "ignore_patterns"
 CONF_STORAGE_TYPE = "storage_type"
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_ZOMBIE_GRACE_MINUTES = "zombie_grace_minutes"
+CONF_BATTERY_GRACE_MINUTES = "battery_grace_minutes"
 
 # Defaults
 DEFAULT_NAME = "System: HA - Global Health Score"
@@ -29,12 +31,14 @@ STORAGE_TYPES: list[str] = ["sd-card", "ssd", "emmc"]
 # detection to ignore last_changed values restored from the recorder.
 DATA_BOOT_TIME = "_boot_time"
 
-# Grace period (seconds) before an unavailable entity becomes a zombie.
-# Battery-class entities use the extended window because Zigbee/Homematic
-# coordinators routinely take longer than 15 minutes to re-poll low-priority
-# devices after a restart (#62).
-ZOMBIE_GRACE_SECONDS = 15 * 60
-BATTERY_GRACE_SECONDS = 60 * 60
+# Grace periods (minutes) before an unavailable / unknown entity becomes a
+# zombie. Both values are user-configurable in the OptionsFlow; the values
+# below are the defaults if nothing is set. Battery-class entities get a
+# separate, typically longer window because Zigbee / Homematic coordinators
+# routinely take longer than 15 minutes to re-poll low-priority devices
+# after a restart (#62).
+DEFAULT_ZOMBIE_GRACE_MINUTES = 15
+DEFAULT_BATTERY_GRACE_MINUTES = 60
 
 # Maximum number of entity ids carried in the `zombie_entities` state
 # attribute. The Home Assistant state machine caps the entire attribute
