@@ -1,0 +1,123 @@
+name: Augment Release Notes
+
+on:
+  release:
+    types: [published, edited]
+
+permissions:
+  contents: write
+
+jobs:
+  augment:
+    runs-on: ubuntu-latest
+    if: github.event.release.draft == false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Build augmented body
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          OWNER_LOGIN: ${{ github.repository_owner }}
+          TAG: ${{ github.event.release.tag_name }}
+          BODY_RAW: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+
+          COFFEE_START='<!-- haghs:auto-coffee:start -->'
+          COFFEE_END='<!-- haghs:auto-coffee:end -->'
+          CONTRIB_START='<!-- haghs:auto-contributors:start -->'
+          CONTRIB_END='<!-- haghs:auto-contributors:end -->'
+
+          # Write the original body to a file safely (no shell interpolation).
+          python3 -c 'import os,sys; sys.stdout.write(os.environ.get("BODY_RAW",""))' > body.raw
+
+          # Strip any pre-existing auto-blocks so the workflow is idempotent.
+          python3 - <<'PY' > body.stripped
+          import re
+          body = open('body.raw').read()
+          pairs = [
+              ('<!-- haghs:auto-coffee:start -->', '<!-- haghs:auto-coffee:end -->'),
+              ('<!-- haghs:auto-contributors:start -->', '<!-- haghs:auto-contributors:end -->'),
+          ]
+          for start, end in pairs:
+              body = re.sub(re.escape(start) + r'.*?' + re.escape(end) + r'\n*',
+                            '', body, flags=re.DOTALL)
+          print(body.strip('\n'), end='')
+          PY
+
+          # Find the previous published release tag (latest non-draft != this tag).
+          PREV_TAG=$(gh api "repos/$GH_REPO/releases" \
+            --jq "[.[] | select(.draft == false and .tag_name != \"$TAG\")] | .[0].tag_name // empty")
+
+          CONTRIBUTORS=""
+          if [ -n "$PREV_TAG" ]; then
+            COMPARE_JSON=$(gh api "repos/$GH_REPO/compare/$PREV_TAG...$TAG" 2>/dev/null || echo '{}')
+
+            AUTHORS=$(echo "$COMPARE_JSON" \
+              | jq -r '[.commits[]?.author.login // empty] | unique | .[]' 2>/dev/null || true)
+
+            COAUTHORS=$(echo "$COMPARE_JSON" \
+              | jq -r '.commits[]?.commit.message // empty' 2>/dev/null \
+              | grep -oE 'Co-authored-by:[^<]*<[0-9]+\+[A-Za-z0-9_-]+@users\.noreply\.github\.com>' \
+              | sed -E 's/.*<[0-9]+\+([A-Za-z0-9_-]+)@.*/\1/' \
+              | sort -u || true)
+
+            CONTRIBUTORS=$(printf '%s\n%s\n' "$AUTHORS" "$COAUTHORS" \
+              | sed '/^$/d' \
+              | grep -viE "^(${OWNER_LOGIN}|.*\[bot\])$" \
+              | sort -fu || true)
+          fi
+
+          # Coffee block (always added).
+          {
+            echo "$COFFEE_START"
+            cat .github/release-coffee.md
+            echo "$COFFEE_END"
+          } > coffee.md
+
+          # Contributors block (only if non-owner contributors exist).
+          : > contributors.md
+          if [ -n "$CONTRIBUTORS" ]; then
+            {
+              echo "$CONTRIB_START"
+              echo ""
+              echo "## Thanks"
+              echo ""
+              echo "This release wouldn't have been possible without:"
+              echo ""
+              while IFS= read -r handle; do
+                [ -n "$handle" ] && echo "- [@${handle}](https://github.com/${handle})"
+              done <<< "$CONTRIBUTORS"
+              echo ""
+              echo "$CONTRIB_END"
+            } > contributors.md
+          fi
+
+          # Assemble final body: coffee on top, user content, contributors at the bottom.
+          {
+            cat coffee.md
+            echo ""
+            cat body.stripped
+            if [ -s contributors.md ]; then
+              echo ""
+              echo ""
+              cat contributors.md
+            fi
+          } > body.new
+
+          if cmp -s body.raw body.new; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply augmented body
+        if: steps.build.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release edit "$TAG" --notes-file body.new
