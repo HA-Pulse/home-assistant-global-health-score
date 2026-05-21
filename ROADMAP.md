@@ -120,9 +120,40 @@ All work below is committed on `dev` and described in detail in
 
 ## Planned
 
-*No items currently queued for v2.4. Open issues are triaged on
-[GitHub](https://github.com/d-n91/home-assistant-global-health-score/issues)
-and added here once a concrete scope is agreed.*
+### Stale-sensor detection (v2.4)
+
+**Problem:** Sensors can fail silently — they stop reporting but Home
+Assistant keeps showing the last valid value. The current zombie
+detector only catches `unavailable` / `unknown`, so this class of
+failure goes unnoticed.
+
+**Approach — hybrid design (Option D from the v2.3 design session):**
+
+- **Always-on, passive layer:** A new `stale_candidates` state
+  attribute lists every entity whose `state.last_reported` is older
+  than a configurable threshold (default 24 h). No score impact, no
+  penalty — pure transparency, no false-positive risk for unmodified
+  setups.
+- **Opt-in, score-impacting layer:** A new `stale_watch_labels` option
+  mirrors the existing multi-label `ignore_labels` pattern. Entities
+  carrying any of these labels and exceeding the threshold contribute
+  to a new penalty bucket. Zero false positives by design — the user
+  explicitly marks which sensors must keep reporting.
+
+**Why not auto-detect by device class:** Every commonly cited "safe"
+device class (`temperature`, `humidity`, `pressure`, `power`,
+`illuminance`, …) has legitimate long-quiet scenarios (climate-stable
+rooms, idle devices, nighttime). No single threshold works across
+them, and a magic default would violate the "no obfuscated thresholds"
+rule from `HAGHS_PHILOSOPHY.md`.
+
+**Technical primitive:** `state.last_reported` (HA Core 2024.4+).
+Updates on every backend message regardless of whether the value or
+attributes changed, so it survives Zigbee2MQTT's `force_update=False`
+default — which `state.last_updated` does not.
+
+**Prerequisite:** Bump `hacs.json` min HA version to ≥ 2024.4
+(already on the v2.3 pre-release checklist to raise to 2024.10+).
 
 ---
 
@@ -152,4 +183,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-05-13*
+*Last updated: 2026-05-21*
