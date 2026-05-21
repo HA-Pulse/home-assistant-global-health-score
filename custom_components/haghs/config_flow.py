@@ -70,6 +70,29 @@ _BASE_SCHEMA = {
     ),
 }
 
+# Optional fields the user must be able to clear. Without this normalization a
+# missing key in user_input would never reach entry.options, and the
+# {**data, **options} merge in the coordinator would resurrect the original
+# value from entry.data after every HA restart (community bug report).
+_NULLABLE_OPTIONAL_KEYS: tuple[str, ...] = (
+    CONF_DB_SENSOR,
+    CONF_CPU_SENSOR,
+    CONF_RAM_SENSOR,
+    CONF_IGNORE_LABELS,
+    CONF_IGNORE_PATTERNS,
+)
+_LIST_OPTIONAL_KEYS: frozenset[str] = frozenset({CONF_IGNORE_LABELS, CONF_IGNORE_PATTERNS})
+
+
+def _normalize_optional(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Force every leave-able optional field to an explicit None / []."""
+    for key in _NULLABLE_OPTIONAL_KEYS:
+        value = user_input.get(key)
+        if value in (None, "", []):
+            user_input[key] = [] if key in _LIST_OPTIONAL_KEYS else None
+    return user_input
+
+
 _EXTRA_OPTIONS_SCHEMA = {
     vol.Optional(
         CONF_UPDATE_INTERVAL,
@@ -129,7 +152,10 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
 
         if user_input is not None:
-            return self.async_create_entry(title="Global Health Score", data=user_input)
+            return self.async_create_entry(
+                title="Global Health Score",
+                data=_normalize_optional(user_input),
+            )
         psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
         schema = _schema_with_psi(psi.available)
 
@@ -148,7 +174,7 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data=_normalize_optional(user_input))
 
         # Current values: options take priority, then data, then defaults
         current = {**self._config_entry.data, **self._config_entry.options}
