@@ -160,9 +160,12 @@ After adding it, navigate to its entity list and **manually enable** the followi
 After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust:
 * CPU / RAM sensors
 * Storage type
-* Ignore label
+* **Ignore labels** (multi-select)
+* **Ignore entity-id patterns** (glob list)
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
+* **Zombie grace period** (1–240 minutes, default: 15) — how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
+* **Battery-class grace period** (1–240 minutes, default: 60) — extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
 
@@ -194,7 +197,7 @@ In **Advanced Options:**
 
 **2. Select the sensor in HAGHS:**
 
-Go to **Settings > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
+Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
 
 > **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. If you use an external database and do not provide a sensor, the database score will simply be neutral (no penalty, no monitoring). The sensor must report the value in **MB**, not bytes, not GB.
 
@@ -203,10 +206,66 @@ Go to **Settings > Integrations > HAGHS > Configure** and select your new sensor
 ## Label Configuration (Smart Whitelisting)
 To prevent false positives from sleeping tablets or seasonal devices:
 1.  Go to **Settings > Areas, labels & zones > Labels**.
-2.  Create a label named `haghs_ignore`.
-3.  Assign this label to any **Device**, **Entity**, or **Update Entity**.
-    * **Pro Tip:** Assigning the label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
+2.  Create one or more labels (e.g. `haghs_ignore`, `vacation`, `guest_mode`).
+3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
+4.  Assign any of those labels to any **Device**, **Entity**, or **Update Entity**.
+    * **Pro Tip:** Assigning a label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
+
+### Dynamic exclusions via automation
+
+Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
+native label services — HAGHS does not need its own service. List a label like
+`vacation` in the HAGHS *Ignore labels* field, then assign/remove it from
+automations:
+
+```yaml
+# Start ignoring vacation devices at 08:00 the day you leave
+- alias: HAGHS vacation start
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - service: label.assign
+      data:
+        label_id: vacation
+        target:
+          entity_id:
+            - light.terrace
+            - switch.coffee_machine
+            - vacuum.robot
+
+# Stop ignoring them when you are back
+- alias: HAGHS vacation end
+  trigger:
+    - platform: state
+      entity_id: input_boolean.vacation
+      to: "off"
+  action:
+    - service: label.remove
+      data:
+        label_id: vacation
+        target:
+          entity_id:
+            - light.terrace
+            - switch.coffee_machine
+            - vacuum.robot
+```
+
+HAGHS picks up the change automatically on its next refresh; no reload needed.
+
+### Pattern-Based Ignore (for entities without a unique ID)
+
+Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. HAGHS would otherwise flag them as zombies as soon as they go unavailable.
+
+Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from both zombie detection and update penalties.
+
+Examples:
+- `sensor.docker_*` — every Docker monitor sensor
+- `sensor.torque_*` — every Torque OBD sensor
+- `binary_sensor.test_?` — `binary_sensor.test_1` through `binary_sensor.test_9`
+
+Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are logged as a `WARNING` and skipped, so a single typo never disables the rest of the list.
 
 ---
 
@@ -221,11 +280,21 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `zombie_count` | int | Total number of zombie entities |
 | `zombie_entities` | list | Entity IDs of zombies (capped at 20) |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
-| `psi_available` | bool | Whether PSI metrics are active (CPU + RAM + I/O). When `false`, only classic sensors are used (CPU + RAM, no I/O) |
+| `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`) |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag) |
+| `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
+| `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
+| `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
+| `rec_disk_low` | bool | Disk free space is below the storage-type threshold |
+| `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
+| `rec_power_unstable` | bool | RPi under-voltage detected |
+| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
+| `rec_updates_pending` | bool | At least one non-ignored update entity is pending |
+| `rec_zombie` | bool | At least one zombie entity is reported |
+| `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
 
 ---
 
@@ -274,7 +343,7 @@ cards:
       'psi_available') | default(false, true) %} {% set _upd =
       '/config/updates' %} {% set _ent = '/config/entities' %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending
       — [Open Updates]({{ _upd }}) {% endif %}
@@ -282,8 +351,17 @@ cards:
       {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s) — [Check
       Entities]({{ _ent }}) {% endif %}
 
-      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %} {%
-      else %} --- ✅ System healthy. No recommendations. {% endif %}
+      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
+      {{ rec }}
+      {% else %} --- ✅ System healthy. No recommendations. {% endif %}
+
+      {% set keep = state_attr(e, 'recorder_keep_days') %}
+      {% set filter = state_attr(e, 'recorder_filter_active') | default(false, true) %}
+      {% if keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score:
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      {% endif %}
 
       **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
       hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
@@ -291,7 +369,7 @@ cards:
 
 ```
 
-### HAGHS Pro v1.1 (Command Center)
+### HAGHS Pro v1.2 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
@@ -317,7 +395,7 @@ cards:
       state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
   - type: markdown
@@ -351,9 +429,10 @@ cards:
         state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
         '/config/updates' %}
 
-        {% if updates | length > 0 %} {{ updates | length }} update(s) pending:
-        {% for u in updates %} &nbsp;&nbsp; • {{ u }} {% endfor %} [→ Open
-        Updates]({{ _upd }}) {% else %} ✅ All updates installed {% endif %}
+        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
+        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
+        [→ Open Updates]({{ _upd }})
+        {% else %} ✅ All updates installed {% endif %}
 
         <hr>
 
@@ -366,6 +445,13 @@ cards:
 
 
         {{ 'Entity filter active' if filter else 'No entity filter' }}
+
+
+        {% if keep in [none, 'unknown'] or not filter %}
+        💡 Tips to improve your score:
+        {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+        {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+        {% endif %}
 
 
         ---
@@ -388,10 +474,31 @@ cards:
         {% else %}
           {% set z_list = z_raw | list %}
         {% endif %}
-        {% set grouped = expand(z_list) | groupby('domain') %}
+        {% set ghosts = z_list | select('match', '^\\[unregistered\\]') | list %}
+        {% set tracked = z_list | reject('match', '^\\[unregistered\\]') | list %}
+        {% set grouped = expand(tracked) | groupby('domain') %}
 
-        {{ z_count }} zombie(s) across {{ grouped | length }} domain(s)
-        {% if z_count > 20 %}*(showing first 20 — {{ z_count - 20 }} more hidden)*{% endif %}
+        {# Domain count: prefer the HAGHS v2.3+ attribute when present.
+           Fall back to extracting the distinct domains from z_list so the
+           card keeps working on older HAGHS versions that do not expose
+           zombie_count_per_domain. #}
+        {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
+        {% if per_domain %}
+          {% set domain_count = per_domain | length %}
+        {% else %}
+          {% set ns = namespace(seen=[]) %}
+          {% for entry in z_list %}
+            {% set dom = (entry | replace('[unregistered] ', '')).split('.')[0] %}
+            {% if dom not in ns.seen %}
+              {% set ns.seen = ns.seen + [dom] %}
+            {% endif %}
+          {% endfor %}
+          {% set domain_count = ns.seen | length %}
+        {% endif %}
+
+        {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
+        {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+        {% if z_count > z_list | length %}*(showing first {{ z_list | length }} — {{ z_count - z_list | length }} more hidden)*{% endif %}
 
         {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
@@ -399,10 +506,19 @@ cards:
         <details>
         <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
         {% for item in domain[1] %}
-        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }}: {{ item.state }}
+        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
         {% endfor %}
         </details>
         {% endfor %}
+
+        {% if ghosts | length > 0 %}
+        <details>
+        <summary>⚠️ Unregistered: {{ ghosts | length }}</summary>
+        {% for entry in ghosts %}
+        &nbsp;&nbsp; • `{{ entry | replace('[unregistered] ', '') }}`
+        {% endfor %}
+        </details>
+        {% endif %}
       {% endif %}
 
 ```
@@ -450,7 +566,7 @@ Each pending update costs **5 pts**. A Core version lag (≥3 months behind) add
 Entities that just became `unavailable` or `unknown` are ignored for 15 minutes. This prevents your score from dropping during brief network hiccups or device reboots. After 15 minutes, they count as zombies.
 
 **Can I change the update interval?**
-Yes. Go to **Settings > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
+Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
 
 **What happens if a sub-calculation fails?**
 HAGHS uses a safety net: if any pillar calculation times out or throws an error, it falls back to a neutral score (100 / no penalty) and logs a warning. The sensor never crashes.

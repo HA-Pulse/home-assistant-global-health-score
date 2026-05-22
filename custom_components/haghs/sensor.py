@@ -1,4 +1,5 @@
 """HAGHS Sensor — CoordinatorEntity backed by HaghsDataUpdateCoordinator."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,8 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HaghsDataUpdateCoordinator
-from .const import DEFAULT_NAME, DOMAIN
+from .const import DEFAULT_NAME, DOMAIN, REC_FLAG_KEYS
+from .coordinator import HaghsDataUpdateCoordinator
 
 
 async def async_setup_entry(
@@ -56,10 +57,12 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "application_score": data["application_score"],
             "zombie_count": data["zombie_count"],
             "zombie_entities": data["zombie_entities"],
+            "zombie_count_per_domain": data["zombie_count_per_domain"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
             "recorder_keep_days": data["recorder_keep_days"],
             "recorder_filter_active": data["recorder_filter_active"],
             "pending_updates": data["pending_updates"],
             "recommendations": data["recommendations"],
+            **{k: data[k] for k in REC_FLAG_KEYS},
         }
