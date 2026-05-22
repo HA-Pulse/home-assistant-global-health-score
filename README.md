@@ -130,15 +130,15 @@ Evaluates the physical constraints of the host machine using real system metrics
 Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts.
 
 * **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Penalties scale with the percentage of zombies relative to the entities in the monitored domains (22 physical/UI-relevant domains; helpers, automations, scripts etc. are excluded so the ratio is not diluted). Two **configurable grace periods** prevent false positives: a regular window (default **15 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit); ghost zombies without an entity-registry entry are surfaced with a `[unregistered]` prefix. `zombie_count` and the new `zombie_count_per_domain` attribute always carry the full totals.
-  
+
 * **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
-  
+
 * **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (>3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
-  
+
 * **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**.
-  
+
 * **Backup Health:** A static **30-point deduction** for stale backups.
-  
+
 * **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene, purge days configured (+5) and entity filters active (+5).
 
 ---
@@ -451,10 +451,14 @@ cards:
         state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
         '/config/updates' %}
 
-        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
-        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
-        [→ Open Updates]({{ _upd }})
-        {% else %} ✅ All updates installed {% endif %}
+        {% if updates | length > 0 %}
+        {{ updates | length }} update(s) pending:
+        {% for u in updates %}
+          &nbsp;&nbsp; • {{ u }}
+        {%- endfor %}
+
+        [→ Open Updates]({{ _upd }}) {% else %} ✅ All updates installed {% endif
+        %}
 
         <hr>
 
