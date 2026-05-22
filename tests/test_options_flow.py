@@ -62,14 +62,14 @@ async def test_clearing_db_sensor_persists(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_STORAGE_TYPE: "sd",
+            CONF_STORAGE_TYPE: "sd-card",
             CONF_DB_SENSOR: "sensor.wrongly_picked_at_install",
         },
         options={},
     )
     entry.add_to_hass(hass)
 
-    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd"})
+    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd-card"})
 
     assert entry.options[CONF_DB_SENSOR] is None
     assert _merged(entry)[CONF_DB_SENSOR] is None
@@ -80,14 +80,14 @@ async def test_clearing_ignore_labels_persists(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_STORAGE_TYPE: "sd",
+            CONF_STORAGE_TYPE: "sd-card",
             CONF_IGNORE_LABELS: ["legacy_label"],
         },
         options={},
     )
     entry.add_to_hass(hass)
 
-    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd"})
+    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd-card"})
 
     assert entry.options[CONF_IGNORE_LABELS] == []
     assert _merged(entry)[CONF_IGNORE_LABELS] == []
@@ -98,14 +98,14 @@ async def test_clearing_ignore_patterns_persists(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_STORAGE_TYPE: "sd",
+            CONF_STORAGE_TYPE: "sd-card",
             CONF_IGNORE_PATTERNS: ["sensor.docker_*"],
         },
         options={},
     )
     entry.add_to_hass(hass)
 
-    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd"})
+    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd-card"})
 
     assert entry.options[CONF_IGNORE_PATTERNS] == []
     assert _merged(entry)[CONF_IGNORE_PATTERNS] == []
@@ -116,7 +116,7 @@ async def test_clearing_cpu_ram_persists_when_psi_available(hass: HomeAssistant)
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_STORAGE_TYPE: "sd",
+            CONF_STORAGE_TYPE: "sd-card",
             CONF_CPU_SENSOR: "sensor.old_cpu",
             CONF_RAM_SENSOR: "sensor.old_ram",
         },
@@ -124,7 +124,7 @@ async def test_clearing_cpu_ram_persists_when_psi_available(hass: HomeAssistant)
     )
     entry.add_to_hass(hass)
 
-    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd"}, psi=_PSI_AVAILABLE)
+    await _run_options_flow(hass, entry, {CONF_STORAGE_TYPE: "sd-card"}, psi=_PSI_AVAILABLE)
 
     assert entry.options[CONF_CPU_SENSOR] is None
     assert entry.options[CONF_RAM_SENSOR] is None
@@ -138,7 +138,7 @@ async def test_existing_value_kept_when_field_submitted(hass: HomeAssistant) -> 
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_STORAGE_TYPE: "sd",
+            CONF_STORAGE_TYPE: "sd-card",
             CONF_DB_SENSOR: "sensor.old_db",
         },
         options={},
@@ -148,7 +148,7 @@ async def test_existing_value_kept_when_field_submitted(hass: HomeAssistant) -> 
     await _run_options_flow(
         hass,
         entry,
-        {CONF_STORAGE_TYPE: "sd", CONF_DB_SENSOR: "sensor.new_db"},
+        {CONF_STORAGE_TYPE: "sd-card", CONF_DB_SENSOR: "sensor.new_db"},
     )
 
     assert entry.options[CONF_DB_SENSOR] == "sensor.new_db"

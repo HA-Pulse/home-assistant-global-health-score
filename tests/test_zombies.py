@@ -368,16 +368,6 @@ def test_compile_patterns_translates_glob() -> None:
     assert not compiled[1].match("binary_sensor.test_12")
 
 
-def test_compile_patterns_skips_invalid_with_warning(caplog) -> None:
-    """An invalid pattern is logged but does not break the rest."""
-    with caplog.at_level("WARNING"):
-        compiled = _compile_patterns(["sensor.[unclosed", "sensor.ok_*"])
-
-    assert len(compiled) == 1
-    assert compiled[0].match("sensor.ok_one")
-    assert "Invalid ignore pattern" in caplog.text
-
-
 async def test_pattern_match_excludes_zombie(hass: HomeAssistant) -> None:
     """An entity matching a configured glob is not counted as a zombie."""
     entry = MockConfigEntry(

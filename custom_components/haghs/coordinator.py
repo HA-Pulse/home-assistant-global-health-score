@@ -19,7 +19,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers import (
     device_registry as dr,
 )
@@ -201,6 +201,10 @@ def _compile_patterns(raw: list[str] | None) -> list[re.Pattern[str]]:
         try:
             compiled.append(re.compile(fnmatch.translate(pattern)))
         except re.error as err:
+            # Defense-in-depth: fnmatch.translate escapes most malformed
+            # glob input (e.g. unclosed character classes) so re.compile
+            # rarely raises in practice, but we keep the guard in case
+            # CPython's translation rules change in a future release.
             _LOGGER.warning(
                 "HAGHS: Invalid ignore pattern %r (%s) — skipping",
                 pattern,
@@ -273,7 +277,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # assignments) may not yet be loaded from storage, which would cause
         # labelled-but-unavailable entities to be misreported as zombies on
         # the first refresh after boot.
-        self._registries_ready: bool = hass.is_running
+        #
+        # Use `state == CoreState.running` instead of `hass.is_running`, which
+        # returns True for both `starting` and `running` and would defeat the
+        # deferral during the startup window we actually care about (#13).
+        self._registries_ready: bool = hass.state == CoreState.running
         if not self._registries_ready:
             hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STARTED,
