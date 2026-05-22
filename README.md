@@ -213,6 +213,18 @@ In **Advanced Options:**
 - **Device Class:** `Data size`
 - **State Class:** `Measurement`
 
+**Alternative: PostgreSQL**
+
+If you use PostgreSQL instead of MariaDB, replace the SQL query with:
+
+```sql
+SELECT ROUND(pg_database_size('homeassistant') / 1024.0 / 1024.0, 2) AS size_mb;
+```
+
+(Replace `homeassistant` with your actual database name.)
+
+Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com/D-N91/home-assistant-global-health-score/issues/82).
+
 **2. Select the sensor in HAGHS:**
 
 Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
