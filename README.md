@@ -187,9 +187,9 @@ Changes apply immediately, no restart required.
 <details>
 <summary><b>External Database (MariaDB / PostgreSQL)</b> - full SQL-sensor walkthrough</summary>
 
-### External Database
+### External Database (MariaDB)
 
-If you use an **external database** (MariaDB, PostgreSQL) instead of the built-in SQLite, HAGHS cannot auto-detect the database size. To enable database monitoring for your setup:
+If you use an **external database** (MariaDB) instead of the built-in SQLite, HAGHS cannot auto-detect the database size. To enable database monitoring for your setup:
 
 **1. Create a SQL sensor (no YAML needed):**
 
@@ -213,7 +213,7 @@ In **Advanced Options:**
 - **Device Class:** `Data size`
 - **State Class:** `Measurement`
 
-**Alternative: PostgreSQL**
+### Alternative (PostgreSQL)
 
 If you use PostgreSQL instead of MariaDB, replace the SQL query with:
 
@@ -224,6 +224,7 @@ SELECT ROUND(pg_database_size('homeassistant') / 1024.0 / 1024.0, 2) AS size_mb;
 (Replace `homeassistant` with your actual database name.)
 
 Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com/D-N91/home-assistant-global-health-score/issues/82).
+
 
 **2. Select the sensor in HAGHS:**
 
