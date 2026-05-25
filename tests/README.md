@@ -1,6 +1,6 @@
 # HAGHS Test Suite
 
-Bootstrapped per issue [#54](https://github.com/d-n91/home-assistant-global-health-score/issues/54).
+Bootstrapped per issue [#54](https://github.com/HA-Pulse/home-assistant-global-health-score/issues/54).
 
 ## Running tests locally
 
