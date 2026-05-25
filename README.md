@@ -25,10 +25,10 @@ As Home Assistant matures into a mission-critical Smart Home OS, the need for a 
 
 ---
 ### Featured In
-- [How-To Geek](https://www.howtogeek.com/this-tool-gave-my-home-assistant-server-a-rating-and-told-me-how-to-improve-it/) — *"This tool gave my Home Assistant server a rating (and told me how to improve it)"*
-- [XDA Developers](https://www.xda-developers.com/tool-graded-home-assistant-server-told-how-make-better/) — *"This tool graded my Home Assistant server and told me how to make it better"*
-- [SmartHütte Podcast](https://www.youtube.com/watch?v=G892ii7YTL8&t=48s) — Episode 30, at 0:48 (German)
-- [HomeTech.fm Podcast](https://www.youtube.com/watch?v=IrIW2VR7qic&t=3676s) — Episode 569, at 1:01:16 (English)
+- [How-To Geek](https://www.howtogeek.com/this-tool-gave-my-home-assistant-server-a-rating-and-told-me-how-to-improve-it/) - *"This tool gave my Home Assistant server a rating (and told me how to improve it)"*
+- [XDA Developers](https://www.xda-developers.com/tool-graded-home-assistant-server-told-how-make-better/) - *"This tool graded my Home Assistant server and told me how to make it better"*
+- [SmartHütte Podcast](https://www.youtube.com/watch?v=G892ii7YTL8&t=48s) - Episode 30, at 0:48 (German)
+- [HomeTech.fm Podcast](https://www.youtube.com/watch?v=IrIW2VR7qic&t=3676s) - Episode 569, at 1:01:16 (English)
 - [Simon42 Youtube Video](https://www.youtube.com/watch?v=btd66ndsUuA) - Interview with D-N91, creator of HAGHS (German)
 - [Tristans Smartes Heim Youtube Video](https://www.youtube.com/watch?v=oDUdchF1mww&t=20s) - Clean up your Home Assistant (German)
 ---
@@ -47,7 +47,7 @@ HAGHS v2.3 ships a full `async_migrate_entry` handler that converts config entri
   - [Prerequisites](#1-prerequisites)
   - [Installation & Setup](#2-installation--setup)
   - [Options Flow](#3-options-flow-runtime-settings)
-  - [External Database](#external-database)
+  - [External Database](#external-database-mariadb)
 - [Label Configuration](#label-configuration-smart-whitelisting)
 - [Sensor Attributes](#sensor-attributes)
 - [Roadmap](#roadmap)
@@ -576,7 +576,7 @@ Yes. HAGHS auto-detects disk usage and database size on any platform. The Core u
 PSI (Pressure Stall Information) is a Linux kernel feature that measures real resource contention — how long tasks are actually waiting for CPU, memory, or I/O — rather than how busy a resource is. A system at 40% CPU utilization can have near-zero stall time, while one at 20% utilization may be heavily stalled. HAGHS uses PSI as the primary metric where available, falling back to classic utilization sensors on systems without PSI support (Windows, older Docker setups). Because their scales differ fundamentally, HAGHS uses separate penalty thresholds for each. When PSI is active, I/O monitoring is also included, giving a 4-component hardware score (CPU + RAM + I/O + Disk). Without PSI, the score uses 3 components (CPU + RAM + Disk). The classic sensors selected during setup are only used when PSI is unavailable.
 
 **I use an external database (MariaDB / PostgreSQL). How do I monitor it?**
-See the [External Database](#external-database) section above for full setup instructions. The sensor must report the database size in **MB**. If no sensor is configured, HAGHS skips database monitoring, no penalty, no scoring, other scores unaffected.
+See the [External Database](#external-database-mariadb) section above for full setup instructions. The sensor must report the database size in **MB**. If no sensor is configured, HAGHS skips database monitoring, no penalty, no scoring, other scores unaffected.
 
 **Do I still need a disk usage sensor?**
 No. HAGHS reads disk usage directly via `psutil`. No manual sensor selection required.
