@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import UnitOfTime
+from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers import selector
 
 from .const import (
@@ -21,6 +22,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
     DEFAULT_BATTERY_GRACE_MINUTES,
+    DEFAULT_IGNORE_LABEL_NAME,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
@@ -133,6 +135,22 @@ _EXTRA_OPTIONS_SCHEMA = {
 }
 
 
+def _ensure_default_label(hass) -> str | None:
+    """Ensure the default ignore label exists and return its label_id."""
+    label_reg = lr.async_get(hass)
+    for label_id, label_entry in label_reg.labels.items():
+        if label_entry.name.lower() == DEFAULT_IGNORE_LABEL_NAME.lower():
+            return label_id
+    try:
+        created = label_reg.async_create(DEFAULT_IGNORE_LABEL_NAME)
+        return created.label_id
+    except ValueError:
+        for label_id, label_entry in label_reg.labels.items():
+            if label_entry.name.lower() == DEFAULT_IGNORE_LABEL_NAME.lower():
+                return label_id
+    return None
+
+
 class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for HAGHS."""
 
@@ -159,7 +177,15 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
         schema = _schema_with_psi(psi.available)
 
-        return self.async_show_form(step_id="user", data_schema=schema)
+        ignore_label_id = _ensure_default_label(self.hass)
+        suggested = {}
+        if ignore_label_id:
+            suggested[CONF_IGNORE_LABELS] = [ignore_label_id]
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
+        )
 
 
 class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
