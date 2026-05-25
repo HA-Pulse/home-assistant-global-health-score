@@ -1,17 +1,16 @@
-<img width="460" alt="logo@2xzugeschnitten" src="https://github.com/user-attachments/assets/63f439f2-58ab-4306-9e34-932b74a30d6d" />
-
+<img width="732" height="256" alt="logo" src="https://github.com/user-attachments/assets/625f23d8-f328-4c6f-ab93-b0b80086548a" />
 
 **The open standard for Home Assistant instance health monitoring.**
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/d-n91/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/d-n91/home-assistant-global-health-score/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/HA-Pulse/home-assistant-global-health-score/releases)
 ![Tracked Installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Tracked%20Installs&suffix=%2B&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)
-[![GitHub Stars](https://img.shields.io/github/stars/d-n91/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/D-N91/home-assistant-global-health-score/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/HA-Pulse/home-assistant-global-health-score/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Support%20My%20Work-buy%20me%20a%20coffee-yellow?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/DN91)
 ![AI-Assisted](https://img.shields.io/badge/AI-Assisted-blue?style=for-the-badge)
 
 ---
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/22d138d764884b0380033fb33d7c1875)](https://app.codacy.com/gh/D-N91/home-assistant-global-health-score?utm_source=github.com&utm_medium=referral&utm_content=D-N91/home-assistant-global-health-score&utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/22d138d764884b0380033fb33d7c1875)](https://app.codacy.com/gh/HA-Pulse/home-assistant-global-health-score?utm_source=github.com&utm_medium=referral&utm_content=HA-Pulse/home-assistant-global-health-score&utm_campaign=Badge_Grade)
 
 ## Abstract
 As Home Assistant matures into a mission-critical Smart Home OS, the need for a unified stability metric becomes paramount. **HAGHS** is a fully local, open-scoring framework designed to provide an objective **Health Score (0-100)**. It differentiates between transient hardware load and chronic maintenance neglect, providing users with a "North Star" for instance optimization. All scoring logic is fully visible in the codebase, no hidden penalties, no black boxes.
@@ -223,7 +222,7 @@ SELECT ROUND(pg_database_size('homeassistant') / 1024.0 / 1024.0, 2) AS size_mb;
 
 (Replace `homeassistant` with your actual database name.)
 
-Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com/D-N91/home-assistant-global-health-score/issues/82).
+Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com/HA-Pulse/home-assistant-global-health-score/issues/82).
 
 
 **2. Select the sensor in HAGHS:**
