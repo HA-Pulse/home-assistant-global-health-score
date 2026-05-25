@@ -336,11 +336,11 @@ HAGHS provides all data as sensor attributes. Dashboard visualization happens en
 
 Below are two ready-to-use card configurations:
 
-### HAGHS Lite v1.1 (Quick Check)
+### HAGHS Lite v1.2 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-![HAGHS Lite v2 2](https://github.com/user-attachments/assets/00ed0c47-bcc7-4ef7-bad4-f76950347e88)
+<img width="519" height="392" alt="haghs lite v1 2" src="https://github.com/user-attachments/assets/262f91cb-ba47-4d90-ab27-931d224a0332" />
 
 ```yaml
 type: vertical-stack
@@ -395,8 +395,7 @@ cards:
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
-![HAGHS Pro](https://github.com/user-attachments/assets/b5b1e3ab-d648-4784-9eb0-5df2513aea57)
-
+<img width="518" height="1177" alt="haghspro1 2" src="https://github.com/user-attachments/assets/38e90a7a-dfbf-40af-b26d-0de38ccc6852" />
 
 ```yaml
 type: vertical-stack
