@@ -1,7 +1,6 @@
 <img width="460" alt="logo@2xzugeschnitten" src="https://github.com/user-attachments/assets/63f439f2-58ab-4306-9e34-932b74a30d6d" />
 
 
-
 **The open standard for Home Assistant instance health monitoring.**
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
@@ -34,35 +33,33 @@ As Home Assistant matures into a mission-critical Smart Home OS, the need for a 
 - [Tristans Smartes Heim Youtube Video](https://www.youtube.com/watch?v=oDUdchF1mww&t=20s) - Clean up your Home Assistant (German)
 ---
 
-### Important: Upgrading from v2.1.x to v2.2+ (Migration Error)
-If you are upgrading from an older version and encounter a `Migration handler not found` error in your logs or UI, this is expected behavior.
+### Upgrading
 
-Version 2.2 introduced a complete architectural rewrite, moving away from manual YAML configurations to a pure auto-detection setup. Because the old stored settings are fundamentally incompatible with the new system, an automatic background migration is not possible.
-
-**How to fix:** Simply delete the existing HAGHS integration from your *Settings > Devices & Services* dashboard, restart Home Assistant, and add the integration fresh.
+HAGHS v2.3 ships a full `async_migrate_entry` handler that converts config entries from version 1, 2 (any minor), 3.0, 3.1, 3.2, and 3.3 to the current 3.4 layout automatically on the next restart. **No manual remove/re-add is needed**, including for users previously affected by the *"Migration handler not found"* warning on v2.2.x (#75).
 
 ---
 
 ## Table of Contents
-- [The HAGHS Standard](#the-haghs-standard-v222)
+- [The HAGHS Standard](#the-haghs-standard)
 - [Pillar 1: Hardware Performance (40%)](#pillar-1-hardware-performance-40)
 - [Pillar 2: Application Hygiene (60%)](#pillar-2-application-hygiene-60)
 - [Configuration](#configuration)
   - [Prerequisites](#1-prerequisites)
   - [Installation & Setup](#2-installation--setup)
   - [Options Flow](#3-options-flow-runtime-settings)
-  - [External Database](#external-database)
+  - [External Database](#external-database-mariadb)
 - [Label Configuration](#label-configuration-smart-whitelisting)
 - [Sensor Attributes](#sensor-attributes)
+- [Roadmap](#roadmap)
 - [UI Integration](#ui-integration)
-  - [HAGHS Lite](#haghs-lite-v11-quick-check)
-  - [HAGHS Pro](haghs-pro-v11-command-center)
+  - [HAGHS Lite](#haghs-lite-v12-quick-check)
+  - [HAGHS Pro](#haghs-pro-v12-command-center)
 - [FAQ](#faq)
 - [Changelog](#changelog)
 
 ---
 
-## The HAGHS Standard (v2.2.2)
+## The HAGHS Standard
 
 The index is calculated via a weighted average of two core pillars, prioritizing long-term software hygiene over temporary hardware fluctuations.
 
@@ -79,6 +76,9 @@ $$Score_{Global} = \lfloor (Score_{Hardware} \cdot 0.4) + (Score_{Application} \
 Evaluates the physical constraints of the host machine using real system metrics. The hardware score is the average of all available component scores (CPU, RAM, I/O, Disk).
 
 * **Metric Source (Smart Fallback):** HAGHS reads **Pressure Stall Information (PSI)** directly from the Linux kernel (`/proc/pressure/cpu`, `/proc/pressure/memory`, `/proc/pressure/io`) for high-precision measurements. If PSI is unavailable (Windows, older Docker, non-Linux hosts), it automatically falls back to the manually configured CPU/RAM sensors. PSI measures real *stall time* (how long tasks waited for a resource), while classic sensors measure *utilization* (how busy a resource is). Because these scales differ fundamentally, HAGHS uses **separate threshold tiers** for each source.
+
+<details>
+<summary><b>Penalty tier tables</b> - exact thresholds for CPU, RAM, and I/O</summary>
 
 * **CPU Load (Tiered):**
 
@@ -111,7 +111,13 @@ Evaluates the physical constraints of the host machine using real system metrics
   | Heavy (50 pts) | 31–50% |
   | Critical (80 pts) | >50% |
 
+</details>
+
   > When PSI I/O is available, the hardware score uses **4 components** (CPU + RAM + I/O + Disk) / 4. Without I/O, it falls back to **3 components** (CPU + RAM + Disk) / 3.
+
+**PSI-aware recommendations:** The advisor text is split into PSI and classic variants for CPU and RAM. On PSI-equipped systems you see "PSI CPU stall time: 12.5%" (the actual blocking time); on fallback systems "CPU utilization: 65%" (the busy-ness). The metric source is always explicit so you know whether you are looking at stalls or load.
+
+**Power supply detection (Raspberry Pi):** HAGHS auto-detects `binary_sensor.rpi_power_status` when available and applies a flat **20-point** hardware penalty while under-voltage is reported. Surfaces silent throttling on undersized power supplies that classic CPU sensors cannot see.
 
 * **Storage Integrity (Smart Thresholds):** Disk usage is **auto-detected** via `psutil`, no manual sensor needed. Thresholds adapt to your storage type:
   * **SD-Card / eMMC:** Critical at **<3 GB free**, Warning at **<5 GB free**.
@@ -123,11 +129,16 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts.
 
-* **Zombie Entities (Ratio-based, max 20 pts):** Penalties scale with the percentage of zombies relative to total entities, not a fixed count. A **15-minute grace period** prevents false positives from temporary network outages. The attribute list is capped at 20 entries to protect the state machine; the full count is always accurate.
+* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Penalties scale with the percentage of zombies relative to the entities in the monitored domains (22 physical/UI-relevant domains; helpers, automations, scripts etc. are excluded so the ratio is not diluted). Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit); ghost zombies without an entity-registry entry are surfaced with a `[unregistered]` prefix. `zombie_count` and the new `zombie_count_per_domain` attribute always carry the full totals.
+  
 * **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
-* **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). Penalizes a "Core Version Lag" of **>3 months** behind the latest release. Each update costs **5 pts**, Core lag adds **20 pts**, capped at **35 pts** total. The `haghs_ignore` label also works on update entities.
+  
+* **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (>3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
+  
 * **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**.
+  
 * **Backup Health:** A static **30-point deduction** for stale backups.
+  
 * **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene, purge days configured (+5) and entity filters active (+5).
 
 ---
@@ -145,31 +156,40 @@ After adding it, navigate to its entity list and **manually enable** the followi
 * `sensor.system_monitor_memory_usage` (Percentage %)
 
 > **Note:** On most Linux-based HA installations (HAOS, Supervised), HAGHS uses PSI data automatically and these sensors are only a safety net. They are still required during setup but may not be actively used for scoring.
+> > **If PSI disappears after setup:** Should the kernel stop exposing PSI (e.g. after switching from HAOS to a non-Linux host) and no CPU/RAM fallback sensors are configured, HAGHS surfaces a **Repair flow** in *Settings > System > Repairs* instead of crashing. The flow lets you pick the fallback sensors and resume operation without restarting Home Assistant.
 
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
 
 ### 2. Installation & Setup
 1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
+> **Note on HACS installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page). HACS uses this asset automatically; users on legacy versions can also download it manually and drop the contents into `<config>/custom_components/haghs/`
 2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask:
-    * Select your **CPU** and **RAM** sensors (PSI fallback).
+    * Select your **CPU** and **RAM** sensors (smart PSI fallback - only used if PSI data is not available on your host).
     * Choose your **Storage Type** (SD-Card / SSD / eMMC, default: SD-Card).
-    * Optionally change the **Ignore Label** (default: `haghs_ignore`).
-    * Optionally select a **Database Size Sensor** for external databases (see below).
+    * Select one or more **Ignore labels** (multi-select). The `haghs_ignore` label is created automatically and pre-selected.
+    * Optionally fill the **Ignore entity-id patterns** field with glob patterns.
+    * Optionally select a **Database Size Sensor** for external databases (see the collapsible block below).
 
 ### 3. Options Flow (Runtime Settings)
 After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust:
 * CPU / RAM sensors
 * Storage type
-* Ignore label
+* **Ignore labels** (multi-select)
+* **Ignore entity-id patterns** (glob list)
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
+* **Zombie grace period** (1–240 minutes, default: 5) - how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
+* **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
 
-### External Database
+<details>
+<summary><b>External Database (MariaDB / PostgreSQL)</b> - full SQL-sensor walkthrough</summary>
 
-If you use an **external database** (MariaDB, PostgreSQL) instead of the built-in SQLite, HAGHS cannot auto-detect the database size. To enable database monitoring for your setup:
+### External Database (MariaDB)
+
+If you use an **external database** (MariaDB) instead of the built-in SQLite, HAGHS cannot auto-detect the database size. To enable database monitoring for your setup:
 
 **1. Create a SQL sensor (no YAML needed):**
 
@@ -193,21 +213,84 @@ In **Advanced Options:**
 - **Device Class:** `Data size`
 - **State Class:** `Measurement`
 
+### Alternative (PostgreSQL)
+
+If you use PostgreSQL instead of MariaDB, replace the SQL query with:
+
+```sql
+SELECT ROUND(pg_database_size('homeassistant') / 1024.0 / 1024.0, 2) AS size_mb;
+```
+
+(Replace `homeassistant` with your actual database name.)
+
+Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com/D-N91/home-assistant-global-health-score/issues/82).
+
+
 **2. Select the sensor in HAGHS:**
 
-Go to **Settings > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
+Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
 
 > **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. If you use an external database and do not provide a sensor, the database score will simply be neutral (no penalty, no monitoring). The sensor must report the value in **MB**, not bytes, not GB.
+
+</details>
 
 ---
 
 ## Label Configuration (Smart Whitelisting)
-To prevent false positives from sleeping tablets or seasonal devices:
+To prevent false positives from sleeping tablets or seasonal devices, you have three ways to exclude entities from HAGHS scoring - pick whichever feels most natural:
+
+1. **Disable the entity** (*Settings > Devices & Services > Entity > Disable entity*). HAGHS now respects `entity_registry.disabled_by` automatically, so disabled entities never count as zombies or contribute to update penalties. No HAGHS configuration needed.
+2. **Apply an ignore label** (described below) for entities you want to keep enabled but exclude from scoring (e.g. vacation devices, tablets that sleep).
+3. **Use a glob pattern** (see *Pattern-Based Ignore* further down) for entities without a unique ID, which cannot carry a label.
+
+To use ignore labels:
 1.  Go to **Settings > Areas, labels & zones > Labels**.
-2.  Create a label named `haghs_ignore`.
-3.  Assign this label to any **Device**, **Entity**, or **Update Entity**.
-    * **Pro Tip:** Assigning the label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
+2.  The `haghs_ignore` label is created automatically during setup. Create additional labels if needed (e.g. `vacation`, `guest_mode`).
+3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
+4.  Assign any of those labels to any **Device**, **Entity**, or **Update Entity**.
+    * **Pro Tip:** Assigning a label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
+    * **Note on `hidden_by`:** Hiding an entity from auto-generated dashboards does **not** exclude it from HAGHS. To exclude a hidden entity, disable it or apply an ignore label.
+
+### Dynamic exclusions via automation
+
+Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
+native label services - HAGHS does not need its own service. List a label like
+`vacation` in the HAGHS *Ignore labels* field, then assign/remove it from
+automations:
+
+```yaml
+# Toggle the `vacation` label on a group of entities
+# (use label.remove with the same target when vacation ends)
+- alias: HAGHS vacation start
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - service: label.assign
+      data:
+        label_id: vacation
+        target:
+          entity_id:
+            - light.terrace
+            - switch.coffee_machine
+            - vacuum.robot
+```
+
+HAGHS picks up the change automatically on its next refresh; no reload needed.
+
+### Pattern-Based Ignore (for entities without a unique ID)
+
+Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. HAGHS would otherwise flag them as zombies as soon as they go unavailable.
+
+Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from both zombie detection and update penalties.
+
+Examples:
+- `sensor.docker_*` - every Docker monitor sensor
+- `sensor.torque_*` - every Torque OBD sensor
+- `binary_sensor.test_?` - `binary_sensor.test_1` through `binary_sensor.test_9`
+
+Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are logged as a `WARNING` and skipped, so a single typo never disables the rest of the list.
 
 ---
 
@@ -220,23 +303,30 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `hardware_score` | int | Hardware pillar score (0–100), averaged from CPU, RAM, I/O (if PSI), and Disk |
 | `application_score` | int | Application pillar score (0–100) |
 | `zombie_count` | int | Total number of zombie entities |
-| `zombie_entities` | list | Entity IDs of zombies (capped at 20) |
+| `zombie_entities`| list | Entity IDs of zombies (capped at 100; ghost zombies prefixed with [unregistered] |
+| `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
-| `psi_available` | bool | Whether PSI metrics are active (CPU + RAM + I/O). When `false`, only classic sensors are used (CPU + RAM, no I/O) |
+| `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
-| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`) |
+| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag) |
+| `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
+| `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
+| `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
+| `rec_disk_low` | bool | Disk free space is below the storage-type threshold |
+| `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
+| `rec_power_unstable` | bool | RPi under-voltage detected |
+| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
+| `rec_updates_pending` | bool | At least one non-ignored update entity is pending |
+| `rec_zombie` | bool | At least one zombie entity is reported |
+| `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
 
 ---
 
 ## Roadmap
 
-The roadmap is a living document. New ideas are collected, evaluated, and added here once they are deemed viable and aligned with the HAGHS philosophy:
-
-- **Local-only:** Features must never introduce outbound network traffic or cloud dependencies.
-- **System health focus:** Purely decorative features are rejected. Every addition must serve instance health monitoring.
-- **HA Core compatibility:** All new code must follow HA Core standards to support the long-term goal of native adoption.
+Planned features, declined items, and completed milestones live in [`ROADMAP.md`](./ROADMAP.md). The roadmap follows the HAGHS philosophy: local-only, system-health focus, HA Core compatibility.
 
 ---
 
@@ -246,11 +336,11 @@ HAGHS provides all data as sensor attributes. Dashboard visualization happens en
 
 Below are two ready-to-use card configurations:
 
-### HAGHS Lite v1.1 (Quick Check)
+### HAGHS Lite v1.2 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-![HAGHS Lite v2 2](https://github.com/user-attachments/assets/00ed0c47-bcc7-4ef7-bad4-f76950347e88)
+<img width="519" height="392" alt="haghs lite v1 2" src="https://github.com/user-attachments/assets/262f91cb-ba47-4d90-ab27-931d224a0332" />
 
 ```yaml
 type: vertical-stack
@@ -275,7 +365,7 @@ cards:
       'psi_available') | default(false, true) %} {% set _upd =
       '/config/updates' %} {% set _ent = '/config/entities' %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending
       — [Open Updates]({{ _upd }}) {% endif %}
@@ -283,8 +373,17 @@ cards:
       {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s) — [Check
       Entities]({{ _ent }}) {% endif %}
 
-      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %} {%
-      else %} --- ✅ System healthy. No recommendations. {% endif %}
+      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
+      {{ rec }}
+      {% else %} --- ✅ System healthy. No recommendations. {% endif %}
+
+      {% set keep = state_attr(e, 'recorder_keep_days') %}
+      {% set filter = state_attr(e, 'recorder_filter_active') | default(false, true) %}
+      {% if keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score:
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      {% endif %}
 
       **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
       hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
@@ -292,12 +391,11 @@ cards:
 
 ```
 
-### HAGHS Pro v1.1 (Command Center)
+### HAGHS Pro v1.2 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
-![HAGHS Pro](https://github.com/user-attachments/assets/b5b1e3ab-d648-4784-9eb0-5df2513aea57)
-
+<img width="518" height="1177" alt="haghspro1 2" src="https://github.com/user-attachments/assets/38e90a7a-dfbf-40af-b26d-0de38ccc6852" />
 
 ```yaml
 type: vertical-stack
@@ -318,7 +416,7 @@ cards:
       state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
 
-      | Hardware | Application | | **{{ hw }}**/100 | **{{ app }}**/100 |
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
   - type: markdown
@@ -352,9 +450,10 @@ cards:
         state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
         '/config/updates' %}
 
-        {% if updates | length > 0 %} {{ updates | length }} update(s) pending:
-        {% for u in updates %} &nbsp;&nbsp; • {{ u }} {% endfor %} [→ Open
-        Updates]({{ _upd }}) {% else %} ✅ All updates installed {% endif %}
+        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
+        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
+        [→ Open Updates]({{ _upd }})
+        {% else %} ✅ All updates installed {% endif %}
 
         <hr>
 
@@ -367,6 +466,13 @@ cards:
 
 
         {{ 'Entity filter active' if filter else 'No entity filter' }}
+
+
+        {% if keep in [none, 'unknown'] or not filter %}
+        💡 Tips to improve your score:
+        {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+        {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+        {% endif %}
 
 
         ---
@@ -389,10 +495,31 @@ cards:
         {% else %}
           {% set z_list = z_raw | list %}
         {% endif %}
-        {% set grouped = expand(z_list) | groupby('domain') %}
+        {% set ghosts = z_list | select('match', '^\\[unregistered\\]') | list %}
+        {% set tracked = z_list | reject('match', '^\\[unregistered\\]') | list %}
+        {% set grouped = expand(tracked) | groupby('domain') %}
 
-        {{ z_count }} zombie(s) across {{ grouped | length }} domain(s)
-        {% if z_count > 20 %}*(showing first 20 — {{ z_count - 20 }} more hidden)*{% endif %}
+        {# Domain count: prefer the HAGHS v2.3+ attribute when present.
+           Fall back to extracting the distinct domains from z_list so the
+           card keeps working on older HAGHS versions that do not expose
+           zombie_count_per_domain. #}
+        {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
+        {% if per_domain %}
+          {% set domain_count = per_domain | length %}
+        {% else %}
+          {% set ns = namespace(seen=[]) %}
+          {% for entry in z_list %}
+            {% set dom = (entry | replace('[unregistered] ', '')).split('.')[0] %}
+            {% if dom not in ns.seen %}
+              {% set ns.seen = ns.seen + [dom] %}
+            {% endif %}
+          {% endfor %}
+          {% set domain_count = ns.seen | length %}
+        {% endif %}
+
+        {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
+        {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+        {% if z_count > z_list | length %}*(showing first {{ z_list | length }} — {{ z_count - z_list | length }} more hidden)*{% endif %}
 
         {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
@@ -400,10 +527,19 @@ cards:
         <details>
         <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
         {% for item in domain[1] %}
-        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }}: {{ item.state }}
+        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
         {% endfor %}
         </details>
         {% endfor %}
+
+        {% if ghosts | length > 0 %}
+        <details>
+        <summary>⚠️ Unregistered: {{ ghosts | length }}</summary>
+        {% for entry in ghosts %}
+        &nbsp;&nbsp; • `{{ entry | replace('[unregistered] ', '') }}`
+        {% endfor %}
+        </details>
+        {% endif %}
       {% endif %}
 
 ```
@@ -439,7 +575,7 @@ Yes. HAGHS auto-detects disk usage and database size on any platform. The Core u
 PSI (Pressure Stall Information) is a Linux kernel feature that measures real resource contention — how long tasks are actually waiting for CPU, memory, or I/O — rather than how busy a resource is. A system at 40% CPU utilization can have near-zero stall time, while one at 20% utilization may be heavily stalled. HAGHS uses PSI as the primary metric where available, falling back to classic utilization sensors on systems without PSI support (Windows, older Docker setups). Because their scales differ fundamentally, HAGHS uses separate penalty thresholds for each. When PSI is active, I/O monitoring is also included, giving a 4-component hardware score (CPU + RAM + I/O + Disk). Without PSI, the score uses 3 components (CPU + RAM + Disk). The classic sensors selected during setup are only used when PSI is unavailable.
 
 **I use an external database (MariaDB / PostgreSQL). How do I monitor it?**
-See the [External Database](#external-database) section above for full setup instructions. The sensor must report the database size in **MB**. If no sensor is configured, HAGHS skips database monitoring, no penalty, no scoring, other scores unaffected.
+See the [External Database](#external-database-mariadb) section above for full setup instructions. The sensor must report the database size in **MB**. If no sensor is configured, HAGHS skips database monitoring, no penalty, no scoring, other scores unaffected.
 
 **Do I still need a disk usage sensor?**
 No. HAGHS reads disk usage directly via `psutil`. No manual sensor selection required.
@@ -448,10 +584,22 @@ No. HAGHS reads disk usage directly via `psutil`. No manual sensor selection req
 Each pending update costs **5 pts**. A Core version lag (≥3 months behind) adds **20 pts**. The combined penalty is capped at **35 pts**.
 
 **How does the zombie grace period work?**
-Entities that just became `unavailable` or `unknown` are ignored for 15 minutes. This prevents your score from dropping during brief network hiccups or device reboots. After 15 minutes, they count as zombies.
+Entities that just became `unavailable` or `unknown` are ignored for **5 minutes by default**, configurable in the Options Flow from 1 to 240 minutes. This prevents your score from dropping during brief network hiccups or device reboots. Battery-class entities (`device_class: battery`) get a separate, longer window (default 60 minutes) because Zigbee / Homematic coordinators routinely take longer than 15 minutes to re-poll low-priority devices.
+
+**Why is my score capped at 99 right after a restart?**
+Two reasons it can happen:
+1. **Boot-time grace baseline.** HAGHS uses `max(last_changed, boot_time)` as the floor for the grace window, so entities whose `last_changed` value was restored from the recorder do not bypass the grace period after a restart. A zombie that was already a zombie before the restart still gets the configured grace window from the new boot.
+2. **Startup defer.** Zombie detection waits for `EVENT_HOMEASSISTANT_STARTED` before running for the first time. The entity registry (and therefore your ignore labels) only finishes loading at that point; running earlier would produce false positives for labelled-but-unavailable entities.
+The hard-cap at 99 while at least one zombie is reported is intentional — the Config-Audit bonus can never lift a "real" zombie issue to 100.
+
+**Why did my score change after upgrading to v2.3?**
+v2.3 expanded zombie detection from 9 to 22 domains, added a 7-day grace period before pending updates count, and now hard-caps the application score at 99 while a zombie exists. Most users will see a small **increase** (fewer noisy update penalties, disabled-entity entities no longer counted), but instances with previously unnoticed zombies in the new domains may see a small drop. The Changelog and the in-card *Tips* block explain exactly which factors are active.
+
+**A pending update from yesterday is in the list but doesn't change my score yet — why?**
+Because of the 7-day update grace period. The list is informational and shows everything HA reports as pending; the **score** only deducts after a pending update has been available for at least 7 days. This avoids punishing normal user behaviour — most updates land within a few days.
 
 **Can I change the update interval?**
-Yes. Go to **Settings > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
+Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
 
 **What happens if a sub-calculation fails?**
 HAGHS uses a safety net: if any pillar calculation times out or throws an error, it falls back to a neutral score (100 / no penalty) and logs a warning. The sensor never crashes.
@@ -460,11 +608,54 @@ HAGHS uses a safety net: if any pillar calculation times out or throws an error,
 
 ## Changelog
 
+### [v2.3.0] - 2026-05-21
+
+**Highlights**
+
+* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via HA-native `label.assign` / `label.remove` services (no custom HAGHS service). Migration from the legacy single-label config is automatic.
+* **Disabled-entity auto-ignore.** Entities marked *Disable entity* in the entity registry are now excluded from zombie detection and update penalties — no `haghs_ignore` label required.
+* **Pattern-based ignore (#64).** New `ignore_patterns` field accepts glob patterns for entities without a unique ID (e.g. `sensor.docker_*`, `sensor.torque_*`).
+* **Configurable zombie + battery grace periods.** Two new Options Flow fields (1–240 min each, defaults 5 / 60). Battery-class entities get the longer window because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices.
+* **7-day update grace.** Pending updates only contribute to the penalty after 7 days; the list stays informational so you still see what is queued.
+* **ZOMBIE_DOMAINS expanded 9 → 22.** New domains include `alarm_control_panel`, `camera`, `climate`, `cover`, `device_tracker`, `fan`, `humidifier`, `lawn_mower`, `lock`, `media_player`, `number`, `remote`, `select`, `siren`, `text`, `vacuum`, `valve`, `water_heater`. New `zombie_count_per_domain` attribute exposes a per-domain breakdown; `zombie_entities` list cap raised from 20 → 100.
+* **Hard-cap at 99 with zombies (#61).** While `zombie_count > 0`, the application score cannot exceed 99 so the Config-Audit bonus can never mask a real issue.
+* **Unregistered ghost zombies marked (#61).** Entities without an entity-registry entry are surfaced in `zombie_entities` with a `[unregistered]` prefix and warned in the log.
+* **Power Supply Status detection (#21).** Auto-detects `binary_sensor.rpi_power_status` for Raspberry Pi under-voltage and applies a flat 20-point hardware penalty.
+* **Boolean `rec_*` recommendation flags.** Ten new state attributes (e.g. `rec_cpu_load`, `rec_zombie`, `rec_backup_stale`) alongside the existing `recommendations` string — easier to consume in templates and automations.
+* **PSI-aware recommendation text.** CPU and RAM advice are split into PSI ("12.5% PSI stall time") and classic ("65% CPU utilization") variants so the metric source is always explicit.
+* **Config Flow refactor + RepairsFlow (#49).** CPU/RAM fallback sensors are optional when PSI is available. A new Repair flow lets you recover after PSI disappears post-setup without restarting Home Assistant.
+
+**Bug fixes**
+
+* `async_migrate_entry` now shipped — closes the v2.2.x "Migration handler not found" failure for v1/v2 config entries (#75).
+* Options Flow no longer reverts cleared optional fields (`db_sensor`, CPU/RAM fallback, ignore labels/patterns) after an HA restart.
+* Registry-race guard now correctly defers zombie detection during HA's `starting` phase, not only when HA is fully shut down (previously the guard used `hass.is_running` which is `True` for both `starting` and `running`).
+* Battery-class entities get a separate, longer grace window (#62).
+* Zombie denominator counts only the 22 zombie-eligible domains, so instances with many automations/scripts/helpers are no longer artificially diluted (#9).
+* Restart grace via boot-time baseline so `last_changed` values restored from the recorder no longer bypass the grace window (#10, #27).
+
+**Infrastructure**
+
+* Full test suite bootstrap (`pyproject.toml`, `requirements_test.txt`, seven test modules: zombies, updates, application, hardware-power, migration, recommendations, options-flow).
+* CI workflow runs pytest + ruff on every PR.
+* Release-notes augmentation workflow auto-injects a coffee-support block and a contributors list into each release body.
+
+**Documentation**
+
+* External database walkthrough (no-YAML SQL-sensor setup, MariaDB query).
+* Pattern-Based Ignore documentation.
+* Full long-form story in `v2.3_CHANGELOG.md`.
+
+**Minimum Home Assistant version raised** to 2024.10.0 (for `vol.Exclusive`, `IssueSeverity`, and the modern `LabelSelector`).
+
 ### [v2.2.2] - 2026-03-30
 * **Feature:** Added optional **Database Size Sensor** override for external databases (MariaDB, PostgreSQL). Configurable in both Setup and Options flow. When set, HAGHS uses the sensor value (in MB) instead of SQLite auto-detection. When left empty, the default SQLite behavior is unchanged. No migration needed, existing installations are unaffected.
 
 ### [v2.2.1] - 2026-03-29
 * **Bugfix:** Fixed absurd percentage values in hardware recommendations (e.g. "Memory pressure is impacting score (5698.1%)") when a manually configured CPU/RAM sensor reports absolute values (MB/MHz) instead of percent. Values above 100% are now clamped and a warning is logged to help users select the correct sensor.
+
+<details>
+<summary><b>Older releases (v2.2.0 and earlier)</b></summary>
 
 ### [v2.2.0] - 2026-03-29
 * **Architecture:** Full async migration to `DataUpdateCoordinator` with safety-net timeouts.
@@ -500,6 +691,8 @@ HAGHS uses a safety net: if any pillar calculation times out or throws an error,
 * **NEW:** Implemented Single-Point Configuration using Template Variables.
 * **NEW:** Added Heavyweight CPU Tiers.
 * **Fixed:** Switched to **Floor Rounding** (Integer) for a more honest health assessment.
+
+</details>
 
 ---
 

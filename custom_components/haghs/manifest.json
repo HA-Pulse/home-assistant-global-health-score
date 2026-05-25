@@ -8,5 +8,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/d-n91/home-assistant-global-health-score/issues",
   "requirements": [],
-  "version": "2.2.2"
+  "version": "2.3.0"
 }

@@ -8,15 +8,43 @@
           "cpu_sensor": "CPU usage sensor",
           "ram_sensor": "RAM usage sensor",
           "storage_type": "Storage type",
-          "ignore_label": "Ignore label",
+          "ignore_labels": "Ignore labels",
+          "ignore_patterns": "Ignore entity-id patterns",
           "db_sensor": "Database size sensor (optional)"
         },
         "data_description": {
-          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
-          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
+          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
+          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
-          "ignore_label": "Entities and devices with this label are excluded from zombie detection and update penalties. Useful for devices you intentionally keep offline or updates you want to skip.",
+          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation by calling Home Assistant's native 'label.assign' and 'label.remove' service actions (e.g. switch a 'vacation' label on while you are away). Create the labels first under Settings → Labels if they do not exist yet.",
+          "ignore_patterns": "Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size')."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "fallback_missing": {
+      "message": "PSI is unavailable, and CPU and RAM fallback sensors are not configured."
+    }
+  },
+  "issues": {
+    "fallback_missing": {
+      "title": "PSI is unavailable and fallback sensors are missing",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Configure CPU and RAM fallback sensors",
+            "description": "HAGHS cannot start because Linux PSI data is unavailable and CPU/RAM fallback sensors are not configured. Select both sensors below and submit to recover without restarting Home Assistant.",
+            "data": {
+              "cpu_sensor": "CPU usage sensor",
+              "ram_sensor": "RAM usage sensor"
+            },
+            "data_description": {
+              "cpu_sensor": "Select the sensor that reports CPU usage in percent.",
+              "ram_sensor": "Select the sensor that reports memory usage in percent."
+            }
+          }
         }
       }
     }
@@ -30,17 +58,23 @@
           "cpu_sensor": "CPU usage sensor",
           "ram_sensor": "RAM usage sensor",
           "storage_type": "Storage type",
-          "ignore_label": "Ignore label",
+          "ignore_labels": "Ignore labels",
+          "ignore_patterns": "Ignore entity-id patterns",
           "db_sensor": "Database size sensor (optional)",
-          "update_interval": "Update interval"
+          "update_interval": "Update interval",
+          "zombie_grace_minutes": "Zombie grace period (minutes)",
+          "battery_grace_minutes": "Battery-class grace period (minutes)"
         },
         "data_description": {
-          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
-          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
+          "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
+          "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
-          "ignore_label": "Entities and devices with this label are excluded from zombie detection and update penalties. Useful for devices you intentionally keep offline or updates you want to skip.",
+          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation by calling Home Assistant's native 'label.assign' and 'label.remove' service actions (e.g. switch a 'vacation' label on while you are away). Create the labels first under Settings → Labels if they do not exist yet.",
+          "ignore_patterns": "Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size').",
-          "update_interval": "How often HAGHS recalculates the health score, in seconds. Lower values mean faster updates but slightly more CPU usage. Default: 60 seconds."
+          "update_interval": "How often HAGHS recalculates the health score, in seconds. Lower values mean faster updates but slightly more CPU usage. Default: 60 seconds.",
+          "zombie_grace_minutes": "How long an entity must stay in 'unavailable' or 'unknown' before HAGHS counts it as a zombie. Allowed range: 1 to 240 minutes. Lower values make detection more aggressive (more false positives from briefly-offline devices). Higher values mask short outages but let real failures linger. Default: 15 minutes.",
+          "battery_grace_minutes": "Extended grace period specifically for entities with 'device_class: battery'. Zigbee and Homematic radios routinely take longer than the regular window to re-poll battery devices, so flagging them as zombies after only 15 minutes produces false positives. Allowed range: 1 to 240 minutes. If you set this lower than the regular grace, it effectively disables the extension. Default: 60 minutes."
         }
       }
     }
