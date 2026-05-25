@@ -2,7 +2,7 @@ name: Augment Release Notes
 
 on:
   release:
-    types: [published, edited]
+    types: [published, edited, created]
   workflow_dispatch:
     inputs:
       tag:
