@@ -4,9 +4,9 @@
   "codeowners": ["@d-n91"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/d-n91/home-assistant-global-health-score",
+  "documentation": "https://github.com/HA-Pulse/home-assistant-global-health-score",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/d-n91/home-assistant-global-health-score/issues",
+  "issue_tracker": "https://github.com/HA-Pulse/home-assistant-global-health-score/issues",
   "requirements": [],
   "version": "2.3.0"
 }
