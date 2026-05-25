@@ -32,12 +32,13 @@ STORAGE_TYPES: list[str] = ["sd-card", "ssd", "emmc"]
 DATA_BOOT_TIME = "_boot_time"
 
 # Grace periods (minutes) before an unavailable / unknown entity becomes a
-# zombie. Both values are user-configurable in the OptionsFlow; the values
+# zombie.  Both values are user-configurable in the OptionsFlow; the values
 # below are the defaults if nothing is set. Battery-class entities get a
 # separate, typically longer window because Zigbee / Homematic coordinators
 # routinely take longer than 15 minutes to re-poll low-priority devices
 # after a restart (#62).
-DEFAULT_ZOMBIE_GRACE_MINUTES = 15
+DEFAULT_ZOMBIE_GRACE_MINUTES = 5
+DEFAULT_IGNORE_LABEL_NAME = "haghs_ignore"
 DEFAULT_BATTERY_GRACE_MINUTES = 60
 
 # Maximum number of entity ids carried in the `zombie_entities` state
