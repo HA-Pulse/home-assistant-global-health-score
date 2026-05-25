@@ -2,7 +2,7 @@ name: Attach HACS Release Asset
 
 on:
   release:
-    types: [published]
+    types: [published, created]
   workflow_dispatch:
     inputs:
       tag:
