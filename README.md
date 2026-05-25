@@ -52,7 +52,7 @@ HAGHS v2.3 ships a full `async_migrate_entry` handler that converts config entri
 - [Sensor Attributes](#sensor-attributes)
 - [Roadmap](#roadmap)
 - [UI Integration](#ui-integration)
-  - [HAGHS Lite](#haghs-lite-v11-quick-check)
+  - [HAGHS Lite](#haghs-lite-v12-quick-check)
   - [HAGHS Pro](#haghs-pro-v12-command-center)
 - [FAQ](#faq)
 - [Changelog](#changelog)
