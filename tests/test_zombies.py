@@ -32,7 +32,7 @@ def _make_zombie(
 ) -> None:
     """Set an entity to STATE_UNAVAILABLE with last_changed in the past.
 
-    The grace period in _calc_zombies skips entities changed less than 15
+    The grace period in _calc_zombies skips entities changed less than 5
     minutes ago (60 minutes for device_class=battery), so age_minutes must
     exceed the relevant window for the entity to be counted.
     """
@@ -136,13 +136,13 @@ async def test_denominator_ignores_non_zombie_domains(hass: HomeAssistant) -> No
 
 
 async def test_grace_period_still_active(hass: HomeAssistant) -> None:
-    """Entities unavailable for less than 15 minutes are still ignored."""
+    """Entities unavailable for less than 5 minutes are still ignored."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
     for i in range(5):
         hass.states.async_set(f"sensor.healthy_{i}", "100")
-    _make_zombie(hass, "sensor.recent", age_minutes=5)
+    _make_zombie(hass, "sensor.recent", age_minutes=2)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
     _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
@@ -154,7 +154,7 @@ async def test_grace_period_still_active(hass: HomeAssistant) -> None:
 async def test_restart_grace_skips_recently_restored_state(
     hass: HomeAssistant,
 ) -> None:
-    """A 2-hour-old last_changed is ignored within 15 min of HA boot.
+    """A 2-hour-old last_changed is ignored within 5 min of HA boot.
 
     Reproduces #10: after a restart, last_changed is restored from the
     recorder and predates the boot. Without this fix the entity would be
@@ -167,7 +167,7 @@ async def test_restart_grace_skips_recently_restored_state(
         hass.states.async_set(f"sensor.healthy_{i}", "100")
     _make_zombie(hass, "sensor.restored", age_minutes=120)
 
-    coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=5)
+    coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=2)
     _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
 
     assert zombie_count == 0
@@ -175,7 +175,7 @@ async def test_restart_grace_skips_recently_restored_state(
 
 
 async def test_restart_grace_releases_after_15_minutes(hass: HomeAssistant) -> None:
-    """After 15 min post-boot, restored zombies are flagged again."""
+    """After 5 min post-boot, restored zombies are flagged again."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
@@ -199,7 +199,7 @@ async def test_post_boot_grace_uses_last_changed(hass: HomeAssistant) -> None:
         hass.states.async_set(f"sensor.healthy_{i}", "100")
     # HA booted 60 min ago, sensor went unavailable 5 min ago. Effective
     # baseline is the (newer) last_changed, so the standard grace applies.
-    _make_zombie(hass, "sensor.recent_after_boot", age_minutes=5)
+    _make_zombie(hass, "sensor.recent_after_boot", age_minutes=2)
 
     coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=60)
     _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
@@ -466,7 +466,7 @@ async def test_battery_zombie_within_60min_window_skipped(
     """A battery-class sensor unavailable for 30 min is still inside its grace.
 
     Reproduces #62: Zigbee/Homematic battery devices often re-poll on a
-    multi-minute cycle, so the standard 15 min window flagged them as zombies.
+    multi-minute cycle, so the standard 5 min window flagged them as zombies.
     """
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
@@ -707,7 +707,7 @@ async def test_per_domain_only_counts_actual_zombies(hass: HomeAssistant) -> Non
 
     for i in range(3):
         hass.states.async_set(f"cover.healthy_{i}", "open")
-    _make_zombie(hass, "cover.recent", age_minutes=5)
+    _make_zombie(hass, "cover.recent", age_minutes=2)
     _make_zombie(hass, "cover.gone", age_minutes=30)
     _make_zombie(hass, "lock.also_gone", age_minutes=30)
 
@@ -773,7 +773,7 @@ async def test_custom_battery_grace_minutes_used_for_battery_class(
     _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
 
     # Battery sensor still inside its custom 120 min window; normal sensor
-    # passes the default 15 min window and is flagged.
+    # passes the default 5 min window and is flagged.
     assert zombie_count == 1
 
 
