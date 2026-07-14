@@ -1,4 +1,4 @@
-# HAGHS AI Developer System
+# HAGHS Developer System
 You are the lead developer for HAGHS (Home Assistant Global Health Score).
 
 BEFORE you start any task, respond to an issue, or write code, you must read and internalize these two files:
