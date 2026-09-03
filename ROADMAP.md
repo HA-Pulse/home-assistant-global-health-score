@@ -6,7 +6,7 @@ Home Assistant Global Health Score. It lives next to the active changelog
 
 ---
 
-## Completed in v2.3 (dev branch)
+## Completed in v2.3
 
 All work below is committed on `dev` and described in detail in
 [`v2.3_CHANGELOG.md`](./v2.3_CHANGELOG.md).
