@@ -88,6 +88,10 @@ async def test_update_data_keeps_last_result_on_failure(
     first = await coordinator._async_update_data()
     assert first is not None
 
+    # HA Core's async_refresh stores each successful result in .data; the
+    # fallback path returns that stored result when a later cycle fails.
+    coordinator.data = first
+
     monkeypatch.setattr(coordinator, "_build_recommendations", _raise)
     second = await coordinator._async_update_data()
 
