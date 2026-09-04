@@ -347,10 +347,26 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data and calculate the health score.
 
+        Total safety net: no matter what fails, the update cycle must
+        never raise (#103). On failure the last valid result is kept so
+        the sensor never loses its value; on the very first update a
+        neutral result is returned. Every failure is logged with a full
+        traceback so silent stalls become diagnosable.
+        """
+        try:
+            return await self._async_update_data_inner()
+        except Exception:
+            _LOGGER.exception("HAGHS: update cycle failed — keeping last result")
+            if self.data:
+                return self.data
+            return self._neutral_result()
+
+    async def _async_update_data_inner(self) -> dict[str, Any]:
+        """Run the guarded sub-calculations and assemble the result.
+
         Each pillar runs in its own guarded coroutine.  On timeout or
         exception the affected pillar falls back to a neutral score
-        (100 / no penalty) and a warning is logged.  The coordinator
-        itself never crashes.
+        (100 / no penalty) and a warning is logged.
         """
         # Recorder info — read before app pillar so config audit can use it
         self.recorder_info = self._read_recorder_info()
@@ -367,6 +383,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _ApplicationResult(),
         )
 
+        return self._build_result(hw, app)
+
+    def _build_result(
+        self,
+        hw: _HardwareResult,
+        app: _ApplicationResult,
+    ) -> dict[str, Any]:
+        """Assemble the final result dict from the two pillar results."""
         global_score = max(
             0, min(100, math.floor((hw.hardware_score * 0.4) + (app.app_score * 0.6)))
         )
@@ -389,6 +413,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
             **rec_flags,
         }
+
+    def _neutral_result(self) -> dict[str, Any]:
+        """Neutral result for the very first failed update.
+
+        Mirrors the _safe_calc fallback semantics: both pillars default
+        to their neutral (100 / no penalty) state.
+        """
+        return self._build_result(_HardwareResult(), _ApplicationResult())
 
     async def _safe_calc(
         self,
