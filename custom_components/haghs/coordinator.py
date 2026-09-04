@@ -55,6 +55,7 @@ from .const import (
     REC_DB_OVER_LIMIT,
     REC_DISK_SD_LOW,
     REC_DISK_SSD_LOW,
+    REC_FLAG_KEYS,
     REC_IO_PRESSURE,
     REC_POWER_UNSTABLE,
     REC_RAM_PRESSURE_CLASSIC,
@@ -417,10 +418,30 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _neutral_result(self) -> dict[str, Any]:
         """Neutral result for the very first failed update.
 
-        Mirrors the _safe_calc fallback semantics: both pillars default
-        to their neutral (100 / no penalty) state.
+        Built inline without calling the (potentially failing) scoring
+        sub-components: both pillars default to their neutral state and
+        every recommendation flag is False.
         """
-        return self._build_result(_HardwareResult(), _ApplicationResult())
+        hw = _HardwareResult()
+        app = _ApplicationResult()
+        global_score = max(
+            0, min(100, math.floor((hw.hardware_score * 0.4) + (app.app_score * 0.6)))
+        )
+        return {
+            "global_score": int(global_score),
+            "hardware_score": int(hw.hardware_score),
+            "application_score": app.app_score,
+            "zombie_count": app.zombie_count,
+            "zombie_entities": app.zombie_list,
+            "zombie_count_per_domain": app.zombie_per_domain,
+            "db_size_mb": round(app.db_mb, 1),
+            "psi_available": hw.psi_available,
+            "recorder_keep_days": self.recorder_info.keep_days,
+            "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "pending_updates": app.pending_updates,
+            "recommendations": REC_ALL_CLEAR,
+            **{key: False for key in REC_FLAG_KEYS},
+        }
 
     async def _safe_calc(
         self,
