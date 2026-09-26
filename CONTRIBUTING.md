@@ -21,9 +21,12 @@ closed.
 ## Branching
 
 - Target branch for all PRs: **`dev`**. Never open PRs against `main`.
-- `main` is release-only and is updated by the maintainer through a
-  controlled `dev` → `main` merge after CI and manual validation.
-- Create your feature branch off the latest `dev`.
+- Create your feature branch off the latest `dev` (`feat/*`, `fix/*`,
+  `chore/*`).
+- PRs into `dev` are merged as **squash merges**, once CI is green.
+- `main` is release-only: it receives changes exclusively through a release
+  PR from `dev`, merged with a **merge commit** so the `dev` history is
+  preserved. See [`RELEASING.md`](./RELEASING.md) for the release flow.
 
 ## Language
 
@@ -146,7 +149,8 @@ disabling the check.
 - Maintainer is `@D-N91`.
 - Responses in English only.
 - Expect at least one review round before merge. Don't force-push during an
-  active review — append commits; the maintainer may squash on merge.
+  active review; append commits instead. The maintainer squash-merges PRs
+  into `dev`.
 
 ## Reporting Issues Instead
 
