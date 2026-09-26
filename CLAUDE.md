@@ -5,7 +5,7 @@ BEFORE you start any task, respond to an issue, or write code, you must read and
 1. `HAGHS_PHILOSOPHY.md` (Vision & Alignment)
 2. `DEVELOPMENT_GUIDELINES.md` (Hard Coding Rules)
 
-CRITICAL RULE: Never modify any `*.py` file without explicitly asking for confirmation first. Do not fabricate technical feasibility — be honest when something is not possible in Home Assistant, and explain possible workarounds instead.
+CRITICAL RULE: On feature branches, plan approval covers all code changes. Never commit directly to `dev` or `main`. Merge and release only after explicit OK. Do not fabricate technical feasibility: be honest when something is not possible in Home Assistant, and explain possible workarounds instead.
 
 Additional rules:
 - When instructions are ambiguous, ask before assuming.
@@ -14,18 +14,19 @@ Additional rules:
 - The trigger "Are you sure?" is your command to perform a full re-evaluation of your sources and reasoning.
 
 Workflow rules:
-- Always develop new features and fixes on the `dev` branch, never directly on `main`.
-- Keep `v2.3_CHANGELOG.md` on `dev` updated for every change.
+- Always develop on a feature branch cut from `dev` (`feat/*`, `fix/*`, `chore/*`, `release/*`). Never commit directly to `dev` or `main`.
+- Every change lands via pull request into `dev` (squash merge). `main` only receives release PRs from `dev` (merge commit).
+- Keep the active changelog for the next release updated for every change (on the feature branch, never directly on `dev`).
 - Write all GitHub comments and community responses in English.
 
 ## File-Level Autonomy Rules
 
-### I may update without asking:
+### I may update without asking (on feature branches, never directly on `dev`):
 - `ROADMAP.md` — add/update planned features, declined items, or the date, based on session context (issues, community feedback, conversations)
-- `v2.3_CHANGELOG.md` (dev only) — document changes already made in the session
+- the active changelog for the next release: document changes already made in the session
 
 ### I must always ask first:
-- Any `*.py` file — scoring logic, config flow, coordinator, constants
+- Any `*.py` file outside an approved feature-branch plan (scoring logic, config flow, coordinator, constants)
 - `README.md` — owner manages this manually; never commit changes to it without explicit instruction
 - `HAGHS_PHILOSOPHY.md` — foundational document, changes affect everything downstream
 - `DEVELOPMENT_GUIDELINES.md` — same as above

@@ -20,6 +20,25 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      - name: Verify release tag matches manifest version
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG#v}"
+          if [[ "$tag" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(b[0-9]+)?$ ]]; then
+            base="${BASH_REMATCH[1]}"
+          else
+            echo "::error::Unexpected release tag '$RELEASE_TAG' (expected vX.Y.Z or vX.Y.ZbN)."
+            exit 1
+          fi
+          version="$(python3 -c 'import json; print(json.load(open("custom_components/haghs/manifest.json"))["version"])')"
+          if [ "$base" != "$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match manifest version '$version'."
+            exit 1
+          fi
+          echo "Release tag '$RELEASE_TAG' matches manifest version '$version'."
+
       - name: Create haghs.zip
         run: cd custom_components && zip -r ../haghs.zip haghs/
 
