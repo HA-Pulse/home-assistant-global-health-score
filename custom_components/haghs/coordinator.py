@@ -30,7 +30,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    ATTR_UNREGISTERED_PREFIX,
     CONF_BATTERY_GRACE_MINUTES,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
@@ -62,6 +61,7 @@ from .const import (
     REC_RAM_PRESSURE_PSI,
     REC_UPDATES_PENDING,
     REC_ZOMBIES,
+    UNREGISTERED_LIST_CAP,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
 )
@@ -168,6 +168,9 @@ class _ApplicationResult:
     zombie_count: int = 0
     zombie_list: list[str] = field(default_factory=list)
     zombie_per_domain: dict[str, int] = field(default_factory=dict)
+    unregistered_count: int = 0
+    unregistered_list: list[str] = field(default_factory=list)
+    unregistered_per_domain: dict[str, int] = field(default_factory=dict)
     db_mb: float = 0.0
     db_limit_mb: float = 1000.0
     update_count: int = 0
@@ -269,9 +272,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             DATA_UPDATE_FIRST_SEEN, {}
         )
 
-        # Track ghost zombies (no entity-registry entry) so we warn at most
-        # once per entity per coordinator instance instead of every refresh.
-        self._logged_ghost_entities: set[str] = set()
+        # Track unregistered entities (no entity-registry entry) so we warn
+        # at most once per entity per coordinator instance instead of every
+        # refresh.
+        self._logged_unregistered_entities: set[str] = set()
 
         # Registry-race guard: if HAGHS first runs while HA is still in the
         # 'starting' state, the entity registry (and therefore label
@@ -408,6 +412,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_count": app.zombie_count,
             "zombie_entities": app.zombie_list,
             "zombie_count_per_domain": app.zombie_per_domain,
+            "unregistered_count": app.unregistered_count,
+            "unregistered_entities": app.unregistered_list,
+            "unregistered_count_per_domain": app.unregistered_per_domain,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -436,6 +443,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_count": app.zombie_count,
             "zombie_entities": app.zombie_list,
             "zombie_count_per_domain": app.zombie_per_domain,
+            "unregistered_count": app.unregistered_count,
+            "unregistered_entities": app.unregistered_list,
+            "unregistered_count_per_domain": app.unregistered_per_domain,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -748,8 +758,16 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_calc_application(self) -> _ApplicationResult:
         """Calculate the application pillar score."""
-        # A. ZOMBIES
-        zombie_list, p_zombie, zombie_count, zombie_per_domain = self._calc_zombies()
+        # A. ZOMBIES + UNREGISTERED ENTITIES (#98)
+        (
+            zombie_list,
+            p_zombie,
+            zombie_count,
+            zombie_per_domain,
+            unregistered_list,
+            unregistered_count,
+            unregistered_per_domain,
+        ) = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
         p_integration = self._calc_integration_health()
@@ -783,6 +801,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zombie_count=zombie_count,
             zombie_list=zombie_list,
             zombie_per_domain=zombie_per_domain,
+            unregistered_count=unregistered_count,
+            unregistered_list=unregistered_list,
+            unregistered_per_domain=unregistered_per_domain,
             db_mb=db_mb,
             db_limit_mb=db_limit_mb,
             update_count=update_count,
@@ -797,26 +818,39 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Application sub-calculations
     # ------------------------------------------------------------------
 
-    def _calc_zombies(self) -> tuple[list[str], int, int, dict[str, int]]:
-        """Detect zombie entities, respecting ignore labels and grace period.
+    def _calc_zombies(
+        self,
+    ) -> tuple[list[str], int, int, dict[str, int], list[str], int, dict[str, int]]:
+        """Detect zombie and unregistered entities, respecting ignore labels.
 
-        Returns (zombie_list_capped, p_zombie, zombie_count, per_domain).
-        zombie_list is capped to ZOMBIE_LIST_CAP entries because the HA
-        state machine caps an attribute payload at 16 KB; zombie_count and
-        the per_domain dict always reflect the full count so users can see
-        the true scope even when the listing is truncated.
+        Zombies: entities in ZOMBIE_DOMAINS that have been unavailable /
+        unknown longer than the grace period and have an entity-registry
+        entry. These affect the score.
+
+        Unregistered entities (#98): valid HA entities (YAML templates,
+        Utility Meter, Riemann Sum, ...) without a registry entry. They are
+        not an operational problem: reported for information only, they do
+        not affect the score.
+
+        Returns (zombie_list_capped, p_zombie, zombie_count, zombie_per_domain,
+        unregistered_list_capped, unregistered_count, unregistered_per_domain).
+        Both lists are capped because the HA state machine caps an attribute
+        payload at 16 KB; the counts and per-domain dicts always reflect the
+        full numbers.
         """
         # Defer detection until HA is fully running. Otherwise the entity
         # registry may not yet be loaded from storage and ignore labels would
         # be missing, producing false positives right after boot (#13).
         if not self._registries_ready:
             _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
-            return [], 0, 0, {}
+            return [], 0, 0, {}, [], 0, {}
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
         zombie_per_domain: dict[str, int] = {}
+        unregistered_list: list[str] = []
+        unregistered_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
         # so an instance with many automations/scripts/etc. is not artificially
         # diluted. Counted in the same pass as detection.
@@ -852,38 +886,51 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._is_ignored(entity_id, entity_entry):
                 continue
 
-            zombie_per_domain[state.domain] = zombie_per_domain.get(state.domain, 0) + 1
-
             if entity_entry is None:
-                # Ghost zombie: exists in the state machine but has no entity
-                # registry entry, so it cannot be managed in the HA UI.
-                # Surface it explicitly and warn once per id (#6).
-                if entity_id not in self._logged_ghost_entities:
+                # Unregistered entity (#98): exists in the state machine but
+                # has no entity registry entry, so it cannot be managed in
+                # the HA UI. Valid for YAML-defined entities; informational
+                # only, no score impact. Warn once per id (#6).
+                if entity_id not in self._logged_unregistered_entities:
                     _LOGGER.warning(
-                        "HAGHS: Detected unregistered zombie entity '%s'. "
+                        "HAGHS: Detected unregistered entity '%s'. "
                         "It exists in the state machine but has no entity "
                         "registry entry, so it cannot be managed via the "
-                        "HA UI. Check the integration that created it.",
+                        "HA UI. It is reported for information only and "
+                        "does not affect the score.",
                         entity_id,
                     )
-                    self._logged_ghost_entities.add(entity_id)
-                zombie_list.append(f"{ATTR_UNREGISTERED_PREFIX}{entity_id}")
+                    self._logged_unregistered_entities.add(entity_id)
+                unregistered_per_domain[state.domain] = (
+                    unregistered_per_domain.get(state.domain, 0) + 1
+                )
+                unregistered_list.append(entity_id)
             else:
+                zombie_per_domain[state.domain] = zombie_per_domain.get(state.domain, 0) + 1
                 zombie_list.append(entity_id)
 
         zombie_count = len(zombie_list)
+        unregistered_count = len(unregistered_list)
 
         # Ratio-based penalty: percentage of zombies relative to entities in
         # ZOMBIE_DOMAINS only. Factor 7 + ceil ensures zombies are visible on
-        # all instance sizes.
+        # all instance sizes. Unregistered entities do not contribute (#98).
         if zombie_domain_total > 0:
             zombie_ratio_pct = (zombie_count / zombie_domain_total) * 100
             p_zombie = min(20, math.ceil(zombie_ratio_pct * 7))
         else:
             p_zombie = 0
 
-        # Cap the list for state attributes (count + per_domain stay full).
-        return zombie_list[:ZOMBIE_LIST_CAP], p_zombie, zombie_count, zombie_per_domain
+        # Cap the lists for state attributes (counts + per_domain stay full).
+        return (
+            zombie_list[:ZOMBIE_LIST_CAP],
+            p_zombie,
+            zombie_count,
+            zombie_per_domain,
+            unregistered_list[:UNREGISTERED_LIST_CAP],
+            unregistered_count,
+            unregistered_per_domain,
+        )
 
     def _calc_integration_health(self) -> int:
         """Count unhealthy integrations via native ConfigEntry states.

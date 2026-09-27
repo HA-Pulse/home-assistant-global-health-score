@@ -43,10 +43,15 @@ DEFAULT_BATTERY_GRACE_MINUTES = 60
 
 # Maximum number of entity ids carried in the `zombie_entities` state
 # attribute. The Home Assistant state machine caps the entire attribute
-# payload at 16 KB; 100 entity ids (with the `[unregistered] ` prefix
-# accounted for) stay well below that. `zombie_count` and the per-domain
-# breakdown always reflect the full count, only the listing is capped.
+# payload at 16 KB; 100 entity ids stay well below that. `zombie_count`
+# and the per-domain breakdown always reflect the full count, only the
+# listing is capped.
 ZOMBIE_LIST_CAP = 100
+
+# Maximum number of entity ids carried in the `unregistered_entities`
+# state attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count
+# and the per-domain breakdown always reflect the full number.
+UNREGISTERED_LIST_CAP = 100
 
 # Internal hass.data key holding the per-entity first-seen timestamps for
 # pending updates (#26). Only updates that have been available longer than
@@ -83,11 +88,6 @@ REC_ALL_CLEAR = "\u2705 System optimized"
 
 # Fallback text for empty lists in state attributes
 ATTR_NONE = "None"
-
-# Marker prefix for zombie entities that exist in the state machine but
-# have no entity registry entry. Surfaces these "ghost" entities in the
-# zombie_entities attribute so users can locate them in HA logs.
-ATTR_UNREGISTERED_PREFIX = "[unregistered] "
 
 # Boolean recommendation flags exposed as state attributes alongside the
 # existing 'recommendations' string. Dashboards and external integrations

@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -17,7 +18,20 @@ from custom_components.haghs.coordinator import (
 
 
 def _make_zombie(hass: HomeAssistant, entity_id: str, age_minutes: int = 30) -> None:
-    """Mark a state as STATE_UNAVAILABLE with last_changed in the past."""
+    """Create a registered zombie: state unavailable past the grace period.
+
+    A registry entry is created when missing so the entity counts as a
+    real zombie (unregistered entities are reported separately since #98).
+    """
+    entity_registry = er.async_get(hass)
+    if entity_registry.async_get(entity_id) is None:
+        domain, object_id = entity_id.split(".", 1)
+        entity_registry.async_get_or_create(
+            domain,
+            "test_platform",
+            f"uid_{entity_id}",
+            suggested_object_id=object_id,
+        )
     hass.states.async_set(entity_id, STATE_UNAVAILABLE)
     state = hass.states.get(entity_id)
     state.last_changed = dt_util.utcnow() - timedelta(minutes=age_minutes)
@@ -100,3 +114,32 @@ async def test_hard_cap_does_not_inflate_lower_scores(hass: HomeAssistant) -> No
 
     assert result.zombie_count == 1
     assert result.app_score < 99
+
+
+async def test_unregistered_entity_does_not_cap_app_score(
+    hass: HomeAssistant,
+) -> None:
+    """Unregistered entities must not reduce the score or trigger the cap (#98).
+
+    Reproduces the community report: a YAML-based entity without a
+    registry entry is fully operational and must not be treated as a
+    zombie, while remaining visible via the unregistered_* attributes.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(10):
+        hass.states.async_set(f"sensor.healthy_{i}", "100")
+
+    hass.states.async_set("sensor.yaml_entity", STATE_UNAVAILABLE)
+    state = hass.states.get("sensor.yaml_entity")
+    state.last_changed = dt_util.utcnow() - timedelta(minutes=60)
+
+    coordinator = _coordinator_with_recorder_bonus(hass, entry)
+    result = await coordinator._async_calc_application()
+
+    assert result.zombie_count == 0
+    assert result.unregistered_count == 1
+    assert result.unregistered_list == ["sensor.yaml_entity"]
+    assert result.unregistered_per_domain == {"sensor": 1}
+    assert result.app_score == 100
