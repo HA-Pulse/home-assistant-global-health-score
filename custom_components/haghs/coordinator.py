@@ -315,8 +315,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         should disable the entity or apply one of the ignore labels.
 
         Multiple ignore labels can be configured. Toggling them on/off at
-        runtime is done via Home Assistant's native ``label.assign`` and
-        ``label.remove`` service actions, not via a HAGHS-specific service.
+        runtime is done via Home Assistant's native
+        ``homeassistant.add_label_to_entity`` and
+        ``homeassistant.remove_label_from_entity`` service actions, not via a
+        HAGHS-specific service.
         """
         if entity_entry is not None and entity_entry.disabled_by is not None:
             return True
