@@ -10,6 +10,8 @@ body:
 
         Please fill in the form as completely as you can. Reports without
         reproduction details may be closed.
+
+        Issues are reviewed regularly, usually within two weeks.
   - type: textarea
     id: description
     attributes:

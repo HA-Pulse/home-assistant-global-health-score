@@ -9,6 +9,8 @@ body:
         Thanks for suggesting an improvement. HAGHS is deliberately local-only
         and focuses on health signals, so not every idea can be implemented.
         Declined ideas may still be documented in the ROADMAP.
+
+        Issues are reviewed regularly, usually within two weeks.
   - type: textarea
     id: problem
     attributes:
