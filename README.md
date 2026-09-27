@@ -128,7 +128,7 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts.
 
-* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Penalties scale with the percentage of zombies relative to the entities in the monitored domains (22 physical/UI-relevant domains; helpers, automations, scripts etc. are excluded so the ratio is not diluted). Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit); ghost zombies without an entity-registry entry are surfaced with a `[unregistered]` prefix. `zombie_count` and the new `zombie_count_per_domain` attribute always carry the full totals.
+* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Penalties scale with the percentage of zombies relative to the entities in the monitored domains (22 physical/UI-relevant domains; helpers, automations, scripts etc. are excluded so the ratio is not diluted). Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit). Entities without an entity-registry entry (YAML-defined templates, Utility Meter, Riemann Sum, ...) are **not** zombies: they are reported separately as *unregistered* (`unregistered_count`, `unregistered_entities`, `unregistered_count_per_domain`) and do **not** affect the score. `zombie_count` and `zombie_count_per_domain` always carry the full totals.
   
 * **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
   
@@ -280,9 +280,9 @@ HAGHS picks up the change automatically on its next refresh; no reload needed.
 
 ### Pattern-Based Ignore (for entities without a unique ID)
 
-Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. HAGHS would otherwise flag them as zombies as soon as they go unavailable.
+Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. They are reported as *unregistered* (informational only, no score impact, see [Sensor Attributes](#sensor-attributes)) and never counted as zombies.
 
-Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from both zombie detection and update penalties.
+Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from zombie detection, the unregistered listing and update penalties.
 
 Examples:
 - `sensor.docker_*` - every Docker monitor sensor
@@ -301,9 +301,12 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 |---|---|---|
 | `hardware_score` | int | Hardware pillar score (0–100), averaged from CPU, RAM, I/O (if PSI), and Disk |
 | `application_score` | int | Application pillar score (0–100) |
-| `zombie_count` | int | Total number of zombie entities |
-| `zombie_entities`| list | Entity IDs of zombies (capped at 100; ghost zombies prefixed with [unregistered] |
+| `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
+| `zombie_entities`| list | Entity IDs of zombies (capped at 100) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
+| `unregistered_count` | int | Number of detected entities without an entity-registry entry (informational only, does not affect the score) |
+| `unregistered_entities` | list | Entity IDs of unregistered entities (capped at 100) |
+| `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
@@ -494,9 +497,7 @@ cards:
         {% else %}
           {% set z_list = z_raw | list %}
         {% endif %}
-        {% set ghosts = z_list | select('match', '^\\[unregistered\\]') | list %}
-        {% set tracked = z_list | reject('match', '^\\[unregistered\\]') | list %}
-        {% set grouped = expand(tracked) | groupby('domain') %}
+        {% set grouped = expand(z_list) | groupby('domain') %}
 
         {# Domain count: prefer the HAGHS v2.3+ attribute when present.
            Fall back to extracting the distinct domains from z_list so the
@@ -508,7 +509,7 @@ cards:
         {% else %}
           {% set ns = namespace(seen=[]) %}
           {% for entry in z_list %}
-            {% set dom = (entry | replace('[unregistered] ', '')).split('.')[0] %}
+            {% set dom = entry.split('.')[0] %}
             {% if dom not in ns.seen %}
               {% set ns.seen = ns.seen + [dom] %}
             {% endif %}
@@ -531,11 +532,12 @@ cards:
         </details>
         {% endfor %}
 
-        {% if ghosts | length > 0 %}
+        {% set u_raw = state_attr(e, 'unregistered_entities') | default([], true) %} {% set u_count = state_attr(e, 'unregistered_count') | int(0) %}
+        {% if u_count > 0 %}
         <details>
-        <summary>⚠️ Unregistered: {{ ghosts | length }}</summary>
-        {% for entry in ghosts %}
-        &nbsp;&nbsp; • `{{ entry | replace('[unregistered] ', '') }}`
+        <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
+        {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
+        &nbsp;&nbsp; • `{{ entry }}`
         {% endfor %}
         </details>
         {% endif %}
