@@ -2,7 +2,7 @@
 
 This document outlines completed, planned, and declined features for the
 Home Assistant Global Health Score. It lives next to the active changelog
-(`v2.3_CHANGELOG.md`) and is refreshed whenever a release lands.
+file and is refreshed whenever a release lands.
 
 ---
 
@@ -120,7 +120,7 @@ All work below is committed on `dev` and described in detail in
 
 ## Planned
 
-### Stale-sensor detection (v2.4)
+### Stale-sensor detection (v2.5)
 
 **Problem:** Sensors can fail silently — they stop reporting but Home
 Assistant keeps showing the last valid value. The current zombie
@@ -183,4 +183,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-05-31*
+*Last updated: 2026-09-27*
