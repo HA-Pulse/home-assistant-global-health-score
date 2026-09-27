@@ -260,13 +260,13 @@ automations:
 
 ```yaml
 # Toggle the `vacation` label on a group of entities
-# (use label.remove with the same target when vacation ends)
+# (use homeassistant.remove_label_from_entity with the same target when vacation ends)
 - alias: HAGHS vacation start
   trigger:
     - platform: time
       at: "08:00:00"
   action:
-    - service: label.assign
+    - service: homeassistant.add_label_to_entity
       data:
         label_id: vacation
         target:
@@ -611,7 +611,7 @@ HAGHS uses a safety net: if any pillar calculation times out or throws an error,
 
 **Highlights**
 
-* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via HA-native `label.assign` / `label.remove` services (no custom HAGHS service). Migration from the legacy single-label config is automatic.
+* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via HA-native `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` services (no custom HAGHS service). Migration from the legacy single-label config is automatic.
 * **Disabled-entity auto-ignore.** Entities marked *Disable entity* in the entity registry are now excluded from zombie detection and update penalties — no `haghs_ignore` label required.
 * **Pattern-based ignore (#64).** New `ignore_patterns` field accepts glob patterns for entities without a unique ID (e.g. `sensor.docker_*`, `sensor.torque_*`).
 * **Configurable zombie + battery grace periods.** Two new Options Flow fields (1–240 min each, defaults 5 / 60). Battery-class entities get the longer window because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices.
