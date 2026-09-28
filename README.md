@@ -116,6 +116,8 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 **PSI-aware recommendations:** The advisor text is split into PSI and classic variants for CPU and RAM. On PSI-equipped systems you see "PSI CPU stall time: 12.5%" (the actual blocking time); on fallback systems "CPU utilization: 65%" (the busy-ness). The metric source is always explicit so you know whether you are looking at stalls or load.
 
+**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English.
+
 **Power supply detection (Raspberry Pi):** HAGHS auto-detects `binary_sensor.rpi_power_status` when available and applies a flat **20-point** hardware penalty while under-voltage is reported. Surfaces silent throttling on undersized power supplies that classic CPU sensors cannot see.
 
 * **Storage Integrity (Smart Thresholds):** Disk usage is **auto-detected** via `psutil`, no manual sensor needed. Thresholds adapt to your storage type:
