@@ -126,7 +126,7 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 ## Pillar 2: Application Hygiene (60%)
 
-Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts.
+Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts. Every point difference below 100 is explained: each deduction and each unearned bonus prints a recommendation line and sets a matching `rec_*` flag.
 
 * **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Detects entities with `unavailable` or `unknown` state in 22 physical/UI-relevant domains (automations, scripts, etc. are excluded). Penalties scale with the percentage of zombies relative to the entities in the monitored domains. Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit). Entities without an entity-registry entry (YAML-defined templates, Utility Meter, Riemann Sum, ...) are **not** zombies: they are reported separately as *unregistered* (`unregistered_count`, `unregistered_entities`, `unregistered_count_per_domain`) and do **not** affect the score. `zombie_count` and `zombie_count_per_domain` always carry the full totals.
   
@@ -134,11 +134,11 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
   
 * **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (>3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
   
-* **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**.
+* **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
   
 * **Backup Health:** A static **30-point deduction** for stale backups.
   
-* **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene, purge days configured (+5) and entity filters active (+5).
+* **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene, purge days configured (+5) and entity filters active (+5). Unearned bonus points are reported in the recommendations and in `rec_config_audit` (meaning "bonus points are missing", not "the configuration is bad").
 
 ---
 
@@ -311,8 +311,10 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
+| `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
+| `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period |
-| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag) |
+| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag, integration health, config audit) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
 | `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
@@ -323,6 +325,8 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_updates_pending` | bool | At least one non-ignored update entity is pending |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
+| `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
+| `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
 
 ---
 
