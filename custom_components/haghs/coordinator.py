@@ -26,6 +26,9 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     entity_registry as er,
 )
+from homeassistant.helpers import (
+    issue_registry as ir,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -62,8 +65,12 @@ from .const import (
     REC_POWER_UNSTABLE,
     REC_RAM_PRESSURE_CLASSIC,
     REC_RAM_PRESSURE_PSI,
+    REC_REPAIRS,
     REC_UPDATES_PENDING,
     REC_ZOMBIES,
+    REPAIR_LIST_CAP,
+    REPAIR_PENALTY_CAP,
+    REPAIR_PENALTY_PER_ISSUE,
     UNREGISTERED_LIST_CAP,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
@@ -183,6 +190,9 @@ class _ApplicationResult:
     p_core_lag: int = 0
     p_zombie: int = 0
     integration_unhealthy_count: int = 0
+    repair_count: int = 0
+    repair_list: list[str] = field(default_factory=list)
+    p_repairs: int = 0
 
 
 @dataclass
@@ -425,6 +435,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "integration_unhealthy_count": app.integration_unhealthy_count,
             "config_audit_bonus": app.config_bonus,
+            "repair_count": app.repair_count,
+            "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
             "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
             **rec_flags,
@@ -458,6 +470,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "integration_unhealthy_count": app.integration_unhealthy_count,
             "config_audit_bonus": app.config_bonus,
+            "repair_count": app.repair_count,
+            "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
             "recommendations": REC_ALL_CLEAR,
             **{key: False for key in REC_FLAG_KEYS},
@@ -790,19 +804,30 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # E. CONFIG AUDIT — bonus for good recorder configuration
         config_bonus = self._calc_config_audit()
 
+        # F. REPAIRS (#97) — open repair issues of other integrations
+        p_repairs, repair_count, repair_list = self._calc_repairs()
+
         app_final = max(
             0,
             min(
                 100,
-                100 - p_zombie - p_integration - p_backup - p_updates - p_db + config_bonus,
+                100
+                - p_zombie
+                - p_integration
+                - p_backup
+                - p_updates
+                - p_db
+                - p_repairs
+                + config_bonus,
             ),
         )
 
         # Hard cap: a perfect 100 must always reflect zero detected issues.
         # On large instances the ratio-based p_zombie can be small enough
         # that config_bonus fully offsets it, which would otherwise hide
-        # existing zombies behind a 100 score.
-        if zombie_count > 0:
+        # existing zombies behind a 100 score. Open repairs block the cap
+        # too: the bonus must never mask a broken integration.
+        if zombie_count > 0 or repair_count > 0:
             app_final = min(99, app_final)
 
         return _ApplicationResult(
@@ -822,6 +847,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_core_lag=p_core_lag,
             p_zombie=p_zombie,
             integration_unhealthy_count=integration_unhealthy_count,
+            repair_count=repair_count,
+            repair_list=repair_list,
+            p_repairs=p_repairs,
         )
 
     # ------------------------------------------------------------------
@@ -1097,6 +1125,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return bonus
 
     # ------------------------------------------------------------------
+    # Repairs — open repair issues from other integrations (#97)
+    # ------------------------------------------------------------------
+
+    def _calc_repairs(self) -> tuple[int, int, list[str]]:
+        """Count open repair issues and derive the penalty (#97).
+
+        Counts every issue in HA's issue registry that is active, not
+        dismissed by the user (native "Ignore" in the repairs UI) and owned
+        by another integration. HAGHS's own repairs are excluded: they
+        describe the integration's own prerequisites and would make the
+        score depend on HAGHS' own diagnosis.
+
+        Returns (penalty, full count, capped "domain/issue_id" list).
+        """
+        try:
+            registry = ir.async_get(self.hass)
+            identifiers = sorted(
+                f"{entry.domain}/{entry.issue_id}"
+                for entry in registry.issues.values()
+                if entry.active and entry.dismissed_version is None and entry.domain != DOMAIN
+            )
+        except Exception:
+            _LOGGER.warning("HAGHS: Failed to read the issue registry", exc_info=True)
+            return 0, 0, []
+
+        penalty = min(REPAIR_PENALTY_CAP, len(identifiers) * REPAIR_PENALTY_PER_ISSUE)
+        return penalty, len(identifiers), identifiers[:REPAIR_LIST_CAP]
+
+    # ------------------------------------------------------------------
     # Recorder info reader
     # ------------------------------------------------------------------
 
@@ -1205,6 +1262,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         missing_bonus = CONFIG_AUDIT_MAX_BONUS - app.config_bonus
         if missing_bonus > 0:
             advice.append(REC_CONFIG_AUDIT.format(missing=missing_bonus))
+        if app.p_repairs > 0:
+            advice.append(REC_REPAIRS.format(count=app.repair_count))
         return advice
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
@@ -1245,6 +1304,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_core_lag": app.p_core_lag > 0,
             "rec_integration_health": app.integration_unhealthy_count > 0,
             "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0,
+            "rec_repairs": app.p_repairs > 0,
         }
 
     # ------------------------------------------------------------------

@@ -29,6 +29,10 @@ from tests.factories import make_coordinator, patch_disk, patch_psi
             id="integration_health",
         ),
         pytest.param(_ApplicationResult(config_bonus=0, app_score=90), id="config_audit"),
+        pytest.param(
+            _ApplicationResult(p_repairs=5, repair_count=1, app_score=95),
+            id="repairs",
+        ),
     ],
 )
 async def test_every_missing_point_is_explained(hass, app) -> None:

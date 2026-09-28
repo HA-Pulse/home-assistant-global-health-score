@@ -91,10 +91,21 @@ REC_CONFIG_AUDIT = (
     "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
     "(recorder purge days / entity filter)."
 )
+REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
 
 # Maximum config-audit bonus. Kept next to the templates so the "missing
 # points" message and the bonus calculation can never drift apart.
 CONFIG_AUDIT_MAX_BONUS = 10
+
+# Repairs pillar (#97). Open repair issues raised by any integration except
+# HAGHS itself. 5 points per issue, capped below the integration-health cap
+# because one broken backend often produces both signals.
+REPAIR_PENALTY_PER_ISSUE = 5
+REPAIR_PENALTY_CAP = 10
+# Maximum number of "domain/issue_id" entries carried in the `repairs` state
+# attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
+# reflects the full number.
+REPAIR_LIST_CAP = 50
 
 # Fallback text for empty lists in state attributes
 ATTR_NONE = "None"
@@ -117,6 +128,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_core_lag",
     "rec_integration_health",
     "rec_config_audit",
+    "rec_repairs",
 )
 
 
