@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v5.0.0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
       - run: pip install -r requirements_test.txt
       - run: ruff check .
@@ -27,7 +27,8 @@ jobs:
       - uses: actions/checkout@v5.0.0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
       - run: pip install -r requirements_test.txt
       - run: pytest --cov=custom_components.haghs --cov-report=term-missing --cov-fail-under=65
+      - run: coverage report --include='custom_components/haghs/coordinator.py' --fail-under=80
