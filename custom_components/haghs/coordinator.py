@@ -29,6 +29,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     issue_registry as ir,
 )
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -50,24 +51,8 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
-    REC_ALL_CLEAR,
-    REC_BACKUP_STALE,
-    REC_CONFIG_AUDIT,
-    REC_CORE_LAG,
-    REC_CPU_LOAD_CLASSIC,
-    REC_CPU_LOAD_PSI,
-    REC_DB_OVER_LIMIT,
-    REC_DISK_SD_LOW,
-    REC_DISK_SSD_LOW,
     REC_FLAG_KEYS,
-    REC_INTEGRATION_HEALTH,
-    REC_IO_PRESSURE,
-    REC_POWER_UNSTABLE,
-    REC_RAM_PRESSURE_CLASSIC,
-    REC_RAM_PRESSURE_PSI,
-    REC_REPAIRS,
-    REC_UPDATES_PENDING,
-    REC_ZOMBIES,
+    REC_TEMPLATES,
     REPAIR_LIST_CAP,
     REPAIR_PENALTY_CAP,
     REPAIR_PENALTY_PER_ISSUE,
@@ -255,6 +240,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._storage_type: str = opts.get(CONF_STORAGE_TYPE, DEFAULT_STORAGE_TYPE)
 
+        # Resolved recommendation templates for the configured language.
+        # Empty until the first update cycle; the const.py defaults always
+        # apply as the final fallback.
+        self._rec_translations: dict[str, str] = {}
+
         # Grace windows are user-configurable in the Options Flow. Both
         # values are stored in minutes for friendlier UX, multiplied to
         # seconds here once at init so the hot path stays cheap.
@@ -404,6 +394,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _ApplicationResult(),
         )
 
+        self._rec_translations = await self._async_load_rec_translations()
         return self._build_result(hw, app)
 
     def _build_result(
@@ -438,7 +429,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "repair_count": app.repair_count,
             "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
-            "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
+            "recommendations": ("\n".join(advice) if advice else self._rec("rec_all_clear")),
             **rec_flags,
         }
 
@@ -473,7 +464,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "repair_count": app.repair_count,
             "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
-            "recommendations": REC_ALL_CLEAR,
+            "recommendations": self._rec("rec_all_clear"),
             **{key: False for key in REC_FLAG_KEYS},
         }
 
@@ -1212,6 +1203,33 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Recommendations builder
     # ------------------------------------------------------------------
 
+    async def _async_load_rec_translations(self) -> dict[str, str]:
+        """Resolve the recommendation templates for the configured language.
+
+        Reads the "common" translation category of this integration and
+        strips the cache key prefix. Missing keys, missing language files
+        and errors all leave the dict empty; _rec() then falls back to the
+        const.py defaults.
+        """
+        try:
+            raw = await async_get_translations(
+                self.hass,
+                self.hass.config.language,
+                "common",
+                integrations=[DOMAIN],
+            )
+        except Exception:
+            _LOGGER.warning("HAGHS: Failed to load translations", exc_info=True)
+            return {}
+        prefix = f"component.{DOMAIN}.common."
+        return {
+            key.removeprefix(prefix): value for key, value in raw.items() if key.startswith(prefix)
+        }
+
+    def _rec(self, key: str) -> str:
+        """Return the template for *key*: translated if present, else English."""
+        return self._rec_translations.get(key, REC_TEMPLATES[key])
+
     def _build_recommendations(
         self,
         hw: _HardwareResult,
@@ -1219,51 +1237,53 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> list[str]:
         """Build human-readable recommendation strings.
 
-        All templates are defined in const.py; they are not translated yet
-        (see the i18n follow-up issue).
+        Templates resolve via HA translations (category "common"); the
+        const.py defaults are the final fallback.
         """
         advice: list[str] = []
         if hw.p_cpu > 0:
-            cpu_tpl = REC_CPU_LOAD_PSI if hw.cpu_used_psi else REC_CPU_LOAD_CLASSIC
-            advice.append(cpu_tpl.format(cpu_pct=hw.cpu))
+            cpu_key = "rec_cpu_load_psi" if hw.cpu_used_psi else "rec_cpu_load_classic"
+            advice.append(self._rec(cpu_key).format(cpu_pct=hw.cpu))
         if hw.p_ram > 0:
-            ram_tpl = REC_RAM_PRESSURE_PSI if hw.ram_used_psi else REC_RAM_PRESSURE_CLASSIC
-            advice.append(ram_tpl.format(ram_pct=hw.ram))
+            ram_key = "rec_ram_pressure_psi" if hw.ram_used_psi else "rec_ram_pressure_classic"
+            advice.append(self._rec(ram_key).format(ram_pct=hw.ram))
         if hw.p_io > 0:
-            advice.append(REC_IO_PRESSURE.format(io_pct=hw.io))
+            advice.append(self._rec("rec_io_pressure").format(io_pct=hw.io))
         if self._is_disk_low_sd(hw):
             advice.append(
-                REC_DISK_SD_LOW.format(
+                self._rec("rec_disk_sd_low").format(
                     free_gb=hw.disk_free / _GB,
                     storage_type=self._storage_type,
                 )
             )
         elif self._is_disk_low_ssd(hw):
-            advice.append(REC_DISK_SSD_LOW.format(free_gb=hw.disk_free / _GB))
+            advice.append(self._rec("rec_disk_ssd_low").format(free_gb=hw.disk_free / _GB))
         if app.db_mb > app.db_limit_mb:
             advice.append(
-                REC_DB_OVER_LIMIT.format(
+                self._rec("rec_db_over_limit").format(
                     db_gb=app.db_mb / 1000,
                     limit_gb=app.db_limit_mb / 1000,
                 )
             )
         if hw.p_power > 0:
-            advice.append(REC_POWER_UNSTABLE)
+            advice.append(self._rec("rec_power_unstable"))
         if app.p_backup > 0:
-            advice.append(REC_BACKUP_STALE)
+            advice.append(self._rec("rec_backup_stale"))
         if app.update_count > 0:
-            advice.append(REC_UPDATES_PENDING.format(count=app.update_count))
+            advice.append(self._rec("rec_updates_pending").format(count=app.update_count))
         if app.p_zombie > 0:
-            advice.append(REC_ZOMBIES.format(count=app.zombie_count))
+            advice.append(self._rec("rec_zombies").format(count=app.zombie_count))
         if app.p_core_lag > 0:
-            advice.append(REC_CORE_LAG)
+            advice.append(self._rec("rec_core_lag"))
         if app.integration_unhealthy_count > 0:
-            advice.append(REC_INTEGRATION_HEALTH.format(count=app.integration_unhealthy_count))
+            advice.append(
+                self._rec("rec_integration_health").format(count=app.integration_unhealthy_count)
+            )
         missing_bonus = CONFIG_AUDIT_MAX_BONUS - app.config_bonus
         if missing_bonus > 0:
-            advice.append(REC_CONFIG_AUDIT.format(missing=missing_bonus))
+            advice.append(self._rec("rec_config_audit").format(missing=missing_bonus))
         if app.p_repairs > 0:
-            advice.append(REC_REPAIRS.format(count=app.repair_count))
+            advice.append(self._rec("rec_repairs").format(count=app.repair_count))
         return advice
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
