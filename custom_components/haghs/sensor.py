@@ -65,6 +65,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "psi_available": data["psi_available"],
             "recorder_keep_days": data["recorder_keep_days"],
             "recorder_filter_active": data["recorder_filter_active"],
+            "integration_unhealthy_count": data["integration_unhealthy_count"],
+            "config_audit_bonus": data["config_audit_bonus"],
             "pending_updates": data["pending_updates"],
             "recommendations": data["recommendations"],
             **{k: data[k] for k in REC_FLAG_KEYS},

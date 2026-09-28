@@ -5,7 +5,12 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.const import DOMAIN, REC_ALL_CLEAR, REC_FLAG_KEYS
+from custom_components.haghs.const import (
+    CONFIG_AUDIT_MAX_BONUS,
+    DOMAIN,
+    REC_ALL_CLEAR,
+    REC_FLAG_KEYS,
+)
 from custom_components.haghs.coordinator import (
     _GB,
     HaghsDataUpdateCoordinator,
@@ -19,6 +24,15 @@ def _coordinator(hass: HomeAssistant) -> HaghsDataUpdateCoordinator:
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
     return HaghsDataUpdateCoordinator(hass, entry)
+
+
+def _clean_app() -> _ApplicationResult:
+    """Application result with nothing missing, including the full bonus.
+
+    Since #92 the config-audit bonus counts as a point source: a result with
+    config_bonus 0 correctly reports the missing bonus points.
+    """
+    return _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS)
 
 
 async def test_cpu_psi_text_when_psi_used(hass: HomeAssistant) -> None:
@@ -107,7 +121,7 @@ async def test_no_advice_when_all_clear(hass: HomeAssistant) -> None:
     """
     coordinator = _coordinator(hass)
     hw = _HardwareResult()
-    app = _ApplicationResult()
+    app = _clean_app()
 
     advice = coordinator._build_recommendations(hw, app)
 
@@ -124,7 +138,7 @@ async def test_no_advice_when_all_clear(hass: HomeAssistant) -> None:
 async def test_all_flags_false_for_empty_result(hass: HomeAssistant) -> None:
     """A clean hardware/application result yields every rec_* flag as False."""
     coordinator = _coordinator(hass)
-    flags = coordinator._build_rec_flags(_HardwareResult(), _ApplicationResult())
+    flags = coordinator._build_rec_flags(_HardwareResult(), _clean_app())
 
     assert set(flags.keys()) == set(REC_FLAG_KEYS)
     assert all(value is False for value in flags.values())

@@ -39,6 +39,7 @@ from .const import (
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
+    CONFIG_AUDIT_MAX_BONUS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
     DEFAULT_BATTERY_GRACE_MINUTES,
@@ -48,6 +49,7 @@ from .const import (
     DOMAIN,
     REC_ALL_CLEAR,
     REC_BACKUP_STALE,
+    REC_CONFIG_AUDIT,
     REC_CORE_LAG,
     REC_CPU_LOAD_CLASSIC,
     REC_CPU_LOAD_PSI,
@@ -55,6 +57,7 @@ from .const import (
     REC_DISK_SD_LOW,
     REC_DISK_SSD_LOW,
     REC_FLAG_KEYS,
+    REC_INTEGRATION_HEALTH,
     REC_IO_PRESSURE,
     REC_POWER_UNSTABLE,
     REC_RAM_PRESSURE_CLASSIC,
@@ -179,6 +182,7 @@ class _ApplicationResult:
     p_backup: int = 0
     p_core_lag: int = 0
     p_zombie: int = 0
+    integration_unhealthy_count: int = 0
 
 
 @dataclass
@@ -419,6 +423,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "integration_unhealthy_count": app.integration_unhealthy_count,
+            "config_audit_bonus": app.config_bonus,
             "pending_updates": app.pending_updates,
             "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
             **rec_flags,
@@ -450,6 +456,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "integration_unhealthy_count": app.integration_unhealthy_count,
+            "config_audit_bonus": app.config_bonus,
             "pending_updates": app.pending_updates,
             "recommendations": REC_ALL_CLEAR,
             **{key: False for key in REC_FLAG_KEYS},
@@ -771,6 +779,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # B. INTEGRATION HEALTH
         p_integration = self._calc_integration_health()
+        integration_unhealthy_count = self._count_unhealthy_integrations()
 
         # C. MAINTENANCE — DB size auto-detected (blocking I/O → executor)
         db_mb, p_db, db_limit_mb = await self._async_calc_maintenance()
@@ -812,6 +821,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_backup=p_backup,
             p_core_lag=p_core_lag,
             p_zombie=p_zombie,
+            integration_unhealthy_count=integration_unhealthy_count,
         )
 
     # ------------------------------------------------------------------
@@ -932,6 +942,19 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unregistered_per_domain,
         )
 
+    def _count_unhealthy_integrations(self) -> int:
+        """Return the number of config entries in an unhealthy state."""
+        unhealthy_states = {
+            ConfigEntryState.SETUP_ERROR,
+            ConfigEntryState.SETUP_RETRY,
+            ConfigEntryState.FAILED_UNLOAD,
+        }
+        return sum(
+            1
+            for entry in self.hass.config_entries.async_entries()
+            if entry.state in unhealthy_states
+        )
+
     def _calc_integration_health(self) -> int:
         """Count unhealthy integrations via native ConfigEntry states.
 
@@ -939,17 +962,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         FAILED_UNLOAD — the same states HA shows as "error" in the UI.
         Penalty: 5 pts per unhealthy integration, capped at 15.
         """
-        unhealthy_states = {
-            ConfigEntryState.SETUP_ERROR,
-            ConfigEntryState.SETUP_RETRY,
-            ConfigEntryState.FAILED_UNLOAD,
-        }
-        failed = sum(
-            1
-            for entry in self.hass.config_entries.async_entries()
-            if entry.state in unhealthy_states
-        )
-        return min(15, failed * 5)
+        return min(15, self._count_unhealthy_integrations() * 5)
 
     async def _async_calc_maintenance(self) -> tuple[float, int, float]:
         """Calculate DB penalty with dynamic limit based on entity count."""
@@ -1149,8 +1162,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> list[str]:
         """Build human-readable recommendation strings.
 
-        All templates are defined in const.py (mirrored in strings.json)
-        so translators can find and override them.
+        All templates are defined in const.py; they are not translated yet
+        (see the i18n follow-up issue).
         """
         advice: list[str] = []
         if hw.p_cpu > 0:
@@ -1187,6 +1200,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice.append(REC_ZOMBIES.format(count=app.zombie_count))
         if app.p_core_lag > 0:
             advice.append(REC_CORE_LAG)
+        if app.integration_unhealthy_count > 0:
+            advice.append(REC_INTEGRATION_HEALTH.format(count=app.integration_unhealthy_count))
+        missing_bonus = CONFIG_AUDIT_MAX_BONUS - app.config_bonus
+        if missing_bonus > 0:
+            advice.append(REC_CONFIG_AUDIT.format(missing=missing_bonus))
         return advice
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
@@ -1225,6 +1243,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_updates_pending": app.update_count > 0,
             "rec_zombie": app.zombie_count > 0,
             "rec_core_lag": app.p_core_lag > 0,
+            "rec_integration_health": app.integration_unhealthy_count > 0,
+            "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0,
         }
 
     # ------------------------------------------------------------------

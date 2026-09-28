@@ -8,6 +8,7 @@ and _ApplicationResult directly instead of driving the whole update cycle.
 from __future__ import annotations
 
 from custom_components.haghs.const import (
+    CONFIG_AUDIT_MAX_BONUS,
     REC_BACKUP_STALE,
     REC_CORE_LAG,
     REC_DB_OVER_LIMIT,
@@ -97,7 +98,7 @@ async def test_hardware_advice_branches(hass) -> None:
 async def test_all_clear_has_no_flags(hass) -> None:
     coord = make_coordinator(hass)
     hw = _HardwareResult()
-    app = _ApplicationResult()
+    app = _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS)
     assert coord._build_recommendations(hw, app) == []
     assert set(coord._build_rec_flags(hw, app)) == set(REC_FLAG_KEYS)
     assert not any(coord._build_rec_flags(hw, app).values())
