@@ -13,10 +13,9 @@ Use `Fixes #<number>` to close the issue automatically on merge. Use
 
 List of files/areas changed and the nature of the change.
 
-> **Workflow files:** changes under `.github/workflows/` cannot be pushed
-> with the automation token (it intentionally has no workflow permission).
-> The exact YAML is prepared separately and entered by the maintainer via
-> the GitHub web UI.
+> **Workflow files:** changes under `.github/workflows/` go into their own
+> small PR, so a failing CI run there does not hide feature failures. The
+> automation token may push them (workflow permission added on 28.09.2026).
 
 ## Test plan
 
