@@ -19,7 +19,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import CoreState, Event, HomeAssistant, callback
+from homeassistant.core import CoreState, Event, HomeAssistant, State, callback
 from homeassistant.helpers import (
     device_registry as dr,
 )
@@ -46,6 +46,7 @@ from .const import (
     CONFIG_AUDIT_MAX_BONUS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
+    DEAD_DEVICE_LIST_CAP,
     DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
@@ -178,6 +179,8 @@ class _ApplicationResult:
     repair_count: int = 0
     repair_list: list[str] = field(default_factory=list)
     p_repairs: int = 0
+    dead_device_count: int = 0
+    dead_device_list: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -420,6 +423,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
+            "dead_device_count": app.dead_device_count,
+            "dead_devices": app.dead_device_list,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -455,6 +460,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
+            "dead_device_count": app.dead_device_count,
+            "dead_devices": app.dead_device_list,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -798,6 +805,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # F. REPAIRS (#97) — open repair issues of other integrations
         p_repairs, repair_count, repair_list = self._calc_repairs()
 
+        # G. DEAD DEVICES (#120) — informational, no score impact
+        dead_device_list, dead_device_count = self._calc_dead_devices()
+
         app_final = max(
             0,
             min(
@@ -841,11 +851,30 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             repair_count=repair_count,
             repair_list=repair_list,
             p_repairs=p_repairs,
+            dead_device_count=dead_device_count,
+            dead_device_list=dead_device_list,
         )
 
     # ------------------------------------------------------------------
     # Application sub-calculations
     # ------------------------------------------------------------------
+
+    def _past_grace(self, state: State, now: datetime) -> bool:
+        """Return True if *state* has been stale longer than the grace window.
+
+        Grace period: skip entities that changed less than the window ago.
+        last_changed values older than the recorded boot time were restored
+        from the recorder and are not a reliable baseline, so treat boot
+        time as the floor. Battery-class entities use a separate, typically
+        longer window (configurable in the Options Flow).
+        """
+        effective_seen = max(state.last_changed, self._boot_time)
+        grace_seconds = (
+            self._battery_grace_seconds
+            if state.attributes.get("device_class") == "battery"
+            else self._zombie_grace_seconds
+        )
+        return (now - effective_seen).total_seconds() >= grace_seconds
 
     def _calc_zombies(
         self,
@@ -893,18 +922,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             # Grace period: skip entities that changed less than the window
-            # ago. last_changed values older than the recorded boot time were
-            # restored from the recorder and are not a reliable baseline, so
-            # treat boot time as the floor. Battery-class entities use a
-            # separate, typically longer window (configurable in the Options
-            # Flow, defaults are 15 min for general and 60 min for battery).
-            effective_seen = max(state.last_changed, self._boot_time)
-            grace_seconds = (
-                self._battery_grace_seconds
-                if state.attributes.get("device_class") == "battery"
-                else self._zombie_grace_seconds
-            )
-            if (now - effective_seen).total_seconds() < grace_seconds:
+            # ago (see _past_grace for the baseline rules).
+            if not self._past_grace(state, now):
                 continue
 
             entity_id = state.entity_id
@@ -960,6 +979,78 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unregistered_count,
             unregistered_per_domain,
         )
+
+    def _calc_dead_devices(self) -> tuple[list[str], int]:
+        """Detect dead devices: every entity unavailable/unknown past grace.
+
+        A "dead device" has at least one registered entity and all of its
+        entities (with a state, not disabled) are unavailable/unknown beyond
+        the zombie grace window. Devices without entities are out of scope
+        (#93). Informational only: no score impact, the entity-level zombie
+        points stay authoritative (#120).
+
+        Ignore semantics: ignored entities still count for the fact that
+        *every* entity is unavailable, so the rendered text cannot lie. The
+        device stays silent when no non-ignored entity is left (device
+        label, all entities ignored via labels or patterns).
+
+        Returns (dead_list_capped, dead_count); the list carries device
+        display names and is capped for the state-attribute payload.
+        """
+        # Same deferral as the zombie check: the registries may not be
+        # loaded yet and ignore labels would be missing (#13).
+        if not self._registries_ready:
+            return [], 0
+
+        ent_reg = er.async_get(self.hass)
+        dev_reg = dr.async_get(self.hass)
+        now = dt_util.utcnow()
+
+        # Candidate pass: devices with at least one entity past grace that
+        # is currently unavailable/unknown.
+        candidate_ids: set[str] = set()
+        for state in self.hass.states.async_all():
+            if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            entity_entry = ent_reg.async_get(state.entity_id)
+            if entity_entry is None or entity_entry.device_id is None:
+                continue
+            if not self._past_grace(state, now):
+                continue
+            candidate_ids.add(entity_entry.device_id)
+
+        # Full pass per candidate: every relevant entity must be dead and
+        # at least one of them must not be ignored.
+        dead_names: list[str] = []
+        for device_id in candidate_ids:
+            entries = er.async_entries_for_device(
+                ent_reg, device_id, include_disabled_entities=False
+            )
+            relevant = 0
+            dead = 0
+            ignored = 0
+            for entry in entries:
+                entity_state = self.hass.states.get(entry.entity_id)
+                if entity_state is None:
+                    continue
+                relevant += 1
+                if self._is_ignored(entry.entity_id, entry):
+                    ignored += 1
+                if entity_state.state in (
+                    STATE_UNAVAILABLE,
+                    STATE_UNKNOWN,
+                ) and self._past_grace(entity_state, now):
+                    dead += 1
+            if relevant == 0 or dead < relevant or ignored >= relevant:
+                continue
+            device_entry = dev_reg.async_get(device_id)
+            if device_entry is None:
+                continue
+            dead_names.append(device_entry.name_by_user or device_entry.name or device_entry.id)
+
+        dead_names.sort()
+        dead_count = len(dead_names)
+        return dead_names[:DEAD_DEVICE_LIST_CAP], dead_count
 
     def _count_unhealthy_integrations(self) -> int:
         """Return the number of config entries in an unhealthy state."""
@@ -1284,6 +1375,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice.append(self._rec("rec_config_audit").format(missing=missing_bonus))
         if app.p_repairs > 0:
             advice.append(self._rec("rec_repairs").format(count=app.repair_count))
+        if app.dead_device_count > 0:
+            advice.append(self._rec("rec_dead_devices").format(count=app.dead_device_count))
         return advice
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
@@ -1325,6 +1418,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_integration_health": app.integration_unhealthy_count > 0,
             "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0,
             "rec_repairs": app.p_repairs > 0,
+            "rec_dead_devices": app.dead_device_count > 0,
         }
 
     # ------------------------------------------------------------------

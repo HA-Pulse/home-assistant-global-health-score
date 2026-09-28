@@ -61,6 +61,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "unregistered_count": data["unregistered_count"],
             "unregistered_entities": data["unregistered_entities"],
             "unregistered_count_per_domain": data["unregistered_count_per_domain"],
+            "dead_device_count": data["dead_device_count"],
+            "dead_devices": data["dead_devices"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
             "recorder_keep_days": data["recorder_keep_days"],

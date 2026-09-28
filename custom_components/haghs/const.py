@@ -53,6 +53,11 @@ ZOMBIE_LIST_CAP = 100
 # and the per-domain breakdown always reflect the full number.
 UNREGISTERED_LIST_CAP = 100
 
+# Maximum number of device names carried in the `dead_devices` state
+# attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
+# reflects the full number.
+DEAD_DEVICE_LIST_CAP = 100
+
 # Internal hass.data key holding the per-entity first-seen timestamps for
 # pending updates (#26). Only updates that have been available longer than
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
@@ -95,6 +100,7 @@ REC_CONFIG_AUDIT = (
     "(recorder purge days / entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
+REC_DEAD_DEVICES = "\U0001f50c Devices: {count} device(s) with all entities unavailable."
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
@@ -108,6 +114,7 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_cpu_load_classic": REC_CPU_LOAD_CLASSIC,
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
+    "rec_dead_devices": REC_DEAD_DEVICES,
     "rec_disk_sd_low": REC_DISK_SD_LOW,
     "rec_disk_ssd_low": REC_DISK_SSD_LOW,
     "rec_integration_health": REC_INTEGRATION_HEALTH,
@@ -156,6 +163,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_integration_health",
     "rec_config_audit",
     "rec_repairs",
+    "rec_dead_devices",
 )
 
 
