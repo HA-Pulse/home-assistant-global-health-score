@@ -61,10 +61,13 @@ DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
 UPDATE_GRACE_DAYS = 7
 
 # ---------------------------------------------------------------------------
-# Recommendation templates (i18n-ready — defined in const.py; not translated
-# yet, see the i18n follow-up issue)
+# Recommendation templates. The English defaults live here; at runtime the
+# coordinator resolves them via HA translations (category "common") and falls
+# back to these values when a key or language is missing.
 #
 # Templates use str.format() placeholders so translations can reorder them.
+# Keys must stay in sync with REC_TEMPLATES and the "common" section of
+# strings.json / translations/en.json.
 # ---------------------------------------------------------------------------
 REC_CPU_LOAD_PSI = "\u26a1 Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%)."
 REC_CPU_LOAD_CLASSIC = "\u26a1 Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%)."
@@ -92,6 +95,30 @@ REC_CONFIG_AUDIT = (
     "(recorder purge days / entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
+
+# Translation keys for the recommendation templates. Maps the slug used in the
+# "common" category of strings.json / translations/en.json to the English
+# default. The coordinator uses this as the final fallback when no translation
+# is available for the configured language.
+REC_TEMPLATES: dict[str, str] = {
+    "rec_all_clear": REC_ALL_CLEAR,
+    "rec_backup_stale": REC_BACKUP_STALE,
+    "rec_config_audit": REC_CONFIG_AUDIT,
+    "rec_core_lag": REC_CORE_LAG,
+    "rec_cpu_load_classic": REC_CPU_LOAD_CLASSIC,
+    "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
+    "rec_db_over_limit": REC_DB_OVER_LIMIT,
+    "rec_disk_sd_low": REC_DISK_SD_LOW,
+    "rec_disk_ssd_low": REC_DISK_SSD_LOW,
+    "rec_integration_health": REC_INTEGRATION_HEALTH,
+    "rec_io_pressure": REC_IO_PRESSURE,
+    "rec_power_unstable": REC_POWER_UNSTABLE,
+    "rec_ram_pressure_classic": REC_RAM_PRESSURE_CLASSIC,
+    "rec_ram_pressure_psi": REC_RAM_PRESSURE_PSI,
+    "rec_repairs": REC_REPAIRS,
+    "rec_updates_pending": REC_UPDATES_PENDING,
+    "rec_zombies": REC_ZOMBIES,
+}
 
 # Maximum config-audit bonus. Kept next to the templates so the "missing
 # points" message and the bonus calculation can never drift apart.

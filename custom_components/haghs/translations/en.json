@@ -1,4 +1,23 @@
 {
+  "common": {
+    "rec_all_clear": "✅ System optimized",
+    "rec_backup_stale": "🚨 Security: Stale backup detected!",
+    "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder purge days / entity filter).",
+    "rec_core_lag": "👴 Legacy: Core version is >3 months old.",
+    "rec_cpu_load_classic": "⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).",
+    "rec_cpu_load_psi": "⚡ Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%).",
+    "rec_db_over_limit": "🗄️ Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB).",
+    "rec_disk_sd_low": "⚠️ Disk Space: Only {free_gb:.1f} GB free on {storage_type}!",
+    "rec_disk_ssd_low": "⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!",
+    "rec_integration_health": "🧩 Integrations: {count} integration(s) failed to set up.",
+    "rec_io_pressure": "⚡ Optimization: I/O pressure is impacting score ({io_pct:.1f}%).",
+    "rec_power_unstable": "⚠️ Power: Under-voltage detected — unstable power supply!",
+    "rec_ram_pressure_classic": "⚡ Optimization: Memory utilization is impacting score ({ram_pct:.1f}%).",
+    "rec_ram_pressure_psi": "⚡ Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%).",
+    "rec_repairs": "🛠️ Repairs: {count} open repair issue(s) detected.",
+    "rec_updates_pending": "📦 Maintenance: {count} update(s) pending.",
+    "rec_zombies": "🧟 Hygiene: {count} zombie(s) detected."
+  },
   "config": {
     "step": {
       "user": {
