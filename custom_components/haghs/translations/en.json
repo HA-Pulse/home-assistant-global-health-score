@@ -7,6 +7,7 @@
     "rec_cpu_load_classic": "⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).",
     "rec_cpu_load_psi": "⚡ Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%).",
     "rec_db_over_limit": "🗄️ Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB).",
+    "rec_dead_devices": "🔌 Devices: {count} device(s) with all entities unavailable.",
     "rec_disk_sd_low": "⚠️ Disk Space: Only {free_gb:.1f} GB free on {storage_type}!",
     "rec_disk_ssd_low": "⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!",
     "rec_integration_health": "🧩 Integrations: {count} integration(s) failed to set up.",
