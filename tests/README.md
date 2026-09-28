@@ -18,7 +18,12 @@ tests do not need a per-test marker.
 
 ```bash
 pytest --cov=custom_components.haghs --cov-report=term-missing
+coverage report --include='custom_components/haghs/coordinator.py' --fail-under=80
 ```
+
+The CI gate fails below 65 % for the package (`--cov-fail-under` in
+`.github/workflows/ci.yml`), and `coordinator.py` is gated at 80 % on top of
+that (issue #107). Current state: `coordinator.py` 100 %, package 87 %.
 
 ## Linting
 
@@ -30,7 +35,13 @@ ruff format --check .
 ## Layout
 
 - `tests/conftest.py` — global fixtures (auto-enables `custom_integrations`).
+- `tests/factories.py`: shared factories (`make_coordinator`, `patch_psi`,
+  `patch_disk`). Plain helpers, no pytest fixtures.
 - `tests/test_*.py` — one file per concern (migration, scoring pillars, …).
+  The pillar coverage from #107 lives in `test_hardware_tiers.py`,
+  `test_hardware_disk.py`, `test_hardware_assembly.py`,
+  `test_application_components.py`, `test_recommendation_branches.py` and
+  `test_ignore_paths.py`.
 
 ## Manual smoke test
 
