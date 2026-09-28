@@ -61,7 +61,8 @@ DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
 UPDATE_GRACE_DAYS = 7
 
 # ---------------------------------------------------------------------------
-# Recommendation templates (i18n-ready — mirrored in strings.json)
+# Recommendation templates (i18n-ready — defined in const.py; not translated
+# yet, see the i18n follow-up issue)
 #
 # Templates use str.format() placeholders so translations can reorder them.
 # ---------------------------------------------------------------------------
@@ -85,6 +86,15 @@ REC_ZOMBIES = "\U0001f9df Hygiene: {count} zombie(s) detected."
 REC_CORE_LAG = "\U0001f474 Legacy: Core version is >3 months old."
 REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected — unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
+REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration(s) failed to set up."
+REC_CONFIG_AUDIT = (
+    "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
+    "(recorder purge days / entity filter)."
+)
+
+# Maximum config-audit bonus. Kept next to the templates so the "missing
+# points" message and the bonus calculation can never drift apart.
+CONFIG_AUDIT_MAX_BONUS = 10
 
 # Fallback text for empty lists in state attributes
 ATTR_NONE = "None"
@@ -105,6 +115,8 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_updates_pending",
     "rec_zombie",
     "rec_core_lag",
+    "rec_integration_health",
+    "rec_config_audit",
 )
 
 
