@@ -136,6 +136,8 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
   
 * **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
   
+* **Repairs:** Open repair issues from HA's issue registry cost **5 pts each**, capped at **10 pts**. Counted are only issues that are currently active, not dismissed and owned by another integration; repairs raised by HAGHS itself describe the integration's own prerequisites and are excluded. While any repair is open, the application score is **hard-capped at 99** - the Config-Audit bonus can never mask a broken integration. Count and list are exposed as `repair_count` and `repairs`, the flag is `rec_repairs`. To take a repair out of the score, use HA's native **"Ignore"** action on it (Settings > Repairs); no HAGHS option is needed. Note that a broken backend often raises a repair issue *and* leaves its config entry unhealthy, so one root cause can cost up to **25 pts** together (15 integration health + 10 repairs).
+  
 * **Backup Health:** A static **30-point deduction** for stale backups.
   
 * **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene, purge days configured (+5) and entity filters active (+5). Unearned bonus points are reported in the recommendations and in `rec_config_audit` (meaning "bonus points are missing", not "the configuration is bad").
@@ -313,8 +315,10 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
+| `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
+| `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50) |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period |
-| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag, integration health, config audit) |
+| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag, integration health, config audit, repairs) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
 | `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
@@ -327,6 +331,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
 | `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
 | `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
+| `rec_repairs` | bool | At least one open repair issue from another integration is counted |
 
 ---
 
