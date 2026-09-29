@@ -21,9 +21,12 @@ closed.
 ## Branching
 
 - Target branch for all PRs: **`dev`**. Never open PRs against `main`.
-- `main` is release-only and is updated by the maintainer through a
-  controlled `dev` → `main` merge after CI and manual validation.
-- Create your feature branch off the latest `dev`.
+- Create your feature branch off the latest `dev` (`feat/*`, `fix/*`,
+  `chore/*`).
+- PRs into `dev` are merged as **squash merges**, once CI is green.
+- `main` is release-only: it receives changes exclusively through a release
+  PR from `dev`, merged with a **merge commit** so the `dev` history is
+  preserved. See [`RELEASING.md`](./RELEASING.md) for the release flow.
 
 ## Language
 
@@ -35,7 +38,7 @@ closed.
 ## Changelog
 
 - Every change that lands on `dev` must include a matching entry in
-  `v2.3_CHANGELOG.md` (or the current active changelog file).
+  the current active changelog file (`v2.4.0_CHANGELOG.md`).
 - The entry should describe the *why*, list files touched, and flag any
   behavior change users might notice.
 - Silent behavior changes (constant removal, default changes, etc.) must be
@@ -146,7 +149,8 @@ disabling the check.
 - Maintainer is `@D-N91`.
 - Responses in English only.
 - Expect at least one review round before merge. Don't force-push during an
-  active review — append commits; the maintainer may squash on merge.
+  active review; append commits instead. The maintainer squash-merges PRs
+  into `dev`.
 
 ## Reporting Issues Instead
 

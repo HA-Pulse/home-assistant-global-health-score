@@ -11,7 +11,6 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.haghs.const import (
-    ATTR_UNREGISTERED_PREFIX,
     CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
     DATA_BOOT_TIME,
@@ -23,12 +22,11 @@ from custom_components.haghs.coordinator import (
 )
 
 
-def _make_zombie(
+def _set_unavailable(
     hass: HomeAssistant,
     entity_id: str,
-    age_minutes: int = 30,
-    *,
-    device_class: str | None = None,
+    age_minutes: int,
+    device_class: str | None,
 ) -> None:
     """Set an entity to STATE_UNAVAILABLE with last_changed in the past.
 
@@ -40,6 +38,47 @@ def _make_zombie(
     hass.states.async_set(entity_id, STATE_UNAVAILABLE, attrs)
     state = hass.states.get(entity_id)
     state.last_changed = dt_util.utcnow() - timedelta(minutes=age_minutes)
+
+
+def _make_zombie(
+    hass: HomeAssistant,
+    entity_id: str,
+    age_minutes: int = 30,
+    *,
+    device_class: str | None = None,
+) -> None:
+    """Create a *registered* zombie (entity-registry entry exists).
+
+    A registry entry is created if missing so the entity counts as a real
+    zombie. Entities without a registry entry are reported separately as
+    unregistered since #98 (see _make_unregistered).
+    """
+    entity_registry = er.async_get(hass)
+    if entity_registry.async_get(entity_id) is None:
+        domain, object_id = entity_id.split(".", 1)
+        entity_registry.async_get_or_create(
+            domain,
+            "test_platform",
+            f"uid_{entity_id}",
+            suggested_object_id=object_id,
+        )
+    _set_unavailable(hass, entity_id, age_minutes, device_class)
+
+
+def _make_unregistered(
+    hass: HomeAssistant,
+    entity_id: str,
+    age_minutes: int = 30,
+    *,
+    device_class: str | None = None,
+) -> None:
+    """Create an *unregistered* entity: state without a registry entry (#98).
+
+    Valid HA entities such as YAML-defined templates, Utility Meter or
+    Riemann Sum integrators have no registry entry; they must not count as
+    zombies and must not affect the score.
+    """
+    _set_unavailable(hass, entity_id, age_minutes, device_class)
 
 
 def _coordinator_with_boot_age(
@@ -80,7 +119,7 @@ async def test_denominator_uses_zombie_domains_only(hass: HomeAssistant) -> None
         hass.states.async_set(f"automation.test_{i}", "on")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
     assert p_zombie == 20
@@ -99,7 +138,7 @@ async def test_denominator_zero_when_no_zombie_domain_states(
         hass.states.async_set(f"script.y_{i}", "off")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -116,7 +155,7 @@ async def test_denominator_ignores_non_zombie_domains(hass: HomeAssistant) -> No
     _make_zombie(hass, "sensor.zombie_two")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie_baseline, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie_baseline, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 2
     # Ratio = 2 / 12 ≈ 16.7 % → ceil(16.7 * 7) = 117 → capped at 20.
@@ -125,7 +164,7 @@ async def test_denominator_ignores_non_zombie_domains(hass: HomeAssistant) -> No
     # Inflate the instance with 200 non-zombie-domain entities.
     for i in range(200):
         hass.states.async_set(f"automation.bulk_{i}", "on")
-    _zombie_list, p_zombie_after, _zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie_after, _zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert p_zombie_after == p_zombie_baseline
 
@@ -145,7 +184,7 @@ async def test_grace_period_still_active(hass: HomeAssistant) -> None:
     _make_zombie(hass, "sensor.recent", age_minutes=2)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -168,7 +207,7 @@ async def test_restart_grace_skips_recently_restored_state(
     _make_zombie(hass, "sensor.restored", age_minutes=120)
 
     coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=2)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -184,7 +223,7 @@ async def test_restart_grace_releases_after_15_minutes(hass: HomeAssistant) -> N
     _make_zombie(hass, "sensor.restored", age_minutes=120)
 
     coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=30)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
     assert p_zombie > 0
@@ -202,7 +241,7 @@ async def test_post_boot_grace_uses_last_changed(hass: HomeAssistant) -> None:
     _make_zombie(hass, "sensor.recent_after_boot", age_minutes=2)
 
     coordinator = _coordinator_with_boot_age(hass, entry, boot_age_minutes=60)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -224,7 +263,7 @@ async def test_zombies_skipped_during_startup(hass: HomeAssistant) -> None:
 
     hass.set_state(CoreState.starting)
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -243,7 +282,7 @@ async def test_zombies_detected_after_started_event(hass: HomeAssistant) -> None
     hass.set_state(CoreState.starting)
     coordinator = _coordinator_with_boot_age(hass, entry)
 
-    _zombie_list, _p, count_pre, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, count_pre, _per_domain, *_ = coordinator._calc_zombies()
     assert count_pre == 0
 
     hass.set_state(CoreState.running)
@@ -251,7 +290,7 @@ async def test_zombies_detected_after_started_event(hass: HomeAssistant) -> None
     await hass.async_block_till_done()
 
     assert coordinator._registries_ready is True
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
     assert zombie_count == 1
     assert p_zombie > 0
 
@@ -270,52 +309,148 @@ async def test_registries_ready_immediately_when_already_running(
 
 
 # ============================================================================
-# Ghost marker (#6)
+# Unregistered entities (#98)
 # ============================================================================
 
 
-async def test_unregistered_zombie_gets_prefix(hass: HomeAssistant) -> None:
-    """Zombies without an entity-registry entry are tagged in the list."""
+async def test_unregistered_entity_not_counted_as_zombie(
+    hass: HomeAssistant,
+) -> None:
+    """An entity without a registry entry is reported separately (#98).
+
+    YAML-defined entities (templates, Utility Meter, Riemann Sum, ...) are
+    valid HA entities without a registry entry. They must not count as
+    zombies and must not reduce the score.
+    """
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
-    _make_zombie(hass, "sensor.ghost", age_minutes=60)
+    _make_unregistered(hass, "sensor.ghost", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    (
+        zombie_list,
+        p_zombie,
+        zombie_count,
+        zombie_per_domain,
+        unregistered_list,
+        unregistered_count,
+        unregistered_per_domain,
+    ) = coordinator._calc_zombies()
 
-    assert zombie_count == 1
-    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.ghost"]
+    assert zombie_count == 0
+    assert p_zombie == 0
+    assert zombie_list == []
+    assert zombie_per_domain == {}
+    assert unregistered_count == 1
+    assert unregistered_list == ["sensor.ghost"]
+    assert unregistered_per_domain == {"sensor": 1}
 
 
-async def test_registered_zombie_has_no_prefix(hass: HomeAssistant) -> None:
-    """Zombies that have an entity-registry entry keep their plain id."""
-    entity_registry = er.async_get(hass)
-    entity_registry.async_get_or_create(
-        "sensor",
-        "test_platform",
-        "unique_id_1",
-        suggested_object_id="real",
-    )
-
+async def test_registered_zombie_counted_with_plain_id(hass: HomeAssistant) -> None:
+    """A registered entity is a real zombie and keeps its plain id."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
     _make_zombie(hass, "sensor.real", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    (
+        zombie_list,
+        _p,
+        zombie_count,
+        _per_domain,
+        _u_list,
+        unregistered_count,
+        _u_pd,
+    ) = coordinator._calc_zombies()
 
     assert zombie_count == 1
     assert zombie_list == ["sensor.real"]
+    assert unregistered_count == 0
 
 
-async def test_ghost_warning_logged_once_per_entity(hass: HomeAssistant, caplog) -> None:
-    """The 'unregistered zombie' warning is emitted at most once per id."""
+async def test_unregistered_ignored_by_pattern(hass: HomeAssistant) -> None:
+    """Ignore patterns also exclude unregistered entities."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_IGNORE_PATTERNS: ["sensor.ghost_*"]},
+    )
+    entry.add_to_hass(hass)
+
+    _make_unregistered(hass, "sensor.ghost_one", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd = coordinator._calc_zombies()
+
+    assert u_count == 0
+    assert u_list == []
+
+
+async def test_unregistered_per_domain_breakdown(hass: HomeAssistant) -> None:
+    """Unregistered entities are grouped per domain, separate from zombies."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
-    _make_zombie(hass, "sensor.ghost_one", age_minutes=60)
+    _make_unregistered(hass, "sensor.u_one", age_minutes=60)
+    _make_unregistered(hass, "sensor.u_two", age_minutes=60)
+    _make_unregistered(hass, "lock.u_three", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _z_list, _p, _z_count, z_pd, _u_list, u_count, u_pd = coordinator._calc_zombies()
+
+    assert u_count == 3
+    assert u_pd == {"sensor": 2, "lock": 1}
+    assert z_pd == {}
+
+
+async def test_mixed_zombie_and_unregistered_classified_separately(
+    hass: HomeAssistant,
+) -> None:
+    """Zombies and unregistered entities land in their own buckets."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_zombie(hass, "sensor.real_zombie", age_minutes=60)
+    _make_unregistered(hass, "sensor.yaml_entity", age_minutes=60)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    z_list, p_zombie, z_count, z_pd, u_list, u_count, u_pd = coordinator._calc_zombies()
+
+    assert z_count == 1
+    assert z_list == ["sensor.real_zombie"]
+    assert z_pd == {"sensor": 1}
+    assert p_zombie > 0
+    assert u_count == 1
+    assert u_list == ["sensor.yaml_entity"]
+    assert u_pd == {"sensor": 1}
+
+
+async def test_unregistered_list_capped_but_count_is_full(
+    hass: HomeAssistant,
+) -> None:
+    """unregistered_entities is capped; the count stays full."""
+    from custom_components.haghs.const import UNREGISTERED_LIST_CAP
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    for i in range(UNREGISTERED_LIST_CAP + 3):
+        _make_unregistered(hass, f"sensor.u_bulk_{i}", age_minutes=30)
+
+    coordinator = _coordinator_with_boot_age(hass, entry)
+    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd = coordinator._calc_zombies()
+
+    assert len(u_list) == UNREGISTERED_LIST_CAP
+    assert u_count == UNREGISTERED_LIST_CAP + 3
+
+
+async def test_unregistered_warning_logged_once_per_entity(hass: HomeAssistant, caplog) -> None:
+    """The 'unregistered entity' warning is emitted at most once per id."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    _make_unregistered(hass, "sensor.ghost_one", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
 
@@ -324,17 +459,17 @@ async def test_ghost_warning_logged_once_per_entity(hass: HomeAssistant, caplog)
         coordinator._calc_zombies()
         coordinator._calc_zombies()
 
-    occurrences = caplog.text.count("Detected unregistered zombie entity")
+    occurrences = caplog.text.count("Detected unregistered entity")
     assert occurrences == 1
 
 
-async def test_ghost_warning_logged_per_distinct_entity(hass: HomeAssistant, caplog) -> None:
-    """Distinct ghost entities each produce one warning."""
+async def test_unregistered_warning_logged_per_distinct_entity(hass: HomeAssistant, caplog) -> None:
+    """Distinct unregistered entities each produce one warning."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
 
-    _make_zombie(hass, "sensor.ghost_a", age_minutes=60)
-    _make_zombie(hass, "sensor.ghost_b", age_minutes=60)
+    _make_unregistered(hass, "sensor.ghost_a", age_minutes=60)
+    _make_unregistered(hass, "sensor.ghost_b", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
 
@@ -381,10 +516,10 @@ async def test_pattern_match_excludes_zombie(hass: HomeAssistant) -> None:
     _make_zombie(hass, "sensor.other", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
-    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.other"]
+    assert zombie_list == ["sensor.other"]
 
 
 async def test_pattern_match_excludes_registered_entity(hass: HomeAssistant) -> None:
@@ -403,7 +538,7 @@ async def test_pattern_match_excludes_registered_entity(hass: HomeAssistant) -> 
     _make_zombie(hass, "sensor.docker_cpu", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
 
@@ -430,10 +565,10 @@ async def test_label_and_pattern_combined(hass: HomeAssistant) -> None:
     _make_zombie(hass, "sensor.real", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
-    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.real"]
+    assert zombie_list == ["sensor.real"]
 
 
 # ============================================================================
@@ -474,7 +609,7 @@ async def test_battery_zombie_within_60min_window_skipped(
     _make_zombie(hass, "sensor.battery_30m", age_minutes=30, device_class="battery")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -490,7 +625,7 @@ async def test_battery_zombie_after_60min_window_counted(
     _make_zombie(hass, "sensor.battery_61m", age_minutes=61, device_class="battery")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
     assert p_zombie > 0
@@ -506,7 +641,7 @@ async def test_non_battery_zombie_still_uses_15min_window(
     _make_zombie(hass, "sensor.temp_30m", age_minutes=30, device_class="temperature")
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
     assert p_zombie > 0
@@ -542,7 +677,7 @@ async def test_disabled_entity_is_not_a_zombie(hass: HomeAssistant) -> None:
     _make_zombie(hass, entry_obj.entity_id, age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -568,7 +703,7 @@ async def test_hidden_entity_is_still_tracked(hass: HomeAssistant) -> None:
     _make_zombie(hass, entry_obj.entity_id, age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p_zombie, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p_zombie, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
 
@@ -601,10 +736,10 @@ async def test_multiple_ignore_labels_match_any(hass: HomeAssistant) -> None:
     _make_zombie(hass, "sensor.real", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
-    assert zombie_list == [f"{ATTR_UNREGISTERED_PREFIX}sensor.real"]
+    assert zombie_list == ["sensor.real"]
 
 
 async def test_empty_ignore_labels_list_acts_as_no_label(
@@ -623,7 +758,7 @@ async def test_empty_ignore_labels_list_acts_as_no_label(
     _make_zombie(hass, labelled.entity_id, age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
 
@@ -647,7 +782,7 @@ async def test_newly_included_domains_are_detected(hass: HomeAssistant) -> None:
     _make_zombie(hass, "siren.alarm", age_minutes=30)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 7
     assert per_domain == {
@@ -673,7 +808,7 @@ async def test_button_unknown_state_is_never_a_zombie(hass: HomeAssistant) -> No
     _make_zombie(hass, "button.unpressed_zigbee_button", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, p_zombie, zombie_count, per_domain = coordinator._calc_zombies()
+    _zombie_list, p_zombie, zombie_count, per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
     assert p_zombie == 0
@@ -693,7 +828,7 @@ async def test_zombie_list_capped_but_count_and_per_domain_are_full(
         _make_zombie(hass, f"sensor.bulk_{i}", age_minutes=30)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    zombie_list, _p, zombie_count, per_domain = coordinator._calc_zombies()
+    zombie_list, _p, zombie_count, per_domain, *_ = coordinator._calc_zombies()
 
     assert len(zombie_list) == ZOMBIE_LIST_CAP
     assert zombie_count == ZOMBIE_LIST_CAP + 25
@@ -712,7 +847,7 @@ async def test_per_domain_only_counts_actual_zombies(hass: HomeAssistant) -> Non
     _make_zombie(hass, "lock.also_gone", age_minutes=30)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 2
     assert per_domain == {"cover": 1, "lock": 1}
@@ -735,7 +870,7 @@ async def test_custom_zombie_grace_minutes_shortens_window(
     _make_zombie(hass, "sensor.aggressive", age_minutes=10)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 1
 
@@ -752,7 +887,7 @@ async def test_custom_zombie_grace_minutes_extends_window(
     _make_zombie(hass, "sensor.tolerant", age_minutes=20)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     assert zombie_count == 0
 
@@ -770,7 +905,7 @@ async def test_custom_battery_grace_minutes_used_for_battery_class(
     _make_zombie(hass, "sensor.normal_90m", age_minutes=90)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     # Battery sensor still inside its custom 120 min window; normal sensor
     # passes the default 5 min window and is flagged.
@@ -817,7 +952,7 @@ async def test_battery_grace_can_be_set_below_zombie_grace(
     _make_zombie(hass, "sensor.normal_30m", age_minutes=30)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _zombie_list, _p, zombie_count, _per_domain = coordinator._calc_zombies()
+    _zombie_list, _p, zombie_count, _per_domain, *_ = coordinator._calc_zombies()
 
     # Only the battery sensor: 30 > 10, while normal sensor is still inside
     # its 60 min window.

@@ -19,18 +19,21 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import CoreState, Event, HomeAssistant, callback
+from homeassistant.core import CoreState, Event, HomeAssistant, State, callback
 from homeassistant.helpers import (
     device_registry as dr,
 )
 from homeassistant.helpers import (
     entity_registry as er,
 )
+from homeassistant.helpers import (
+    issue_registry as ir,
+)
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    ATTR_UNREGISTERED_PREFIX,
     CONF_BATTERY_GRACE_MINUTES,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
@@ -40,27 +43,21 @@ from .const import (
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
+    CONFIG_AUDIT_MAX_BONUS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
+    DEAD_DEVICE_LIST_CAP,
     DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
-    REC_ALL_CLEAR,
-    REC_BACKUP_STALE,
-    REC_CORE_LAG,
-    REC_CPU_LOAD_CLASSIC,
-    REC_CPU_LOAD_PSI,
-    REC_DB_OVER_LIMIT,
-    REC_DISK_SD_LOW,
-    REC_DISK_SSD_LOW,
-    REC_IO_PRESSURE,
-    REC_POWER_UNSTABLE,
-    REC_RAM_PRESSURE_CLASSIC,
-    REC_RAM_PRESSURE_PSI,
-    REC_UPDATES_PENDING,
-    REC_ZOMBIES,
+    REC_FLAG_KEYS,
+    REC_TEMPLATES,
+    REPAIR_LIST_CAP,
+    REPAIR_PENALTY_CAP,
+    REPAIR_PENALTY_PER_ISSUE,
+    UNREGISTERED_LIST_CAP,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
 )
@@ -167,6 +164,9 @@ class _ApplicationResult:
     zombie_count: int = 0
     zombie_list: list[str] = field(default_factory=list)
     zombie_per_domain: dict[str, int] = field(default_factory=dict)
+    unregistered_count: int = 0
+    unregistered_list: list[str] = field(default_factory=list)
+    unregistered_per_domain: dict[str, int] = field(default_factory=dict)
     db_mb: float = 0.0
     db_limit_mb: float = 1000.0
     update_count: int = 0
@@ -175,6 +175,12 @@ class _ApplicationResult:
     p_backup: int = 0
     p_core_lag: int = 0
     p_zombie: int = 0
+    integration_unhealthy_count: int = 0
+    repair_count: int = 0
+    repair_list: list[str] = field(default_factory=list)
+    p_repairs: int = 0
+    dead_device_count: int = 0
+    dead_device_list: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -237,6 +243,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._storage_type: str = opts.get(CONF_STORAGE_TYPE, DEFAULT_STORAGE_TYPE)
 
+        # Resolved recommendation templates for the configured language.
+        # Empty until the first update cycle; the const.py defaults always
+        # apply as the final fallback.
+        self._rec_translations: dict[str, str] = {}
+
         # Grace windows are user-configurable in the Options Flow. Both
         # values are stored in minutes for friendlier UX, multiplied to
         # seconds here once at init so the hot path stays cheap.
@@ -268,9 +279,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             DATA_UPDATE_FIRST_SEEN, {}
         )
 
-        # Track ghost zombies (no entity-registry entry) so we warn at most
-        # once per entity per coordinator instance instead of every refresh.
-        self._logged_ghost_entities: set[str] = set()
+        # Track unregistered entities (no entity-registry entry) so we warn
+        # at most once per entity per coordinator instance instead of every
+        # refresh.
+        self._logged_unregistered_entities: set[str] = set()
 
         # Registry-race guard: if HAGHS first runs while HA is still in the
         # 'starting' state, the entity registry (and therefore label
@@ -314,8 +326,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         should disable the entity or apply one of the ignore labels.
 
         Multiple ignore labels can be configured. Toggling them on/off at
-        runtime is done via Home Assistant's native ``label.assign`` and
-        ``label.remove`` service actions, not via a HAGHS-specific service.
+        runtime is done via Home Assistant's native
+        ``homeassistant.add_label_to_entity`` and
+        ``homeassistant.remove_label_from_entity`` service actions, not via a
+        HAGHS-specific service.
         """
         if entity_entry is not None and entity_entry.disabled_by is not None:
             return True
@@ -347,10 +361,26 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data and calculate the health score.
 
+        Total safety net: no matter what fails, the update cycle must
+        never raise (#103). On failure the last valid result is kept so
+        the sensor never loses its value; on the very first update a
+        neutral result is returned. Every failure is logged with a full
+        traceback so silent stalls become diagnosable.
+        """
+        try:
+            return await self._async_update_data_inner()
+        except Exception:
+            _LOGGER.exception("HAGHS: update cycle failed — keeping last result")
+            if self.data:
+                return self.data
+            return self._neutral_result()
+
+    async def _async_update_data_inner(self) -> dict[str, Any]:
+        """Run the guarded sub-calculations and assemble the result.
+
         Each pillar runs in its own guarded coroutine.  On timeout or
         exception the affected pillar falls back to a neutral score
-        (100 / no penalty) and a warning is logged.  The coordinator
-        itself never crashes.
+        (100 / no penalty) and a warning is logged.
         """
         # Recorder info — read before app pillar so config audit can use it
         self.recorder_info = self._read_recorder_info()
@@ -367,6 +397,15 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _ApplicationResult(),
         )
 
+        self._rec_translations = await self._async_load_rec_translations()
+        return self._build_result(hw, app)
+
+    def _build_result(
+        self,
+        hw: _HardwareResult,
+        app: _ApplicationResult,
+    ) -> dict[str, Any]:
+        """Assemble the final result dict from the two pillar results."""
         global_score = max(
             0, min(100, math.floor((hw.hardware_score * 0.4) + (app.app_score * 0.6)))
         )
@@ -381,13 +420,59 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_count": app.zombie_count,
             "zombie_entities": app.zombie_list,
             "zombie_count_per_domain": app.zombie_per_domain,
+            "unregistered_count": app.unregistered_count,
+            "unregistered_entities": app.unregistered_list,
+            "unregistered_count_per_domain": app.unregistered_per_domain,
+            "dead_device_count": app.dead_device_count,
+            "dead_devices": app.dead_device_list,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "integration_unhealthy_count": app.integration_unhealthy_count,
+            "config_audit_bonus": app.config_bonus,
+            "repair_count": app.repair_count,
+            "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
-            "recommendations": ("\n".join(advice) if advice else REC_ALL_CLEAR),
+            "recommendations": ("\n".join(advice) if advice else self._rec("rec_all_clear")),
             **rec_flags,
+        }
+
+    def _neutral_result(self) -> dict[str, Any]:
+        """Neutral result for the very first failed update.
+
+        Built inline without calling the (potentially failing) scoring
+        sub-components: both pillars default to their neutral state and
+        every recommendation flag is False.
+        """
+        hw = _HardwareResult()
+        app = _ApplicationResult()
+        global_score = max(
+            0, min(100, math.floor((hw.hardware_score * 0.4) + (app.app_score * 0.6)))
+        )
+        return {
+            "global_score": int(global_score),
+            "hardware_score": int(hw.hardware_score),
+            "application_score": app.app_score,
+            "zombie_count": app.zombie_count,
+            "zombie_entities": app.zombie_list,
+            "zombie_count_per_domain": app.zombie_per_domain,
+            "unregistered_count": app.unregistered_count,
+            "unregistered_entities": app.unregistered_list,
+            "unregistered_count_per_domain": app.unregistered_per_domain,
+            "dead_device_count": app.dead_device_count,
+            "dead_devices": app.dead_device_list,
+            "db_size_mb": round(app.db_mb, 1),
+            "psi_available": hw.psi_available,
+            "recorder_keep_days": self.recorder_info.keep_days,
+            "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "integration_unhealthy_count": app.integration_unhealthy_count,
+            "config_audit_bonus": app.config_bonus,
+            "repair_count": app.repair_count,
+            "repairs": app.repair_list,
+            "pending_updates": app.pending_updates,
+            "recommendations": self._rec("rec_all_clear"),
+            **{key: False for key in REC_FLAG_KEYS},
         }
 
     async def _safe_calc(
@@ -693,11 +778,20 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_calc_application(self) -> _ApplicationResult:
         """Calculate the application pillar score."""
-        # A. ZOMBIES
-        zombie_list, p_zombie, zombie_count, zombie_per_domain = self._calc_zombies()
+        # A. ZOMBIES + UNREGISTERED ENTITIES (#98)
+        (
+            zombie_list,
+            p_zombie,
+            zombie_count,
+            zombie_per_domain,
+            unregistered_list,
+            unregistered_count,
+            unregistered_per_domain,
+        ) = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
         p_integration = self._calc_integration_health()
+        integration_unhealthy_count = self._count_unhealthy_integrations()
 
         # C. MAINTENANCE — DB size auto-detected (blocking I/O → executor)
         db_mb, p_db, db_limit_mb = await self._async_calc_maintenance()
@@ -708,19 +802,33 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # E. CONFIG AUDIT — bonus for good recorder configuration
         config_bonus = self._calc_config_audit()
 
+        # F. REPAIRS (#97) — open repair issues of other integrations
+        p_repairs, repair_count, repair_list = self._calc_repairs()
+
+        # G. DEAD DEVICES (#120) — informational, no score impact
+        dead_device_list, dead_device_count = self._calc_dead_devices()
+
         app_final = max(
             0,
             min(
                 100,
-                100 - p_zombie - p_integration - p_backup - p_updates - p_db + config_bonus,
+                100
+                - p_zombie
+                - p_integration
+                - p_backup
+                - p_updates
+                - p_db
+                - p_repairs
+                + config_bonus,
             ),
         )
 
         # Hard cap: a perfect 100 must always reflect zero detected issues.
         # On large instances the ratio-based p_zombie can be small enough
         # that config_bonus fully offsets it, which would otherwise hide
-        # existing zombies behind a 100 score.
-        if zombie_count > 0:
+        # existing zombies behind a 100 score. Open repairs block the cap
+        # too: the bonus must never mask a broken integration.
+        if zombie_count > 0 or repair_count > 0:
             app_final = min(99, app_final)
 
         return _ApplicationResult(
@@ -728,6 +836,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zombie_count=zombie_count,
             zombie_list=zombie_list,
             zombie_per_domain=zombie_per_domain,
+            unregistered_count=unregistered_count,
+            unregistered_list=unregistered_list,
+            unregistered_per_domain=unregistered_per_domain,
             db_mb=db_mb,
             db_limit_mb=db_limit_mb,
             update_count=update_count,
@@ -736,32 +847,68 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_backup=p_backup,
             p_core_lag=p_core_lag,
             p_zombie=p_zombie,
+            integration_unhealthy_count=integration_unhealthy_count,
+            repair_count=repair_count,
+            repair_list=repair_list,
+            p_repairs=p_repairs,
+            dead_device_count=dead_device_count,
+            dead_device_list=dead_device_list,
         )
 
     # ------------------------------------------------------------------
     # Application sub-calculations
     # ------------------------------------------------------------------
 
-    def _calc_zombies(self) -> tuple[list[str], int, int, dict[str, int]]:
-        """Detect zombie entities, respecting ignore labels and grace period.
+    def _past_grace(self, state: State, now: datetime) -> bool:
+        """Return True if *state* has been stale longer than the grace window.
 
-        Returns (zombie_list_capped, p_zombie, zombie_count, per_domain).
-        zombie_list is capped to ZOMBIE_LIST_CAP entries because the HA
-        state machine caps an attribute payload at 16 KB; zombie_count and
-        the per_domain dict always reflect the full count so users can see
-        the true scope even when the listing is truncated.
+        Grace period: skip entities that changed less than the window ago.
+        last_changed values older than the recorded boot time were restored
+        from the recorder and are not a reliable baseline, so treat boot
+        time as the floor. Battery-class entities use a separate, typically
+        longer window (configurable in the Options Flow).
+        """
+        effective_seen = max(state.last_changed, self._boot_time)
+        grace_seconds = (
+            self._battery_grace_seconds
+            if state.attributes.get("device_class") == "battery"
+            else self._zombie_grace_seconds
+        )
+        return (now - effective_seen).total_seconds() >= grace_seconds
+
+    def _calc_zombies(
+        self,
+    ) -> tuple[list[str], int, int, dict[str, int], list[str], int, dict[str, int]]:
+        """Detect zombie and unregistered entities, respecting ignore labels.
+
+        Zombies: entities in ZOMBIE_DOMAINS that have been unavailable /
+        unknown longer than the grace period and have an entity-registry
+        entry. These affect the score.
+
+        Unregistered entities (#98): valid HA entities (YAML templates,
+        Utility Meter, Riemann Sum, ...) without a registry entry. They are
+        not an operational problem: reported for information only, they do
+        not affect the score.
+
+        Returns (zombie_list_capped, p_zombie, zombie_count, zombie_per_domain,
+        unregistered_list_capped, unregistered_count, unregistered_per_domain).
+        Both lists are capped because the HA state machine caps an attribute
+        payload at 16 KB; the counts and per-domain dicts always reflect the
+        full numbers.
         """
         # Defer detection until HA is fully running. Otherwise the entity
         # registry may not yet be loaded from storage and ignore labels would
         # be missing, producing false positives right after boot (#13).
         if not self._registries_ready:
             _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
-            return [], 0, 0, {}
+            return [], 0, 0, {}, [], 0, {}
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
         zombie_per_domain: dict[str, int] = {}
+        unregistered_list: list[str] = []
+        unregistered_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
         # so an instance with many automations/scripts/etc. is not artificially
         # diluted. Counted in the same pass as detection.
@@ -775,18 +922,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             # Grace period: skip entities that changed less than the window
-            # ago. last_changed values older than the recorded boot time were
-            # restored from the recorder and are not a reliable baseline, so
-            # treat boot time as the floor. Battery-class entities use a
-            # separate, typically longer window (configurable in the Options
-            # Flow, defaults are 15 min for general and 60 min for battery).
-            effective_seen = max(state.last_changed, self._boot_time)
-            grace_seconds = (
-                self._battery_grace_seconds
-                if state.attributes.get("device_class") == "battery"
-                else self._zombie_grace_seconds
-            )
-            if (now - effective_seen).total_seconds() < grace_seconds:
+            # ago (see _past_grace for the baseline rules).
+            if not self._past_grace(state, now):
                 continue
 
             entity_id = state.entity_id
@@ -797,38 +934,136 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._is_ignored(entity_id, entity_entry):
                 continue
 
-            zombie_per_domain[state.domain] = zombie_per_domain.get(state.domain, 0) + 1
-
             if entity_entry is None:
-                # Ghost zombie: exists in the state machine but has no entity
-                # registry entry, so it cannot be managed in the HA UI.
-                # Surface it explicitly and warn once per id (#6).
-                if entity_id not in self._logged_ghost_entities:
+                # Unregistered entity (#98): exists in the state machine but
+                # has no entity registry entry, so it cannot be managed in
+                # the HA UI. Valid for YAML-defined entities; informational
+                # only, no score impact. Warn once per id (#6).
+                if entity_id not in self._logged_unregistered_entities:
                     _LOGGER.warning(
-                        "HAGHS: Detected unregistered zombie entity '%s'. "
+                        "HAGHS: Detected unregistered entity '%s'. "
                         "It exists in the state machine but has no entity "
                         "registry entry, so it cannot be managed via the "
-                        "HA UI. Check the integration that created it.",
+                        "HA UI. It is reported for information only and "
+                        "does not affect the score.",
                         entity_id,
                     )
-                    self._logged_ghost_entities.add(entity_id)
-                zombie_list.append(f"{ATTR_UNREGISTERED_PREFIX}{entity_id}")
+                    self._logged_unregistered_entities.add(entity_id)
+                unregistered_per_domain[state.domain] = (
+                    unregistered_per_domain.get(state.domain, 0) + 1
+                )
+                unregistered_list.append(entity_id)
             else:
+                zombie_per_domain[state.domain] = zombie_per_domain.get(state.domain, 0) + 1
                 zombie_list.append(entity_id)
 
         zombie_count = len(zombie_list)
+        unregistered_count = len(unregistered_list)
 
         # Ratio-based penalty: percentage of zombies relative to entities in
         # ZOMBIE_DOMAINS only. Factor 7 + ceil ensures zombies are visible on
-        # all instance sizes.
+        # all instance sizes. Unregistered entities do not contribute (#98).
         if zombie_domain_total > 0:
             zombie_ratio_pct = (zombie_count / zombie_domain_total) * 100
             p_zombie = min(20, math.ceil(zombie_ratio_pct * 7))
         else:
             p_zombie = 0
 
-        # Cap the list for state attributes (count + per_domain stay full).
-        return zombie_list[:ZOMBIE_LIST_CAP], p_zombie, zombie_count, zombie_per_domain
+        # Cap the lists for state attributes (counts + per_domain stay full).
+        return (
+            zombie_list[:ZOMBIE_LIST_CAP],
+            p_zombie,
+            zombie_count,
+            zombie_per_domain,
+            unregistered_list[:UNREGISTERED_LIST_CAP],
+            unregistered_count,
+            unregistered_per_domain,
+        )
+
+    def _calc_dead_devices(self) -> tuple[list[str], int]:
+        """Detect dead devices: every entity unavailable/unknown past grace.
+
+        A "dead device" has at least one registered entity and all of its
+        entities (with a state, not disabled) are unavailable/unknown beyond
+        the zombie grace window. Devices without entities are out of scope
+        (#93). Informational only: no score impact, the entity-level zombie
+        points stay authoritative (#120).
+
+        Ignore semantics: ignored entities still count for the fact that
+        *every* entity is unavailable, so the rendered text cannot lie. The
+        device stays silent when no non-ignored entity is left (device
+        label, all entities ignored via labels or patterns).
+
+        Returns (dead_list_capped, dead_count); the list carries device
+        display names and is capped for the state-attribute payload.
+        """
+        # Same deferral as the zombie check: the registries may not be
+        # loaded yet and ignore labels would be missing (#13).
+        if not self._registries_ready:
+            return [], 0
+
+        ent_reg = er.async_get(self.hass)
+        dev_reg = dr.async_get(self.hass)
+        now = dt_util.utcnow()
+
+        # Candidate pass: devices with at least one entity past grace that
+        # is currently unavailable/unknown.
+        candidate_ids: set[str] = set()
+        for state in self.hass.states.async_all():
+            if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            entity_entry = ent_reg.async_get(state.entity_id)
+            if entity_entry is None or entity_entry.device_id is None:
+                continue
+            if not self._past_grace(state, now):
+                continue
+            candidate_ids.add(entity_entry.device_id)
+
+        # Full pass per candidate: every relevant entity must be dead and
+        # at least one of them must not be ignored.
+        dead_names: list[str] = []
+        for device_id in candidate_ids:
+            entries = er.async_entries_for_device(
+                ent_reg, device_id, include_disabled_entities=False
+            )
+            relevant = 0
+            dead = 0
+            ignored = 0
+            for entry in entries:
+                entity_state = self.hass.states.get(entry.entity_id)
+                if entity_state is None:
+                    continue
+                relevant += 1
+                if self._is_ignored(entry.entity_id, entry):
+                    ignored += 1
+                if entity_state.state in (
+                    STATE_UNAVAILABLE,
+                    STATE_UNKNOWN,
+                ) and self._past_grace(entity_state, now):
+                    dead += 1
+            if relevant == 0 or dead < relevant or ignored >= relevant:
+                continue
+            device_entry = dev_reg.async_get(device_id)
+            if device_entry is None:
+                continue
+            dead_names.append(device_entry.name_by_user or device_entry.name or device_entry.id)
+
+        dead_names.sort()
+        dead_count = len(dead_names)
+        return dead_names[:DEAD_DEVICE_LIST_CAP], dead_count
+
+    def _count_unhealthy_integrations(self) -> int:
+        """Return the number of config entries in an unhealthy state."""
+        unhealthy_states = {
+            ConfigEntryState.SETUP_ERROR,
+            ConfigEntryState.SETUP_RETRY,
+            ConfigEntryState.FAILED_UNLOAD,
+        }
+        return sum(
+            1
+            for entry in self.hass.config_entries.async_entries()
+            if entry.state in unhealthy_states
+        )
 
     def _calc_integration_health(self) -> int:
         """Count unhealthy integrations via native ConfigEntry states.
@@ -837,17 +1072,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         FAILED_UNLOAD — the same states HA shows as "error" in the UI.
         Penalty: 5 pts per unhealthy integration, capped at 15.
         """
-        unhealthy_states = {
-            ConfigEntryState.SETUP_ERROR,
-            ConfigEntryState.SETUP_RETRY,
-            ConfigEntryState.FAILED_UNLOAD,
-        }
-        failed = sum(
-            1
-            for entry in self.hass.config_entries.async_entries()
-            if entry.state in unhealthy_states
-        )
-        return min(15, failed * 5)
+        return min(15, self._count_unhealthy_integrations() * 5)
 
     async def _async_calc_maintenance(self) -> tuple[float, int, float]:
         """Calculate DB penalty with dynamic limit based on entity count."""
@@ -982,6 +1207,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return bonus
 
     # ------------------------------------------------------------------
+    # Repairs — open repair issues from other integrations (#97)
+    # ------------------------------------------------------------------
+
+    def _calc_repairs(self) -> tuple[int, int, list[str]]:
+        """Count open repair issues and derive the penalty (#97).
+
+        Counts every issue in HA's issue registry that is active, not
+        dismissed by the user (native "Ignore" in the repairs UI) and owned
+        by another integration. HAGHS's own repairs are excluded: they
+        describe the integration's own prerequisites and would make the
+        score depend on HAGHS' own diagnosis.
+
+        Returns (penalty, full count, capped "domain/issue_id" list).
+        """
+        try:
+            registry = ir.async_get(self.hass)
+            identifiers = sorted(
+                f"{entry.domain}/{entry.issue_id}"
+                for entry in registry.issues.values()
+                if entry.active and entry.dismissed_version is None and entry.domain != DOMAIN
+            )
+        except Exception:
+            _LOGGER.warning("HAGHS: Failed to read the issue registry", exc_info=True)
+            return 0, 0, []
+
+        penalty = min(REPAIR_PENALTY_CAP, len(identifiers) * REPAIR_PENALTY_PER_ISSUE)
+        return penalty, len(identifiers), identifiers[:REPAIR_LIST_CAP]
+
+    # ------------------------------------------------------------------
     # Recorder info reader
     # ------------------------------------------------------------------
 
@@ -1040,6 +1294,33 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Recommendations builder
     # ------------------------------------------------------------------
 
+    async def _async_load_rec_translations(self) -> dict[str, str]:
+        """Resolve the recommendation templates for the configured language.
+
+        Reads the "common" translation category of this integration and
+        strips the cache key prefix. Missing keys, missing language files
+        and errors all leave the dict empty; _rec() then falls back to the
+        const.py defaults.
+        """
+        try:
+            raw = await async_get_translations(
+                self.hass,
+                self.hass.config.language,
+                "common",
+                integrations=[DOMAIN],
+            )
+        except Exception:
+            _LOGGER.warning("HAGHS: Failed to load translations", exc_info=True)
+            return {}
+        prefix = f"component.{DOMAIN}.common."
+        return {
+            key.removeprefix(prefix): value for key, value in raw.items() if key.startswith(prefix)
+        }
+
+    def _rec(self, key: str) -> str:
+        """Return the template for *key*: translated if present, else English."""
+        return self._rec_translations.get(key, REC_TEMPLATES[key])
+
     def _build_recommendations(
         self,
         hw: _HardwareResult,
@@ -1047,44 +1328,55 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> list[str]:
         """Build human-readable recommendation strings.
 
-        All templates are defined in const.py (mirrored in strings.json)
-        so translators can find and override them.
+        Templates resolve via HA translations (category "common"); the
+        const.py defaults are the final fallback.
         """
         advice: list[str] = []
         if hw.p_cpu > 0:
-            cpu_tpl = REC_CPU_LOAD_PSI if hw.cpu_used_psi else REC_CPU_LOAD_CLASSIC
-            advice.append(cpu_tpl.format(cpu_pct=hw.cpu))
+            cpu_key = "rec_cpu_load_psi" if hw.cpu_used_psi else "rec_cpu_load_classic"
+            advice.append(self._rec(cpu_key).format(cpu_pct=hw.cpu))
         if hw.p_ram > 0:
-            ram_tpl = REC_RAM_PRESSURE_PSI if hw.ram_used_psi else REC_RAM_PRESSURE_CLASSIC
-            advice.append(ram_tpl.format(ram_pct=hw.ram))
+            ram_key = "rec_ram_pressure_psi" if hw.ram_used_psi else "rec_ram_pressure_classic"
+            advice.append(self._rec(ram_key).format(ram_pct=hw.ram))
         if hw.p_io > 0:
-            advice.append(REC_IO_PRESSURE.format(io_pct=hw.io))
+            advice.append(self._rec("rec_io_pressure").format(io_pct=hw.io))
         if self._is_disk_low_sd(hw):
             advice.append(
-                REC_DISK_SD_LOW.format(
+                self._rec("rec_disk_sd_low").format(
                     free_gb=hw.disk_free / _GB,
                     storage_type=self._storage_type,
                 )
             )
         elif self._is_disk_low_ssd(hw):
-            advice.append(REC_DISK_SSD_LOW.format(free_gb=hw.disk_free / _GB))
+            advice.append(self._rec("rec_disk_ssd_low").format(free_gb=hw.disk_free / _GB))
         if app.db_mb > app.db_limit_mb:
             advice.append(
-                REC_DB_OVER_LIMIT.format(
+                self._rec("rec_db_over_limit").format(
                     db_gb=app.db_mb / 1000,
                     limit_gb=app.db_limit_mb / 1000,
                 )
             )
         if hw.p_power > 0:
-            advice.append(REC_POWER_UNSTABLE)
+            advice.append(self._rec("rec_power_unstable"))
         if app.p_backup > 0:
-            advice.append(REC_BACKUP_STALE)
+            advice.append(self._rec("rec_backup_stale"))
         if app.update_count > 0:
-            advice.append(REC_UPDATES_PENDING.format(count=app.update_count))
+            advice.append(self._rec("rec_updates_pending").format(count=app.update_count))
         if app.p_zombie > 0:
-            advice.append(REC_ZOMBIES.format(count=app.zombie_count))
+            advice.append(self._rec("rec_zombies").format(count=app.zombie_count))
         if app.p_core_lag > 0:
-            advice.append(REC_CORE_LAG)
+            advice.append(self._rec("rec_core_lag"))
+        if app.integration_unhealthy_count > 0:
+            advice.append(
+                self._rec("rec_integration_health").format(count=app.integration_unhealthy_count)
+            )
+        missing_bonus = CONFIG_AUDIT_MAX_BONUS - app.config_bonus
+        if missing_bonus > 0:
+            advice.append(self._rec("rec_config_audit").format(missing=missing_bonus))
+        if app.p_repairs > 0:
+            advice.append(self._rec("rec_repairs").format(count=app.repair_count))
+        if app.dead_device_count > 0:
+            advice.append(self._rec("rec_dead_devices").format(count=app.dead_device_count))
         return advice
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
@@ -1123,6 +1415,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_updates_pending": app.update_count > 0,
             "rec_zombie": app.zombie_count > 0,
             "rec_core_lag": app.p_core_lag > 0,
+            "rec_integration_health": app.integration_unhealthy_count > 0,
+            "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0,
+            "rec_repairs": app.p_repairs > 0,
+            "rec_dead_devices": app.dead_device_count > 0,
         }
 
     # ------------------------------------------------------------------

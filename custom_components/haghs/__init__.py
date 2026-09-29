@@ -35,7 +35,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     config = {**entry.data, **entry.options}
     psi = await hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
-    if not psi.available and not (CONF_CPU_SENSOR in config and CONF_RAM_SENSOR in config):
+    # Check the field values, not key presence: cleared fields are stored
+    # as explicit None, so a presence check would let an empty entry pass.
+    if not psi.available and not (config.get(CONF_CPU_SENSOR) and config.get(CONF_RAM_SENSOR)):
         ir.async_create_issue(
             hass,
             DOMAIN,

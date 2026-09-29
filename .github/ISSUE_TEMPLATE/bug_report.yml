@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible problem with HAGHS
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        Please fill in the form as completely as you can. Reports without
+        reproduction details may be closed.
+
+        Issues are reviewed regularly, usually within two weeks.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen instead?
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.9.1"
+    validations:
+      required: true
+  - type: input
+    id: haghs_version
+    attributes:
+      label: HAGHS version
+      description: The installed version, see the HAGHS integration page or manifest.json.
+      placeholder: "2.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      options:
+        - HACS
+        - Manual
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Settings > System > Logs. Enable debug logging for custom_components.haghs
+        if possible, then paste the relevant lines.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, diagnostics, related issues.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this has not been reported yet.
+          required: true
+        - label: I am running the latest version of HAGHS.
+          required: true

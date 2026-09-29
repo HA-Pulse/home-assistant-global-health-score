@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussions
+    url: https://github.com/HA-Pulse/home-assistant-global-health-score/discussions
+    about: Ask questions, share your setup, and discuss ideas before opening an issue.

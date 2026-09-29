@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest an idea or improvement for HAGHS
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. HAGHS is deliberately local-only
+        and focuses on health signals, so not every idea can be implemented.
+        Declined ideas may still be documented in the ROADMAP.
+
+        Issues are reviewed regularly, usually within two weeks.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation or pain point. Focus on the problem, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like HAGHS to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or other approaches you thought about.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links to discussions, related issues.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions and this has not been suggested yet.
+          required: true
+        - label: This feature works fully locally (no cloud services, no external APIs).
+          required: true
