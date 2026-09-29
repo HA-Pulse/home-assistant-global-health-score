@@ -1,0 +1,105 @@
+{
+  "common": {
+    "rec_all_clear": "✅ Sistema otimizado",
+    "rec_backup_stale": "🚨 Segurança: backup obsoleto detectado!",
+    "rec_config_audit": "🔧 Config-Audit: {missing} ponto(s) de bônus não ganhos (dias de limpeza do gravador/filtro de entidade).",
+    "rec_core_lag": "👴 Legado: a versão principal tem ≥ 3 meses.",
+    "rec_cpu_load_classic": "⚡ Otimização: a utilização da CPU está afetando a pontuação ({cpu_pct:.1f}%).",
+    "rec_cpu_load_psi": "⚡ Otimização: o tempo de parada da CPU PSI está afetando a pontuação ({cpu_pct:.1f}%).",
+    "rec_db_over_limit": "🗄️ Banco de dados: banco de dados ({db_gb:.1f} GB) excede o limite dinâmico ({limit_gb:.1f} GB).",
+    "rec_dead_devices": "🔌 Dispositivos: {count} dispositivo(s) com todas as entidades indisponíveis.",
+    "rec_disk_sd_low": "⚠️ Espaço em disco: apenas {free_gb:.1f} GB livres em {storage_type}!",
+    "rec_disk_ssd_low": "⚠️ Espaço em disco: menos de 10% livre ({free_gb:.1f} GB)!",
+    "rec_integration_health": "🧩 Integrações: {count} integrações não foram configuradas.",
+    "rec_io_pressure": "⚡ Otimização: a pressão de E/S está afetando a pontuação ({io_pct:.1f}%).",
+    "rec_power_unstable": "⚠️ Energia: Subtensão detectada — fonte de alimentação instável!",
+    "rec_ram_pressure_classic": "⚡ Otimização: a utilização da memória está afetando a pontuação ({ram_pct:.1f}%).",
+    "rec_ram_pressure_psi": "⚡ Otimização: o tempo de travamento da memória PSI está afetando a pontuação ({ram_pct:.1f}%).",
+    "rec_repairs": "🛠️ Reparos: {count} problemas de reparo abertos detectados.",
+    "rec_updates_pending": "📦 Manutenção: {count} atualizações pendentes.",
+    "rec_zombies": "🧟 Higiene: {count} zumbi(s) detectado(s)."
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar o Global Health Score",
+        "description": "O HAGHS monitora sua instância do Home Assistant e calcula uma pontuação de integridade de 0 a 100. O tamanho do banco de dados, o uso do disco e o status de atualização são detectados automaticamente – você só precisa fornecer os dois campos abaixo.",
+        "data": {
+          "cpu_sensor": "Sensor de uso da CPU",
+          "ram_sensor": "Sensor de uso da RAM",
+          "storage_type": "Tipo de armazenamento",
+          "ignore_labels": "Ignorar rótulos",
+          "ignore_patterns": "Ignorar padrões de entity-id",
+          "db_sensor": "Sensor de tamanho do banco de dados (opcional)"
+        },
+        "data_description": {
+          "cpu_sensor": "Apenas fallback inteligente. O HAGHS usa valores Linux PSI (Pressure Stall Information) de alta precisão do seu sistema host por padrão para calcular a pontuação. Este sensor manual só é usado se o seu sistema não fornecer dados PSI (por exemplo, Windows, configurações mais antigas do Docker ou hosts não Linux). Se o PSI ficar indisponível e nenhum sensor fallback de CPU/RAM estiver configurado, a configuração será rejeitada. Selecione o sensor que informa o uso da CPU em porcentagem (por exemplo, 'Uso do processador').",
+          "ram_sensor": "Apenas fallback inteligente. O HAGHS usa valores Linux PSI (Pressure Stall Information) de alta precisão do seu sistema host por padrão para calcular a pontuação. Este sensor manual só é usado se o seu sistema não fornecer dados PSI (por exemplo, Windows, configurações mais antigas do Docker ou hosts não Linux). Se o PSI ficar indisponível e nenhum sensor fallback de CPU/RAM estiver configurado, a configuração será rejeitada. Selecione o sensor que informa o uso da RAM em porcentagem (por exemplo, 'Uso da memória').",
+          "storage_type": "Escolha o tipo de armazenamento no qual sua instância do HA é executada. O cartão SD é a opção segura para configurações do Raspberry Pi. O SSD usa limiares baseados em porcentagem em vez de espaço livre absoluto.",
+          "ignore_labels": "Selecione um ou mais rótulos de seus rótulos do Home Assistant. Entidades e dispositivos que carregam qualquer um desses rótulos são excluídos da detecção de zumbis e penalidades de atualização. Alterne as exclusões dinamicamente a partir de uma automação chamando as ações de serviço nativas do Home Assistant 'homeassistant.add_label_to_entity' e 'homeassistant.remove_label_from_entity' (por exemplo, ative um rótulo 'férias' enquanto você está fora). Crie os rótulos primeiro em Configurações → Rótulos se eles ainda não existirem.",
+          "ignore_patterns": "Lista opcional de padrões glob correspondentes ao entity_id (um por linha). Entidades cujo ID corresponde a qualquer padrão são excluídas da detecção de zumbis, da listagem de entidades não registradas e das penalidades de atualização. Use isso para entidades sem um ID único, que não podem carregar um rótulo (por exemplo, 'sensor.docker_*'). Os curingas * e ? são suportados.",
+          "db_sensor": "Necessário apenas para bancos de dados externos (MariaDB, PostgreSQL). Deixe vazio para usar a detecção automática do SQLite embutido. O sensor deve reportar o tamanho do banco de dados em MB (por exemplo, 'sensor.mariadb_size')."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "fallback_missing": {
+      "message": "PSI não está disponível e os sensores fallback de CPU e RAM não estão configurados."
+    }
+  },
+  "issues": {
+    "fallback_missing": {
+      "title": "PSI não está disponível e faltam sensores de reserva",
+      "fix_flow": {
+        "abort": {
+          "config_entry_missing": "A entrada de configuração HAGHS não existe mais."
+        },
+        "step": {
+          "confirm": {
+            "title": "Configurar sensores fallback de CPU e RAM",
+            "description": "O HAGHS não pode ser iniciado porque os dados PSI do Linux estão indisponíveis e os sensores de fallback de CPU/RAM não estão configurados. Selecione os dois sensores abaixo e envie para recuperação sem reiniciar o Home Assistant.",
+            "data": {
+              "cpu_sensor": "Sensor de uso da CPU",
+              "ram_sensor": "Sensor de uso da RAM"
+            },
+            "data_description": {
+              "cpu_sensor": "Selecione o sensor que informa o uso da CPU em porcentagem.",
+              "ram_sensor": "Selecione o sensor que informa o uso da RAM em porcentagem."
+            }
+          }
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do HAGHS",
+        "description": "Ajustar configurações de tempo de execução. As alterações são aplicadas imediatamente após o salvamento.",
+        "data": {
+          "cpu_sensor": "Sensor de uso da CPU",
+          "ram_sensor": "Sensor de uso da RAM",
+          "storage_type": "Tipo de armazenamento",
+          "ignore_labels": "Ignorar rótulos",
+          "ignore_patterns": "Ignorar padrões de ID de entidade",
+          "db_sensor": "Sensor de tamanho da base de dados (opcional)",
+          "update_interval": "Intervalo de atualização",
+          "zombie_grace_minutes": "Período de tolerância para zumbis (minutos)",
+          "battery_grace_minutes": "Período de tolerância para baterias (minutos)"
+        },
+        "data_description": {
+          "cpu_sensor": "Apenas fallback inteligente. O HAGHS usa valores Linux PSI (Pressure Stall Information) de alta precisão do seu sistema host por padrão para calcular a pontuação. Este sensor manual só é usado se o seu sistema não fornecer dados PSI (por exemplo, Windows, configurações mais antigas do Docker ou hosts não Linux). Se o PSI ficar indisponível e nenhum sensor fallback de CPU/RAM estiver configurado, a configuração será rejeitada. Selecione o sensor que informa o uso da CPU em porcentagem (por exemplo, 'Uso do processador').",
+          "ram_sensor": "Apenas fallback inteligente. O HAGHS usa valores Linux PSI (Pressure Stall Information) de alta precisão do seu sistema host por padrão para calcular a pontuação. Este sensor manual só é usado se o seu sistema não fornecer dados PSI (por exemplo, Windows, configurações mais antigas do Docker ou hosts não Linux). Se o PSI ficar indisponível e nenhum sensor fallback de CPU/RAM estiver configurado, a configuração será rejeitada. Selecione o sensor que informa o uso da RAM em porcentagem (por exemplo, 'Uso da memória').",
+          "storage_type": "Escolha o tipo de armazenamento em que sua instância de HA é executada. O cartão SD é o padrão seguro para configurações do Raspberry Pi. O SSD usa limites baseados em porcentagem em vez de espaço livre absoluto.",
+          "ignore_labels": "Selecione um ou mais rótulos dos rótulos do Home Assistant. Entidades e dispositivos que carregam qualquer um desses rótulos estão excluídos das penalidades de detecção e atualização de zumbis. Alterne exclusões dinamicamente de uma automação chamando as ações de serviço nativas 'homeassistant.add_label_to_entity' e 'homeassistant.remove_label_from_entity' do Home Assistant (por exemplo, ative um rótulo de 'férias' enquanto você estiver ausente). Crie os rótulos primeiro em Configurações → Rótulos, se eles ainda não existirem.",
+          "ignore_patterns": "Lista opcional de padrões glob correspondentes ao entidade_id (um por linha). Entidades cujo id corresponda a qualquer padrão são excluídas da detecção de zumbis, da listagem não registrada e das penalidades de atualização. Use isto para entidades sem um ID exclusivo, que não podem conter um rótulo (por exemplo, 'sensor.docker_*'). Curingas * e ? são suportados.",
+          "db_sensor": "Necessário apenas para bancos de dados externos (MariaDB, PostgreSQL). Deixe em branco para usar a detecção automática SQLite integrada. O sensor deve informar o tamanho do banco de dados em MB (por exemplo, 'sensor.mariadb_size').",
+          "update_interval": "Com que frequência o HAGHS recalcula a pontuação de integridade, em segundos. Valores mais baixos significam atualizações mais rápidas, mas um pouco mais de uso da CPU. Padrão: 60 segundos.",
+          "zombie_grace_minutes": "Quanto tempo uma entidade deve permanecer “indisponível” ou “desconhecida” antes que o HAGHS a considere um zumbi. Faixa permitida: 1 a 240 minutos. Valores mais baixos tornam a detecção mais agressiva (mais falsos positivos de dispositivos off-line por um breve período). Valores mais altos mascaram interrupções curtas, mas permitem que falhas reais persistam. Padrão: 5 minutos.",
+          "battery_grace_minutes": "Período de carência estendido especificamente para entidades com 'device_class: bateria'. Os rádios Zigbee e Homematic normalmente demoram mais do que a janela normal para re-pesquisar os dispositivos de bateria, portanto, sinalizá-los como zumbis após apenas 5 minutos produz falsos positivos. Faixa permitida: 1 a 240 minutos. Se você definir um valor inferior ao limite normal, a extensão será efetivamente desativada. Padrão: 60 minutos."
+        }
+      }
+    }
+  }
+}
