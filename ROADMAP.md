@@ -84,7 +84,7 @@ All work below is committed on `dev` and described in detail in
   count and per-domain map always carry full totals regardless of the
   display cap).
 - **Configurable zombie + battery grace periods**: Two new Options
-  Flow fields: `zombie_grace_minutes` (1-240, default 15) and
+  Flow fields: `zombie_grace_minutes` (1-240, default 5) and
   `battery_grace_minutes` (1-240, default 60). Both periods are
   independent (battery grace can be set below the general grace, this
   intentionally disables the extension). Replaces the previous
