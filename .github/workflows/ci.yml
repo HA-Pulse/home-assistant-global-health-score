@@ -30,5 +30,5 @@ jobs:
           python-version: "3.14"
           cache: pip
       - run: pip install -r requirements_test.txt
-      - run: pytest --cov=custom_components.haghs --cov-report=term-missing --cov-fail-under=65
+      - run: pytest --cov=custom_components.haghs --cov-report=term-missing --cov-fail-under=90
       - run: coverage report --include='custom_components/haghs/coordinator.py' --fail-under=80
