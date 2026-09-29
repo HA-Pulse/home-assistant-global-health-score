@@ -134,9 +134,9 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
   
 * **Dead Devices (informational, no score impact):** Flags devices whose entities are all `unavailable`/`unknown` beyond the grace period (one device, all entities dead: a re-paired Zigbee plug, a removed bridge). Reported via `dead_device_count`, `dead_devices` and the `rec_dead_devices` flag. Entity-level zombie points stay authoritative, so no second penalty is added. Respects the same ignore labels and patterns.
 
-* **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
+* **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database-mariadb) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
   
-* **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (>3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
+* **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (≥3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
   
 * **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
   
@@ -160,7 +160,7 @@ After adding it, navigate to its entity list and **manually enable** the followi
 * `sensor.system_monitor_processor_use` (Percentage %)
 * `sensor.system_monitor_memory_usage` (Percentage %)
 
-> **Note:** On most Linux-based HA installations (HAOS, Supervised), HAGHS uses PSI data automatically and these sensors are only a safety net. They are still required during setup but may not be actively used for scoring.
+> **Note:** On most Linux-based HA installations (HAOS, Supervised), HAGHS uses PSI data automatically and these sensors are only a safety net. They remain part of the setup flow, required on systems without PSI and optional with it, but may not be actively used for scoring.
 > > **If PSI disappears after setup:** Should the kernel stop exposing PSI (e.g. after switching from HAOS to a non-Linux host) and no CPU/RAM fallback sensors are configured, HAGHS surfaces a **Repair flow** in *Settings > System > Repairs* instead of crashing. The flow lets you pick the fallback sensors and resume operation without restarting Home Assistant.
 
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
@@ -316,7 +316,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `dead_device_count` | int | Number of devices whose entities are all unavailable/unknown past the grace period (informational, does not affect the score) |
 | `dead_devices` | list | Device names (capped at 100) |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
-| `psi_available` | bool | `True` when PSI provides both CPU and memory data (the prerequisite for `psi.available`). I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
+| `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
@@ -324,7 +324,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
 | `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50) |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period |
-| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, backup, core lag, integration health, config audit, repairs) |
+| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, dead devices, backup, core lag, integration health, config audit, repairs) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
 | `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
@@ -338,6 +338,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
 | `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
 | `rec_repairs` | bool | At least one open repair issue from another integration is counted |
+| `rec_dead_devices` | bool | At least one dead device (all entities unavailable/unknown past the grace period) is reported (informational, no score impact) |
 
 ---
 
@@ -609,7 +610,10 @@ Two reasons it can happen:
 The hard-cap at 99 while at least one zombie is reported is intentional — the Config-Audit bonus can never lift a "real" zombie issue to 100.
 
 **Why did my score change after upgrading to v2.3?**
-v2.3 expanded zombie detection from 9 to 22 domains, added a 7-day grace period before pending updates count, and now hard-caps the application score at 99 while a zombie exists. Most users will see a small **increase** (fewer noisy update penalties, disabled-entity entities no longer counted), but instances with previously unnoticed zombies in the new domains may see a small drop. The Changelog and the in-card *Tips* block explain exactly which factors are active.
+v2.3 expanded zombie detection from 9 to 22 domains, added a 7-day grace period before pending updates count, and now hard-caps the application score at 99 while a zombie exists. Most users will see a small **increase** (fewer noisy update penalties, disabled entities no longer counted), but instances with previously unnoticed zombies in the new domains may see a small drop. The Changelog and the in-card *Tips* block explain exactly which factors are active.
+
+**Why did my score change after upgrading to v2.4?**
+Open repair issues now count toward the score (**5 pts each**, capped at **10 pts**) and hard-cap the application score at 99 while any repair is open, so instances with open repairs score lower than before, by design; use HA's native *Ignore* action on a repair to take it out of the score. Entities without an entity-registry entry no longer count as zombies, they are reported as informational *unregistered* entries, which can raise the score on instances that previously had such entries deducted. Everything else behaves as before. Previously, missing CPU/RAM values were treated as 0 % load, so they never lowered the score; now setup stops with a **repair** until both sensors are configured. The same applies when only one of the two sensors is configured.
 
 **A pending update from yesterday is in the list but doesn't change my score yet — why?**
 Because of the 7-day update grace period. The list is informational and shows everything HA reports as pending; the **score** only deducts after a pending update has been available for at least 7 days. This avoids punishing normal user behaviour — most updates land within a few days.
@@ -618,13 +622,13 @@ Because of the 7-day update grace period. The list is informational and shows ev
 Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
 
 **What happens if a sub-calculation fails?**
-HAGHS uses a safety net: if any pillar calculation times out or throws an error, it falls back to a neutral score (100 / no penalty) and logs a warning. The sensor never crashes.
+HAGHS wraps the whole update cycle in a safety net: if any part of the calculation throws, the error is logged with a full traceback and the **last valid result is kept**. The sensor never loses its value and never stops updating. Only if the very first update fails is a neutral result (100 / no penalty) returned until the next refresh.
 
 ---
 
 ## Changelog
 
-### [v2.3.0] - 2026-05-21
+### [v2.3.0] - 2026-05-25
 
 **Highlights**
 
