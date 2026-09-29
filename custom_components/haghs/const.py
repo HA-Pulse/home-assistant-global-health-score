@@ -91,7 +91,7 @@ REC_DB_OVER_LIMIT = (
 REC_BACKUP_STALE = "\U0001f6a8 Security: Stale backup detected!"
 REC_UPDATES_PENDING = "\U0001f4e6 Maintenance: {count} update(s) pending."
 REC_ZOMBIES = "\U0001f9df Hygiene: {count} zombie(s) detected."
-REC_CORE_LAG = "\U0001f474 Legacy: Core version is >3 months old."
+REC_CORE_LAG = "\U0001f474 Legacy: Core version is ≥3 months old."
 REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected — unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
 REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration(s) failed to set up."
@@ -140,9 +140,6 @@ REPAIR_PENALTY_CAP = 10
 # attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
 # reflects the full number.
 REPAIR_LIST_CAP = 50
-
-# Fallback text for empty lists in state attributes
-ATTR_NONE = "None"
 
 # Boolean recommendation flags exposed as state attributes alongside the
 # existing 'recommendations' string. Dashboards and external integrations
