@@ -360,7 +360,7 @@ Both configurations are wired to the entity ID `sensor.system_ha_global_health_s
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-<img width="519" height="392" alt="haghs lite v1 2" src="https://github.com/user-attachments/assets/262f91cb-ba47-4d90-ab27-931d224a0332" />
+<img width="519" height="438" alt="HAGHS Lite v1.3 dashboard card" src="docs/images/dashboard-lite.png" />
 
 ```yaml
 type: vertical-stack
@@ -378,7 +378,8 @@ cards:
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set _upd =
       '/config/updates' %} {% set _ent = '/config/entities' %} {% set _rep =
-      '/config/repairs' %} {% set _int = '/config/integrations' %}
+      '/config/repairs' %} {% set _int = '/config/integrations' %} {% set _dev
+      = '/config/devices/dashboard' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %} {% set hw =
@@ -398,21 +399,24 @@ cards:
 
       {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s), [Check Entities]({{ _ent }}) {% endif %}
 
-      {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact) {% endif %}
+      {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
 
       {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
 
       {% if integrations > 0 %} 🧩 {{ integrations }} integration(s) in error, [Open Integrations]({{ _int }}) {% endif %}
 
-      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
-      {{ rec }}
-      {% else %} --- ✅ System healthy. No recommendations. {% endif %}
+      {# Hide recommendation lines already shown as a status line with a link above. #}
+      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+
+      {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
+      {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
+      {% endif %}
 
       {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
       state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
       keep in [none, 'unknown'] or not filter %}
-      💡 Tips to improve your score:
-      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      💡 Tips to improve your score: <br>
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
@@ -424,7 +428,7 @@ cards:
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
-<img width="518" height="1177" alt="haghspro1 2" src="https://github.com/user-attachments/assets/38e90a7a-dfbf-40af-b26d-0de38ccc6852" />
+<img width="328" height="832" alt="HAGHS Pro v1.3 dashboard card" src="docs/images/dashboard-pro.png" />
 
 ```yaml
 type: vertical-stack
@@ -455,32 +459,28 @@ cards:
   - type: markdown
     title: 🛡️ Advisor
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set rec =
-      state_attr(e, 'recommendations') | default('', true) %}
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set rec = state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
-      is offline ({{ states(e) }}). {% elif rec not in [none, 'unknown',
-      'unavailable'] and '✅' not in rec %} {{ rec }} {% else %} ✅ System
-      healthy. No recommendations. {% endif %}
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+
+      {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
+      {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
+      {% else %} ✅ Nothing beyond the cards below.
+      {% endif %} {% endif %}
   - type: markdown
     title: 🔧 Repairs & Integrations
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count =
-      state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e,
-      'repairs') | default([], true) %} {% set i_count = state_attr(e,
-      'integration_unhealthy_count') | int(0) %} {% set _rep =
-      '/config/repairs' %} {% set _int = '/config/integrations' %}
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count = state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e, 'repairs') | default([], true) %} {% set i_count = state_attr(e, 'integration_unhealthy_count') | int(0) %} {% set _rep = '/config/repairs' %} {% set _int = '/config/integrations' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
-      is offline ({{ states(e) }}). {% else %} {% if r_count == 0 %} ✅ No open
-      repairs {% else %} 🛠️ {{ r_count }} open repair(s), [→ Open
-      Repairs]({{ _rep }}){% for r in r_list %}<br>&nbsp;&nbsp; • `{{ r }}`{% endfor %} {% endif %}
+      is offline ({{ states(e) }}). {% else %}
+
+      {% if r_count == 0 %} ✅ No open repairs {% else %} 🛠️ {{ r_count }} open repair(s), {% if r_count > 0 %}[→ Open Repairs]({{ _rep }}){% endif %}{% for r in r_list %}<br>&nbsp;&nbsp; • `{{ r }}`{% endfor %} {% endif %}
 
       <hr>
 
-      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{
-      i_count }} integration(s) failed to set up, [→ Open
-      Integrations]({{ _int }}) {% endif %} {% endif %}
+
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration(s) failed to set up, [→ Open Integrations]({{ _int }}) {% endif %} {% endif %}
   - type: markdown
     title: 📦 Updates & Maintenance
     content: >
@@ -503,19 +503,18 @@ cards:
 
       <hr>
 
-      Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB detected)*{% endif %}
 
-      Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }} days){% else %}no purge configured, DB may grow indefinitely{% endif %}
-
-      {{ 'Entity filter active' if filter else 'No entity filter' }}
-
+      Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB detected)*{% endif %} <br>
+      Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }} days){% else %}no purge configured, DB may grow indefinitely{% endif %} <br>
+      {{ 'Entity filter active' if filter else 'No entity filter' }} <br>
       Config-Audit bonus: {{ bonus }}/10
 
       {% if keep in [none, 'unknown'] or not filter %}
-      💡 Tips to improve your score:
-      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      💡 Tips to improve your score: <br>
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
+
 
       ---
 
@@ -524,42 +523,24 @@ cards:
   - type: markdown
     title: 🧟 Zombie Entities
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %}
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set z_raw =
+      state_attr(e, 'zombie_entities') | default([], true) %} {% set z_count =
+      state_attr(e, 'zombie_count') | int(0) %} {% set u_raw = state_attr(e,
+      'unregistered_entities') | default([], true) %} {% set u_count =
+      state_attr(e, 'unregistered_count') | int(0) %} {% set d_raw = state_attr(e,
+      'dead_devices') | default([], true) %} {% set d_count = state_attr(e,
+      'dead_device_count') | int(0) %} {% set _dev = '/config/devices/dashboard' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
-      is offline ({{ states(e) }}). {% else %} {% set z_raw = state_attr(e,
-      'zombie_entities') | default([], true) %} {% set z_count = state_attr(e,
-      'zombie_count') | int(0) %}
+      is offline ({{ states(e) }}). {% else %} {% if z_raw is string %} {% set
+      z_list = z_raw.split(',') | map('trim') | list %} {% else %} {% set z_list
+      = z_raw | list %} {% endif %} {% set grouped = expand(z_list) |
+      groupby('domain') %}
 
-      {% if z_count == 0 %} ✅ No zombie entities detected. {% else %}
-      {% if z_raw is string %}
-        {% set z_list = z_raw.split(',') | map('trim') | list %}
-      {% else %}
-        {% set z_list = z_raw | list %}
-      {% endif %}
-      {% set grouped = expand(z_list) | groupby('domain') %}
+      {# Domain count: prefer the HAGHS v2.3+ attribute when present, otherwise derive it from z_list. #}
+      {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}{% if per_domain %}{% set domain_count = per_domain | length %}{% else %}{% set ns = namespace(seen=[]) %}{% for entry in z_list %}{% set dom = entry.split('.')[0] %}{% if dom not in ns.seen %}{% set ns.seen = ns.seen + [dom] %}{% endif %}{% endfor %}{% set domain_count = ns.seen | length %}{% endif %}
 
-      {# Domain count: prefer the HAGHS v2.3+ attribute when present.
-         Fall back to extracting the distinct domains from z_list so the
-         card keeps working on older HAGHS versions that do not expose
-         zombie_count_per_domain. #}
-      {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
-      {% if per_domain %}
-        {% set domain_count = per_domain | length %}
-      {% else %}
-        {% set ns = namespace(seen=[]) %}
-        {% for entry in z_list %}
-          {% set dom = entry.split('.')[0] %}
-          {% if dom not in ns.seen %}
-            {% set ns.seen = ns.seen + [dom] %}
-          {% endif %}
-        {% endfor %}
-        {% set domain_count = ns.seen | length %}
-      {% endif %}
-
-      {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
-      {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
-      {% if z_count > z_list | length %}*(showing first {{ z_list | length }}, {{ z_count - z_list | length }} more hidden)*{% endif %}
+      {% if z_count == 0 %} ✅ No zombie entities detected. {% else %} {{ z_count }} zombie(s) across {{ domain_count }} domain(s) {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %} {% if z_count > z_list | length %}*(showing first {{ z_list | length }}, {{ z_count - z_list | length }} more hidden)*{% endif %}
 
       {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
@@ -567,29 +548,27 @@ cards:
       <details>
       <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
       {% for item in domain[1] %}
-      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
+      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · {{ item.name }} (<code>{{ item.entity_id }}</code>): {{ item.state }}
       {% endfor %}
       </details>
-      {% endfor %}
-      {% endif %}
+      {% endfor %} {% endif %}
 
-      {% set u_raw = state_attr(e, 'unregistered_entities') | default([], true) %} {% set u_count = state_attr(e, 'unregistered_count') | int(0) %}
       {% if u_count > 0 %}
       <details>
       <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
       {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
-      &nbsp;&nbsp; • `{{ entry }}`
+      &nbsp;&nbsp; • <code>{{ entry }}</code>
       {% endfor %}
       </details>
       {% endif %}
 
-      {% set d_raw = state_attr(e, 'dead_devices') | default([], true) %} {% set d_count = state_attr(e, 'dead_device_count') | int(0) %}
       {% if d_count > 0 %}
       <details>
       <summary>💀 Dead devices (informational, no score impact): {{ d_count }}</summary>
       {% for d in d_raw %}
       &nbsp;&nbsp; • {{ d }}
       {% endfor %}
+      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
       </details>
       {% endif %}
 
