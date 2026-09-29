@@ -167,7 +167,7 @@ After adding it, navigate to its entity list and **manually enable** the followi
 
 ### 2. Installation & Setup
 1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
-> **Note on HACS installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page). HACS uses this asset automatically; users on legacy versions can also download it manually and drop the contents into `<config>/custom_components/haghs/`
+> **Note on HACS installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page) that can be downloaded manually and dropped into `<config>/custom_components/haghs/`. HACS itself installs straight from the repository content.
 2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask:
     * Select your **CPU** and **RAM** sensors (smart PSI fallback - only used if PSI data is not available on your host).
@@ -332,7 +332,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
 | `rec_power_unstable` | bool | RPi under-voltage detected |
 | `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
-| `rec_updates_pending` | bool | At least one non-ignored update entity is pending |
+| `rec_updates_pending` | bool | At least one non-ignored update entity has been pending past the 7-day grace period |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
 | `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
@@ -622,7 +622,7 @@ Because of the 7-day update grace period. The list is informational and shows ev
 Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
 
 **What happens if a sub-calculation fails?**
-HAGHS wraps the whole update cycle in a safety net: if any part of the calculation throws, the error is logged with a full traceback and the **last valid result is kept**. The sensor never loses its value and never stops updating. Only if the very first update fails is a neutral result (100 / no penalty) returned until the next refresh.
+HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times out falls back to a neutral score (100 / no penalty) for that refresh and the failure is logged, so the sensor keeps updating. If a failure happens outside the two guarded pillars, the **last valid result is kept** instead, and only before the first successful update is a fully neutral result returned.
 
 ---
 
@@ -637,7 +637,7 @@ HAGHS wraps the whole update cycle in a safety net: if any part of the calculati
 * **Pattern-based ignore (#64).** New `ignore_patterns` field accepts glob patterns for entities without a unique ID (e.g. `sensor.docker_*`, `sensor.torque_*`).
 * **Configurable zombie + battery grace periods.** Two new Options Flow fields (1–240 min each, defaults 5 / 60). Battery-class entities get the longer window because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices.
 * **7-day update grace.** Pending updates only contribute to the penalty after 7 days; the list stays informational so you still see what is queued.
-* **ZOMBIE_DOMAINS expanded 9 → 22.** New domains include `alarm_control_panel`, `camera`, `climate`, `cover`, `device_tracker`, `fan`, `humidifier`, `lawn_mower`, `lock`, `media_player`, `number`, `remote`, `select`, `siren`, `text`, `vacuum`, `valve`, `water_heater`. New `zombie_count_per_domain` attribute exposes a per-domain breakdown; `zombie_entities` list cap raised from 20 → 100.
+* **ZOMBIE_DOMAINS expanded 9 → 22.** Newly covered domains: `alarm_control_panel`, `cover`, `device_tracker`, `humidifier`, `lawn_mower`, `lock`, `number`, `remote`, `select`, `siren`, `text`, `valve`, `water_heater`. New `zombie_count_per_domain` attribute exposes a per-domain breakdown; `zombie_entities` list cap raised from 20 → 100.
 * **Hard-cap at 99 with zombies (#61).** While `zombie_count > 0`, the application score cannot exceed 99 so the Config-Audit bonus can never mask a real issue.
 * **Unregistered ghost zombies marked (#61).** Entities without an entity-registry entry are surfaced in `zombie_entities` with a `[unregistered]` prefix and warned in the log.
 * **Power Supply Status detection (#21).** Auto-detects `binary_sensor.rpi_power_status` for Raspberry Pi under-voltage and applies a flat 20-point hardware penalty.
@@ -666,7 +666,7 @@ HAGHS wraps the whole update cycle in a safety net: if any part of the calculati
 * Pattern-Based Ignore documentation.
 * Full long-form story in `v2.3_CHANGELOG.md`.
 
-**Minimum Home Assistant version raised** to 2024.10.0 (for `vol.Exclusive`, `IssueSeverity`, and the modern `LabelSelector`).
+**Minimum Home Assistant version raised** to 2024.10.0 (for `IssueSeverity` and the modern `LabelSelector`).
 
 ### [v2.2.2] - 2026-03-30
 * **Feature:** Added optional **Database Size Sensor** override for external databases (MariaDB, PostgreSQL). Configurable in both Setup and Options flow. When set, HAGHS uses the sensor value (in MB) instead of SQLite auto-detection. When left empty, the default SQLite behavior is unchanged. No migration needed, existing installations are unaffected.

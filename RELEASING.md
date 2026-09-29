@@ -6,6 +6,10 @@ squash-merged pull requests, and `main` only receives release PRs from `dev`.
 
 ## Overview
 
+Before step 1, the maintainer checks the repository documents (README, ROADMAP,
+changelogs, templates, `hacs.json`, `manifest.json`) against the code; factual
+corrections go into a separate docs PR into `dev`.
+
 1. Prepare the release on a `release/vX.Y.Z` branch cut from `dev`.
 2. Merge that branch into `dev` via PR (squash merge).
 3. Open a release PR from `dev` into `main` (merge commit, not squash).
@@ -54,9 +58,12 @@ Everything else runs without further confirmation.
 
 ## Tag and version check
 
-The release workflow aborts when the release tag does not match the
-`version` field in `custom_components/haghs/manifest.json`:
+The release workflow checks the tag against the `version` field in
+`custom_components/haghs/manifest.json`. The check runs after the release is
+published: on mismatch the job fails and the `haghs.zip` asset is not
+attached, but the release itself is already live. Verify the tag before
+publishing.
 
 - `v2.4.0` matches version `2.4.0`.
 - `v2.4.0b1` matches version `2.4.0` (the beta suffix is allowed).
-- `v2.4.1` against version `2.4.0` fails the release.
+- `v2.4.1` against version `2.4.0` fails the check.

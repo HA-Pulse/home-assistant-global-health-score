@@ -33,7 +33,7 @@ All work below is committed on `dev` and described in detail in
 ### Infrastructure
 
 - **Pillar test coverage and CI refresh (#107, #117)**: The suite grows from
-  103 to 232 tests and `coordinator.py` reaches 100 % statement and branch
+  103 to 257 tests and `coordinator.py` reaches 100 % statement and branch
   coverage. CI runs on Python 3.14 (Home Assistant 2026.9.4 instead of
   2025.1.4) and gates `coordinator.py` coverage at 80 %.
 
@@ -74,13 +74,12 @@ All work below is committed on `dev` and described in detail in
   detection and update penalties without requiring a label. Removes the
   community-flagged friction of having to label every disabled entity.
 - **ZOMBIE_DOMAINS expansion (9 → 22) + per-domain breakdown + cap
-  raise**: Scoring scope expanded to 22 physical/UI-relevant domains
-  (`alarm_control_panel`, `camera`, `climate`, `cover`,
-  `device_tracker`, `fan`, `humidifier`, `lawn_mower`, `light`, `lock`,
-  `media_player`, `number`, `remote`, `select`, `siren`, `switch`,
-  `text`, `vacuum`, `valve`, `water_heater` added; `button` / `event`
+  raise**: Scoring scope expanded to 22 physical/UI-relevant domains.
+  Newly covered: `alarm_control_panel`, `cover`, `device_tracker`,
+  `humidifier`, `lawn_mower`, `lock`, `number`, `remote`, `select`,
+  `siren`, `text`, `valve`, `water_heater`; `button` / `event`
   deliberately excluded, their default `unknown` would cause false
-  positives). New `zombie_count_per_domain` attribute exposes a
+  positives. New `zombie_count_per_domain` attribute exposes a
   per-domain dict; `ZOMBIE_LIST_CAP` raised from 20 → 100 entries (the
   count and per-domain map always carry full totals regardless of the
   display cap).
@@ -184,8 +183,8 @@ Updates on every backend message regardless of whether the value or
 attributes changed, so it survives Zigbee2MQTT's `force_update=False`
 default, which `state.last_updated` does not.
 
-**Prerequisite:** Bump `hacs.json` min HA version to ≥ 2024.4
-(already on the v2.3 pre-release checklist to raise to 2024.10+).
+**Prerequisite:** `hacs.json` min HA version ≥ 2024.4 (done: the file now
+requires 2024.10.0).
 
 ### Repairs penalties: severity weighting and a grace window (v2.5 candidate)
 
@@ -226,4 +225,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-09-28*
+*Last updated: 2026-09-29*
