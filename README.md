@@ -628,6 +628,35 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 ## Changelog
 
+### [v2.4.0] - 2026-09-29
+
+**Highlights**
+
+* **Repairs now count in the score (#97).** Open repair issues cost 5 points each (cap 10) and hard-cap the application score at 99 while any repair is open. HA's native *Ignore* action takes a repair out of the count. New attributes `repair_count` / `repairs`, new flag `rec_repairs`.
+* **Dead devices are flagged (#120).** A device whose entities are all `unavailable` / `unknown` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`. Informational only, the entity-level zombie points stay authoritative.
+* **Recommendation texts are translatable (#114).** All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
+* **Unregistered entities are informational only (#98).** Entities without an entity-registry entry no longer count as zombies and no longer cap the score; they are reported through the `unregistered_*` attributes.
+* **Every missing score point is explained (#92).** New attributes `config_audit_bonus` and `integration_unhealthy_count`, new flags `rec_integration_health` and `rec_config_audit`.
+
+**Behavior changes**
+
+* **Zombie grace default shortened to 5 minutes.** Zombies are detected after 5 minutes instead of 15; this also applies to existing installations that never set a custom value. Set the zombie grace period to 15 minutes in the options for the old behaviour.
+* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+
+**Bug fixes**
+
+* Coordinator total safety net so a failing sub-component can no longer stall the sensor (#103).
+* Label service names in the README, translations and docstring corrected to `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` (#99).
+
+**Infrastructure**
+
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 257 tests.
+
+**Documentation**
+
+* Manual smoke-test guide for live instances in `tests/README.md` (#85).
+* Repository-wide documentation check ahead of this release (#130).
+
 ### [v2.3.0] - 2026-05-25
 
 **Highlights**
