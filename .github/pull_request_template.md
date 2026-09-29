@@ -14,8 +14,9 @@ Use `Fixes #<number>` to close the issue automatically on merge. Use
 List of files/areas changed and the nature of the change.
 
 > **Workflow files:** changes under `.github/workflows/` go into their own
-> small PR, so a failing CI run there does not hide feature failures. The
-> automation token may push them (workflow permission added on 28.09.2026).
+> small PR, so a failing CI run there does not hide feature failures. Pushing
+> them requires the workflow permission to be granted for that PR; without it
+> the maintainer applies the change via the web UI.
 
 ## Test plan
 
