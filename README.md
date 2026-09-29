@@ -51,8 +51,8 @@ HAGHS v2.3 ships a full `async_migrate_entry` handler that converts config entri
 - [Sensor Attributes](#sensor-attributes)
 - [Roadmap](#roadmap)
 - [UI Integration](#ui-integration)
-  - [HAGHS Lite](#haghs-lite-v12-quick-check)
-  - [HAGHS Pro](#haghs-pro-v12-command-center)
+  - [HAGHS Lite](#haghs-lite-v13-quick-check)
+  - [HAGHS Pro](#haghs-pro-v13-command-center)
 - [FAQ](#faq)
 - [Changelog](#changelog)
 
@@ -354,7 +354,9 @@ HAGHS provides all data as sensor attributes. Dashboard visualization happens en
 
 Below are two ready-to-use card configurations:
 
-### HAGHS Lite v1.2 (Quick Check)
+Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it in two places: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
+
+### HAGHS Lite v1.3 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
@@ -374,42 +376,51 @@ cards:
       red: 0
   - type: markdown
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set hw =
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set _upd =
+      '/config/updates' %} {% set _ent = '/config/entities' %} {% set _rep =
+      '/config/repairs' %} {% set _int = '/config/integrations' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set hw =
       state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set rec = state_attr(e,
       'recommendations') | default('', true) %} {% set updates = state_attr(e,
       'pending_updates') | default([], true) | list %} {% set zombies =
-      state_attr(e, 'zombie_count') | int(0) %} {% set psi = state_attr(e,
-      'psi_available') | default(false, true) %} {% set _upd =
-      '/config/updates' %} {% set _ent = '/config/entities' %}
+      state_attr(e, 'zombie_count') | int(0) %} {% set dead = state_attr(e,
+      'dead_device_count') | int(0) %} {% set repairs = state_attr(e,
+      'repair_count') | int(0) %} {% set integrations = state_attr(e,
+      'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
+      'psi_available') | default(false, true) %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
-      {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending
-      — [Open Updates]({{ _upd }}) {% endif %}
+      {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending, [Open Updates]({{ _upd }}) {% endif %}
 
-      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s) — [Check
-      Entities]({{ _ent }}) {% endif %}
+      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s), [Check Entities]({{ _ent }}) {% endif %}
+
+      {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact) {% endif %}
+
+      {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
+
+      {% if integrations > 0 %} 🧩 {{ integrations }} integration(s) in error, [Open Integrations]({{ _int }}) {% endif %}
 
       {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
       {{ rec }}
       {% else %} --- ✅ System healthy. No recommendations. {% endif %}
 
-      {% set keep = state_attr(e, 'recorder_keep_days') %}
-      {% set filter = state_attr(e, 'recorder_filter_active') | default(false, true) %}
-      {% if keep in [none, 'unknown'] or not filter %}
+      {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
+      state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
+      keep in [none, 'unknown'] or not filter %}
       💡 Tips to improve your score:
       {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
-      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
-      hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
-      Disk) — hardware score uses 3 components{% endif %}
-
+      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk), hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}
+      {% endif %}
 ```
 
-### HAGHS Pro v1.2 (Command Center)
+### HAGHS Pro v1.3 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
@@ -430,135 +441,159 @@ cards:
   - type: markdown
     title: Score Breakdown
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set hw =
-      state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
+      {% set e = 'sensor.system_ha_global_health_score' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set hw = state_attr(e,
+      'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
+      {% endif %}
   - type: markdown
     title: 🛡️ Advisor
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set rec =
       state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %}
-        ⚠️ Health Advisor sensor is offline.
-      {% elif rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
-        {{ rec }}
-      {% else %}
-        ✅ System healthy. No recommendations.
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% elif rec not in [none, 'unknown',
+      'unavailable'] and '✅' not in rec %} {{ rec }} {% else %} ✅ System
+      healthy. No recommendations. {% endif %}
+  - type: markdown
+    title: 🔧 Repairs & Integrations
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count =
+      state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e,
+      'repairs') | default([], true) %} {% set i_count = state_attr(e,
+      'integration_unhealthy_count') | int(0) %} {% set _rep =
+      '/config/repairs' %} {% set _int = '/config/integrations' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% if r_count == 0 %} ✅ No open
+      repairs {% else %} 🛠️ {{ r_count }} open repair(s), [→ Open
+      Repairs]({{ _rep }}){% for r in r_list %}<br>&nbsp;&nbsp; • `{{ r }}`{% endfor %} {% endif %}
+
+      <hr>
+
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{
+      i_count }} integration(s) failed to set up, [→ Open
+      Integrations]({{ _int }}) {% endif %} {% endif %}
+  - type: markdown
+    title: 📦 Updates & Maintenance
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set updates = state_attr(e,
+      'pending_updates') | default([], true) | list %} {% set db_mb =
+      state_attr(e, 'db_size_mb') | float(0) %} {% set keep = state_attr(e,
+      'recorder_keep_days') %} {% set filter = state_attr(e,
+      'recorder_filter_active') | default(false, true) %} {% set bonus =
+      state_attr(e, 'config_audit_bonus') | int(0) %} {% set psi =
+      state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
+      '/config/updates' %}
+
+      {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
+      {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
+      [→ Open Updates]({{ _upd }})
+      {% else %} ✅ All updates installed {% endif %}
+
+      <hr>
+
+      Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB detected)*{% endif %}
+
+      Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }} days){% else %}no purge configured, DB may grow indefinitely{% endif %}
+
+      {{ 'Entity filter active' if filter else 'No entity filter' }}
+
+      Config-Audit bonus: {{ bonus }}/10
+
+      {% if keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score:
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
-  - type: conditional
-    conditions:
-      - condition: numeric_state
-        entity: sensor.system_ha_global_health_score
-        attribute: zombie_count
-        above: -1
-    card:
-      type: markdown
-      title: 📦 Updates & Maintenance
-      content: >
-        {% set e = 'sensor.system_ha_global_health_score' %} {% set updates =
-        state_attr(e, 'pending_updates') | default([], true) | list %} {% set
-        db_mb = state_attr(e, 'db_size_mb') | float(0) %} {% set keep =
-        state_attr(e, 'recorder_keep_days') %} {% set filter = state_attr(e,
-        'recorder_filter_active') | default(false, true) %} {% set psi =
-        state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
-        '/config/updates' %}
 
-        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
-        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
-        [→ Open Updates]({{ _upd }})
-        {% else %} ✅ All updates installed {% endif %}
+      ---
 
-        <hr>
-
-        Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB
-        detected)*{% endif %}
-
-
-        Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }}
-        days){% else %}no purge configured — DB may grow indefinitely{% endif %}
-
-
-        {{ 'Entity filter active' if filter else 'No entity filter' }}
-
-
-        {% if keep in [none, 'unknown'] or not filter %}
-        💡 Tips to improve your score:
-        {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
-        {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
-        {% endif %}
-
-
-        ---
-
-        **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
-        hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM
-        + Disk) — hardware score uses 3 components{% endif %}
+      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
+      {% endif %}
   - type: markdown
     title: 🧟 Zombie Entities
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set z_raw =
-      state_attr(e, 'zombie_entities') | default([], true) %} {% set z_count =
-      state_attr(e, 'zombie_count') | int(0) %}
+      {% set e = 'sensor.system_ha_global_health_score' %}
 
-      {% if z_count == 0 %}
-        ✅ No zombie entities detected.
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set z_raw = state_attr(e,
+      'zombie_entities') | default([], true) %} {% set z_count = state_attr(e,
+      'zombie_count') | int(0) %}
+
+      {% if z_count == 0 %} ✅ No zombie entities detected. {% else %}
+      {% if z_raw is string %}
+        {% set z_list = z_raw.split(',') | map('trim') | list %}
       {% else %}
-        {% if z_raw is string %}
-          {% set z_list = z_raw.split(',') | map('trim') | list %}
-        {% else %}
-          {% set z_list = z_raw | list %}
-        {% endif %}
-        {% set grouped = expand(z_list) | groupby('domain') %}
+        {% set z_list = z_raw | list %}
+      {% endif %}
+      {% set grouped = expand(z_list) | groupby('domain') %}
 
-        {# Domain count: prefer the HAGHS v2.3+ attribute when present.
-           Fall back to extracting the distinct domains from z_list so the
-           card keeps working on older HAGHS versions that do not expose
-           zombie_count_per_domain. #}
-        {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
-        {% if per_domain %}
-          {% set domain_count = per_domain | length %}
-        {% else %}
-          {% set ns = namespace(seen=[]) %}
-          {% for entry in z_list %}
-            {% set dom = entry.split('.')[0] %}
-            {% if dom not in ns.seen %}
-              {% set ns.seen = ns.seen + [dom] %}
-            {% endif %}
-          {% endfor %}
-          {% set domain_count = ns.seen | length %}
-        {% endif %}
-
-        {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
-        {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
-        {% if z_count > z_list | length %}*(showing first {{ z_list | length }} — {{ z_count - z_list | length }} more hidden)*{% endif %}
-
-        {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
-
-        {% for domain in grouped %}
-        <details>
-        <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
-        {% for item in domain[1] %}
-        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
+      {# Domain count: prefer the HAGHS v2.3+ attribute when present.
+         Fall back to extracting the distinct domains from z_list so the
+         card keeps working on older HAGHS versions that do not expose
+         zombie_count_per_domain. #}
+      {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
+      {% if per_domain %}
+        {% set domain_count = per_domain | length %}
+      {% else %}
+        {% set ns = namespace(seen=[]) %}
+        {% for entry in z_list %}
+          {% set dom = entry.split('.')[0] %}
+          {% if dom not in ns.seen %}
+            {% set ns.seen = ns.seen + [dom] %}
+          {% endif %}
         {% endfor %}
-        </details>
-        {% endfor %}
-
-        {% set u_raw = state_attr(e, 'unregistered_entities') | default([], true) %} {% set u_count = state_attr(e, 'unregistered_count') | int(0) %}
-        {% if u_count > 0 %}
-        <details>
-        <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
-        {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
-        &nbsp;&nbsp; • `{{ entry }}`
-        {% endfor %}
-        </details>
-        {% endif %}
+        {% set domain_count = ns.seen | length %}
       {% endif %}
 
+      {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
+      {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+      {% if z_count > z_list | length %}*(showing first {{ z_list | length }}, {{ z_count - z_list | length }} more hidden)*{% endif %}
+
+      {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
+
+      {% for domain in grouped %}
+      <details>
+      <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
+      {% for item in domain[1] %}
+      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
+      {% endfor %}
+      </details>
+      {% endfor %}
+      {% endif %}
+
+      {% set u_raw = state_attr(e, 'unregistered_entities') | default([], true) %} {% set u_count = state_attr(e, 'unregistered_count') | int(0) %}
+      {% if u_count > 0 %}
+      <details>
+      <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
+      {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
+      &nbsp;&nbsp; • `{{ entry }}`
+      {% endfor %}
+      </details>
+      {% endif %}
+
+      {% set d_raw = state_attr(e, 'dead_devices') | default([], true) %} {% set d_count = state_attr(e, 'dead_device_count') | int(0) %}
+      {% if d_count > 0 %}
+      <details>
+      <summary>💀 Dead devices (informational, no score impact): {{ d_count }}</summary>
+      {% for d in d_raw %}
+      &nbsp;&nbsp; • {{ d }}
+      {% endfor %}
+      </details>
+      {% endif %}
+
+      {% endif %}
 ```
 
 ### Lite vs. Pro Comparison
@@ -570,8 +605,11 @@ cards:
 | Advisor recommendations (CPU, RAM, I/O, ...) | Inline | Dedicated card |
 | Pending updates (by name) | Count + link | Full list + deep-link |
 | Zombie details (by domain) | Count + link | Grouped + expandable |
-| Database size + warning | — | Yes |
-| Recorder health (purge + filter) | — | Yes |
+| Repairs & unhealthy integrations | Count + link | Count + list + deep-link |
+| Dead devices (informational) | Count | Expandable list |
+| Config-Audit bonus (earned) | No | Yes |
+| Database size + warning | No | Yes |
+| Recorder health (purge + filter) | No | Yes |
 | Metric source (PSI vs. Classic + component count) | Yes (detailed) | Yes (detailed) |
 | Deep-links to HA settings | Yes | Yes |
 
