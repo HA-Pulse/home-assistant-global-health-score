@@ -21,9 +21,9 @@ pytest --cov=custom_components.haghs --cov-report=term-missing
 coverage report --include='custom_components/haghs/coordinator.py' --fail-under=80
 ```
 
-The CI gate fails below 65 % for the package (`--cov-fail-under` in
+The CI gate fails below 90 % for the package (`--cov-fail-under` in
 `.github/workflows/ci.yml`), and `coordinator.py` is gated at 80 % on top of
-that (issue #107). Current state: `coordinator.py` 100 %, package 87 %.
+that (issue #107). Current state: `coordinator.py` 100 %, package 93 %.
 
 ## Linting
 
