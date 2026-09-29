@@ -38,7 +38,7 @@ closed.
 ## Changelog
 
 - Every change that lands on `dev` must include a matching entry in
-  `v2.3_CHANGELOG.md` (or the current active changelog file).
+  the current active changelog file (`v2.4.0_CHANGELOG.md`).
 - The entry should describe the *why*, list files touched, and flag any
   behavior change users might notice.
 - Silent behavior changes (constant removal, default changes, etc.) must be

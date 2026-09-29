@@ -118,9 +118,9 @@ Add one line per run, most recent on top:
 
 ## Roadmap
 
-Per issue #54 the suite grows in three phases:
+Per issue #54 the suite grew in three phases; all three are complete:
 
-1. Infrastructure (this commit).
+1. Infrastructure.
 2. Migration tests covering every branch of `_migrate_ignore_label_value` and
-   `async_migrate_entry`.
-3. Scoring-pillar pilot test (suggested: `p_power` / power supply detection).
+   `async_migrate_entry` (`tests/test_migration.py`).
+3. Scoring-pillar pilot test (`tests/test_hardware_power.py`, `p_power`).

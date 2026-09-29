@@ -52,6 +52,9 @@
     "fallback_missing": {
       "title": "PSI is unavailable and fallback sensors are missing",
       "fix_flow": {
+        "abort": {
+          "config_entry_missing": "The HAGHS configuration entry no longer exists."
+        },
         "step": {
           "confirm": {
             "title": "Configure CPU and RAM fallback sensors",
