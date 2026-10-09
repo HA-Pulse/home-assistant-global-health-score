@@ -8,6 +8,11 @@ const.py.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import (
     CONFIG_AUDIT_MAX_BONUS,
@@ -28,6 +33,44 @@ def _app_with_full_bonus() -> _ApplicationResult:
     return _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS)
 
 
+@pytest.mark.parametrize("filename", ["strings.json", "translations/en.json"])
+@pytest.mark.parametrize(
+    ("key_path", "expected"),
+    [
+        (
+            ("common", "rec_power_unstable"),
+            "⚠️ Power: Under-voltage detected: unstable power supply!",
+        ),
+        (
+            ("config", "step", "user", "description"),
+            "HAGHS monitors your Home Assistant instance and calculates a health "
+            "score from 0 to 100. Database size, disk usage, and update status are "
+            "detected automatically, you only need to provide the two fields below.",
+        ),
+    ],
+    ids=["power", "setup"],
+)
+def test_user_facing_punctuation(filename: str, key_path: tuple[str, ...], expected: str) -> None:
+    """Each target text must have the approved wording without long dashes."""
+    integration_dir = Path(__file__).resolve().parents[1] / "custom_components" / "haghs"
+    value = json.loads((integration_dir / filename).read_text(encoding="utf-8"))
+    for key in key_path:
+        value = value[key]
+    assert value == expected
+    assert "\u2013" not in value
+    assert "\u2014" not in value
+
+
+def test_json_mirror_and_power_fallback() -> None:
+    """The complete English JSON and power fallback must stay aligned."""
+    integration_dir = Path(__file__).resolve().parents[1] / "custom_components" / "haghs"
+    strings = json.loads((integration_dir / "strings.json").read_text(encoding="utf-8"))
+    english = json.loads((integration_dir / "translations" / "en.json").read_text(encoding="utf-8"))
+    assert strings == english
+    assert strings["common"]["rec_power_unstable"] == REC_POWER_UNSTABLE
+    assert REC_POWER_UNSTABLE == REC_TEMPLATES["rec_power_unstable"]
+
+
 async def test_english_translations_mirror_const_templates(hass) -> None:
     """translations/en.json must mirror the const.py defaults byte-identically."""
     coord = make_coordinator(hass)
@@ -35,6 +78,9 @@ async def test_english_translations_mirror_const_templates(hass) -> None:
     assert loaded
     for key, template in REC_TEMPLATES.items():
         assert loaded[key] == template
+    assert loaded["rec_power_unstable"] == (
+        "⚠️ Power: Under-voltage detected: unstable power supply!"
+    )
 
 
 async def test_missing_language_falls_back_to_english(hass) -> None:
@@ -51,6 +97,9 @@ def test_lookup_miss_uses_const_default(hass) -> None:
     coord = make_coordinator(hass)
     hw = _HardwareResult(p_power=1)
     assert coord._build_recommendations(hw, _app_with_full_bonus()) == [REC_POWER_UNSTABLE]
+    assert coord._build_recommendations(hw, _app_with_full_bonus()) == [
+        "⚠️ Power: Under-voltage detected: unstable power supply!"
+    ]
 
 
 def test_override_is_used_and_flag_pairing_holds(hass) -> None:

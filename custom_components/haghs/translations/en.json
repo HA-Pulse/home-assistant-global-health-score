@@ -12,7 +12,7 @@
     "rec_disk_ssd_low": "⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!",
     "rec_integration_health": "🧩 Integrations: {count} integration(s) failed to set up.",
     "rec_io_pressure": "⚡ Optimization: I/O pressure is impacting score ({io_pct:.1f}%).",
-    "rec_power_unstable": "⚠️ Power: Under-voltage detected — unstable power supply!",
+    "rec_power_unstable": "⚠️ Power: Under-voltage detected: unstable power supply!",
     "rec_ram_pressure_classic": "⚡ Optimization: Memory utilization is impacting score ({ram_pct:.1f}%).",
     "rec_ram_pressure_psi": "⚡ Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%).",
     "rec_repairs": "🛠️ Repairs: {count} open repair issue(s) detected.",
@@ -23,7 +23,7 @@
     "step": {
       "user": {
         "title": "Set up Global Health Score",
-        "description": "HAGHS monitors your Home Assistant instance and calculates a health score from 0 to 100. Database size, disk usage, and update status are detected automatically — you only need to provide the two fields below.",
+        "description": "HAGHS monitors your Home Assistant instance and calculates a health score from 0 to 100. Database size, disk usage, and update status are detected automatically, you only need to provide the two fields below.",
         "data": {
           "cpu_sensor": "CPU usage sensor",
           "ram_sensor": "RAM usage sensor",
