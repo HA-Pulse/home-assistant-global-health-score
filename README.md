@@ -543,7 +543,7 @@ cards:
         <details>
         <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
         {% for item in domain[1] %}
-        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
+        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — [{{ item.name }}](/config/entities?more-info-entity-id={{ item.entity_id }}) (`{{ item.entity_id }}`): {{ item.state }}
         {% endfor %}
         </details>
         {% endfor %}
