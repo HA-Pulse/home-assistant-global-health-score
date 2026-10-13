@@ -981,16 +981,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def _calc_dead_devices(self) -> tuple[list[str], int]:
-        """Detect dead devices: every entity unavailable/unknown past grace.
+        """Detect devices with every monitored entity unavailable past grace.
 
-        A "dead device" has at least one registered entity and all of its
-        entities (with a state, not disabled) are unavailable/unknown beyond
-        the zombie grace window. Devices without entities are out of scope
+        A "dead device" has at least one registered entity in ZOMBIE_DOMAINS
+        and all of its monitored entities (with a state, not disabled) are
+        unavailable beyond their respective grace windows. Unknown states
+        do not count as outages. Devices without monitored entities are out of scope
         (#93). Informational only: no score impact, the entity-level zombie
         points stay authoritative (#120).
 
         Ignore semantics: ignored entities still count for the fact that
-        *every* entity is unavailable, so the rendered text cannot lie. The
+        *every monitored* entity is unavailable, so the rendered text cannot lie. The
         device stays silent when no non-ignored entity is left (device
         label, all entities ignored via labels or patterns).
 
@@ -1006,11 +1007,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         now = dt_util.utcnow()
 
-        # Candidate pass: devices with at least one entity past grace that
-        # is currently unavailable/unknown.
+        # Candidate pass: devices with at least one monitored entity past
+        # grace that is currently unavailable.
         candidate_ids: set[str] = set()
         for state in self.hass.states.async_all():
-            if state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            if state.domain not in ZOMBIE_DOMAINS or state.state != STATE_UNAVAILABLE:
                 continue
             entity_entry = ent_reg.async_get(state.entity_id)
             if entity_entry is None or entity_entry.device_id is None:
@@ -1031,15 +1032,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ignored = 0
             for entry in entries:
                 entity_state = self.hass.states.get(entry.entity_id)
-                if entity_state is None:
+                if entity_state is None or entity_state.domain not in ZOMBIE_DOMAINS:
                     continue
                 relevant += 1
                 if self._is_ignored(entry.entity_id, entry):
                     ignored += 1
-                if entity_state.state in (
-                    STATE_UNAVAILABLE,
-                    STATE_UNKNOWN,
-                ) and self._past_grace(entity_state, now):
+                if entity_state.state == STATE_UNAVAILABLE and self._past_grace(entity_state, now):
                     dead += 1
             if relevant == 0 or dead < relevant or ignored >= relevant:
                 continue
