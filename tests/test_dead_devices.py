@@ -1,20 +1,24 @@
 """Tests for dead-device detection (#120).
 
-A dead device has at least one registered entity, and all of its entities
-are unavailable/unknown past the zombie grace window. The detector is
+A dead device has at least one monitored registered entity, and all of its
+monitored entities are unavailable past the zombie grace window. The detector is
 informational: it adds no score penalty, the entity-level zombie points
 stay authoritative.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
-from homeassistant.const import STATE_UNAVAILABLE
+import pytest
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -77,6 +81,40 @@ async def test_dead_device_detected(hass: HomeAssistant) -> None:
 
     assert dead_count == 1
     assert dead_list == ["dead_plug"]
+
+
+async def test_only_disabled_entities_do_not_flag_device(hass: HomeAssistant) -> None:
+    """Disabled unavailable entries cannot establish a dead device."""
+    device = _make_device(hass, "disabled_only")
+    registry = er.async_get(hass)
+    for index in range(2):
+        entity_id = _make_entity(hass, device.id, f"disabled_only_{index}")
+        registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    coord = make_coordinator(hass)
+
+    assert coord._calc_dead_devices() == ([], 0)
+
+
+@pytest.mark.parametrize("disabled_state", ["42", STATE_UNKNOWN])
+async def test_disabled_entity_does_not_prevent_dead_device(
+    hass: HomeAssistant, disabled_state: str
+) -> None:
+    """Disabled live or unknown entries cannot mask an enabled outage."""
+    device = _make_device(hass, "enabled_outage")
+    _make_entity(hass, device.id, "enabled_outage_dead")
+    disabled_id = _make_entity(
+        hass, device.id, "enabled_outage_disabled", unavailable_age_minutes=None
+    )
+    hass.states.async_set(disabled_id, disabled_state)
+    registry = er.async_get(hass)
+    coord = make_coordinator(hass)
+
+    assert coord._calc_dead_devices() == ([], 0)
+
+    registry.async_update_entity(disabled_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    assert coord._calc_dead_devices() == (["enabled_outage"], 1)
 
 
 async def test_dead_device_with_live_entity_not_flagged(hass: HomeAssistant) -> None:
@@ -266,3 +304,170 @@ async def test_vanished_device_is_skipped(hass: HomeAssistant, monkeypatch) -> N
     coord = make_coordinator(hass)
 
     assert coord._calc_dead_devices() == ([], 0)
+
+
+async def test_device_ignore_uses_label_id_not_display_name(hass: HomeAssistant) -> None:
+    """A renamed label excludes by its ID, including after device assignment."""
+    labels = lr.async_get(hass)
+    label = labels.async_create("haghs_ignore_2")
+    label = labels.async_update(label.label_id, name="haghs_ignore")
+    assert label.label_id == "haghs_ignore_2"
+    assert label.name == "haghs_ignore"
+
+    device = _make_device(hass, "renamed_label_device")
+    _make_entity(hass, device.id, "renamed_label_entity")
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    assert coord._calc_dead_devices() == (["renamed_label_device"], 1)
+
+    dr.async_get(hass).async_update_device(device.id, labels={label.label_id})
+    assert coord._calc_dead_devices() == ([], 0)
+
+    wrong_id_coord = make_coordinator(hass, options={"ignore_labels": [label.name]})
+    assert wrong_id_coord._calc_dead_devices() == (["renamed_label_device"], 1)
+
+
+async def test_device_label_not_selected_does_not_exclude(hass: HomeAssistant) -> None:
+    """A device label alone is not an exclusion without matching options."""
+    label = lr.async_get(hass).async_create("haghs_ignore")
+    device = _make_device(hass, "unselected_label_device")
+    _make_entity(hass, device.id, "unselected_label_entity")
+    dr.async_get(hass).async_update_device(device.id, labels={label.label_id})
+
+    coord = make_coordinator(hass, options={"ignore_labels": []})
+    assert coord._calc_dead_devices() == (["unselected_label_device"], 1)
+
+
+async def test_dead_entity_without_device_is_not_dead_device(hass: HomeAssistant) -> None:
+    """A registered unavailable entity without a device cannot add a dead device."""
+    label = lr.async_get(hass).async_create("haghs_ignore")
+    labeled_device = _make_device(hass, "unrelated_labeled_device")
+    dr.async_get(hass).async_update_device(labeled_device.id, labels={label.label_id})
+    entity = er.async_get(hass).async_get_or_create(
+        "sensor",
+        "test_platform",
+        "uid_orphan_dead_entity",
+        suggested_object_id="orphan_dead_entity",
+    )
+    assert entity.device_id is None
+    hass.states.async_set(entity.entity_id, STATE_UNAVAILABLE)
+    hass.states.get(entity.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
+
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    assert coord._calc_dead_devices() == ([], 0)
+
+
+async def test_label_on_other_device_does_not_exclude(hass: HomeAssistant) -> None:
+    """Only entities associated with the labeled device inherit its exclusion."""
+    label = lr.async_get(hass).async_create("haghs_ignore")
+    labeled_device = _make_device(hass, "labeled_device")
+    other_device = _make_device(hass, "other_device")
+    _make_entity(hass, labeled_device.id, "labeled_device_dead_entity")
+    other_entity_id = _make_entity(hass, other_device.id, "other_device_dead_entity")
+    dr.async_get(hass).async_update_device(labeled_device.id, labels={label.label_id})
+    assert er.async_get(hass).async_get(other_entity_id).device_id == other_device.id
+
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    assert coord._calc_dead_devices() == (["other_device"], 1)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "entities", "expected_unlabeled_count"),
+    [
+        ("scene_only", (("scene", STATE_UNKNOWN),), 0),
+        ("tts_only", (("tts", STATE_UNKNOWN),), 0),
+        ("sensor_unknown", (("sensor", STATE_UNKNOWN),), 0),
+        ("scene_unavailable", (("scene", STATE_UNAVAILABLE),), 0),
+        ("tts_unavailable", (("tts", STATE_UNAVAILABLE),), 0),
+        (
+            "mixed_unknown",
+            (("sensor", STATE_UNAVAILABLE), ("select", STATE_UNKNOWN)),
+            0,
+        ),
+        (
+            "unmonitored_live",
+            (("sensor", STATE_UNAVAILABLE), ("scene", "ready")),
+            1,
+        ),
+        (
+            "hue_scene_selector",
+            (("scene", STATE_UNKNOWN), ("select", STATE_UNKNOWN)),
+            0,
+        ),
+        (
+            "offline_hardware",
+            (("light", STATE_UNAVAILABLE), ("sensor", STATE_UNAVAILABLE)),
+            1,
+        ),
+    ],
+)
+@pytest.mark.parametrize("ignored", [False, True])
+async def test_143_dead_device_unknown_domain_hypotheses(
+    hass: HomeAssistant,
+    scenario: str,
+    entities: tuple[tuple[str, str], ...],
+    expected_unlabeled_count: int,
+    ignored: bool,
+) -> None:
+    """Probe reported idle states and device-label exclusion separately."""
+    label = lr.async_get(hass).async_create("Diagnostic device exclusion")
+    device = _make_device(hass, scenario)
+    registry = er.async_get(hass)
+    for index, (domain, state_value) in enumerate(entities):
+        entry = registry.async_get_or_create(
+            domain,
+            "test_platform",
+            f"uid_143_{scenario}_{index}",
+            suggested_object_id=f"issue_143_{scenario}_{index}",
+            device_id=device.id,
+        )
+        hass.states.async_set(entry.entity_id, state_value)
+        hass.states.get(entry.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
+
+    if ignored:
+        dr.async_get(hass).async_update_device(device.id, labels={label.label_id})
+
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    actual = coord._calc_dead_devices()
+    expected_count = 0 if ignored else expected_unlabeled_count
+    expected_names = [scenario] if expected_count else []
+
+    assert actual == (expected_names, expected_count), (
+        f"{scenario}, ignored={ignored}: actual={actual}, "
+        f"expected={(expected_names, expected_count)}"
+    )
+
+
+def test_dead_device_recommendation_wording() -> None:
+    """The English sources describe only monitored entities past grace."""
+    expected = (
+        "🔌 Devices: {count} device(s) with all monitored entities "
+        "unavailable past the grace period."
+    )
+    assert REC_DEAD_DEVICES == expected
+    root = Path(__file__).parents[1] / "custom_components" / "haghs"
+    for relative_path in ("strings.json", "translations/en.json"):
+        data = json.loads((root / relative_path).read_text())
+        assert data["common"]["rec_dead_devices"] == expected
+
+
+@pytest.mark.parametrize("count", [0, 2])
+@pytest.mark.parametrize("translated", [False, True])
+async def test_dead_device_translation_and_fallback(
+    hass: HomeAssistant, monkeypatch, count: int, translated: bool
+) -> None:
+    """Translation lookup, fallback and the flag agree with the count."""
+    template = "Geräte: {count} mit allen überwachten Entitäten nicht verfügbar."
+
+    async def translations(*args, **kwargs) -> dict[str, str]:
+        return {"component.haghs.common.rec_dead_devices": template} if translated else {}
+
+    monkeypatch.setattr(coordinator_module, "async_get_translations", translations)
+    coord = make_coordinator(hass)
+    coord._rec_translations = await coord._async_load_rec_translations()
+    hw = _HardwareResult()
+    app = _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS, dead_device_count=count)
+    expected = template if translated else REC_DEAD_DEVICES
+    assert coord._build_recommendations(hw, app) == (
+        [expected.format(count=count)] if count else []
+    )
+    assert coord._build_rec_flags(hw, app)["rec_dead_devices"] is bool(count)

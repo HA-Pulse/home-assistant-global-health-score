@@ -100,7 +100,10 @@ REC_CONFIG_AUDIT = (
     "(recorder purge days / entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
-REC_DEAD_DEVICES = "\U0001f50c Devices: {count} device(s) with all entities unavailable."
+REC_DEAD_DEVICES = (
+    "\U0001f50c Devices: {count} device(s) with all monitored entities "
+    "unavailable past the grace period."
+)
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
