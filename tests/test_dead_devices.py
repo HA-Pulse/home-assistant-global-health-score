@@ -83,6 +83,40 @@ async def test_dead_device_detected(hass: HomeAssistant) -> None:
     assert dead_list == ["dead_plug"]
 
 
+async def test_only_disabled_entities_do_not_flag_device(hass: HomeAssistant) -> None:
+    """Disabled unavailable entries cannot establish a dead device."""
+    device = _make_device(hass, "disabled_only")
+    registry = er.async_get(hass)
+    for index in range(2):
+        entity_id = _make_entity(hass, device.id, f"disabled_only_{index}")
+        registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    coord = make_coordinator(hass)
+
+    assert coord._calc_dead_devices() == ([], 0)
+
+
+@pytest.mark.parametrize("disabled_state", ["42", STATE_UNKNOWN])
+async def test_disabled_entity_does_not_prevent_dead_device(
+    hass: HomeAssistant, disabled_state: str
+) -> None:
+    """Disabled live or unknown entries cannot mask an enabled outage."""
+    device = _make_device(hass, "enabled_outage")
+    _make_entity(hass, device.id, "enabled_outage_dead")
+    disabled_id = _make_entity(
+        hass, device.id, "enabled_outage_disabled", unavailable_age_minutes=None
+    )
+    hass.states.async_set(disabled_id, disabled_state)
+    registry = er.async_get(hass)
+    coord = make_coordinator(hass)
+
+    assert coord._calc_dead_devices() == ([], 0)
+
+    registry.async_update_entity(disabled_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    assert coord._calc_dead_devices() == (["enabled_outage"], 1)
+
+
 async def test_dead_device_with_live_entity_not_flagged(hass: HomeAssistant) -> None:
     """One live entity keeps the whole device off the list."""
     device = _make_device(hass, "half_alive")
