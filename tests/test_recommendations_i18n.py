@@ -9,9 +9,13 @@ const.py.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from string import Formatter
+from typing import Any
 
 import pytest
+from homeassistant.helpers.translation import async_get_translations
 
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import (
@@ -90,6 +94,116 @@ async def test_missing_language_falls_back_to_english(hass) -> None:
     loaded = await coord._async_load_rec_translations()
     for key, template in REC_TEMPLATES.items():
         assert loaded[key] == template
+
+
+async def test_brazilian_portuguese_recommendations(hass) -> None:
+    """Load real Portuguese translations and render the device recommendation."""
+    hass.config.language = "pt-BR"
+    coord = make_coordinator(hass)
+    loaded = await coord._async_load_rec_translations()
+    assert loaded["rec_all_clear"] == "✅ Sistema otimizado"
+    coord._rec_translations = loaded
+    advice = coord._build_recommendations(
+        _HardwareResult(),
+        _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS, dead_device_count=2),
+    )
+    assert advice == [
+        "🔌 Dispositivos: 2 dispositivo(s) com todas as entidades monitoradas "
+        "indisponíveis após o término dos respectivos períodos de tolerância."
+    ]
+
+
+def _translation_leaves(data: dict[str, object], prefix: str = "") -> dict[str, str]:
+    """Flatten translation paths without losing their category."""
+    leaves: dict[str, str] = {}
+    for key, value in data.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            leaves.update(_translation_leaves(value, path))
+        else:
+            assert isinstance(value, str), path
+            leaves[path] = value
+    return leaves
+
+
+@pytest.fixture
+def portuguese_translation() -> dict[str, Any]:
+    """Read the Portuguese catalog outside the event loop."""
+    integration_dir = Path(__file__).resolve().parents[1] / "custom_components" / "haghs"
+    return json.loads((integration_dir / "translations/pt-BR.json").read_text(encoding="utf-8"))
+
+
+def test_brazilian_portuguese_translation_contract(portuguese_translation: dict[str, Any]) -> None:
+    """Preserve every English key, format field and technical example."""
+    integration_dir = Path(__file__).resolve().parents[1] / "custom_components" / "haghs"
+    english = json.loads((integration_dir / "translations/en.json").read_text(encoding="utf-8"))
+    portuguese = portuguese_translation
+    english_leaves = _translation_leaves(english)
+    portuguese_leaves = _translation_leaves(portuguese)
+    assert portuguese_leaves.keys() == english_leaves.keys()
+    formatter = Formatter()
+    for path, original in english_leaves.items():
+        translated = portuguese_leaves[path]
+        assert translated.strip(), path
+        assert "\u2013" not in translated, path
+        assert "\u2014" not in translated, path
+        original_fields = sorted(
+            (field, spec, conversion)
+            for _, field, spec, conversion in formatter.parse(original)
+            if field is not None
+        )
+        translated_fields = sorted(
+            (field, spec, conversion)
+            for _, field, spec, conversion in formatter.parse(translated)
+            if field is not None
+        )
+        assert translated_fields == original_fields, path
+        assert re.findall(r"\d+(?:\.\d+)?", translated) == re.findall(r"\d+(?:\.\d+)?", original), (
+            path
+        )
+        for token in (
+            "entity_id",
+            "sensor.docker_*",
+            "sensor.mariadb_size",
+            "homeassistant.add_label_to_entity",
+            "homeassistant.remove_label_from_entity",
+            "device_class: battery",
+            "MB",
+            "GB",
+        ):
+            if token in original:
+                assert token in translated, (path, token)
+        if path.startswith("common."):
+            values = {
+                field: "SSD" if field == "storage_type" else 2 for field, _, _ in original_fields
+            }
+            assert translated.format(**values)
+    config = portuguese["config"]["step"]["user"]
+    options = portuguese["options"]["step"]["init"]
+    for section in ("data", "data_description"):
+        for key, value in config[section].items():
+            assert options[section][key] == value, (section, key)
+    descriptions = options["data_description"]
+    assert "device_class: bateria" not in descriptions["battery_grace_minutes"]
+    assert "entidade_id" not in descriptions["ignore_patterns"]
+    assert "'unavailable'" in descriptions["zombie_grace_minutes"]
+    assert "'unknown'" in descriptions["zombie_grace_minutes"]
+    for key in ("zombie_grace_minutes", "battery_grace_minutes"):
+        assert "1 a 240 minutos" in descriptions[key]
+    assert "Padrão: 5 minutos." in descriptions["zombie_grace_minutes"]
+    assert "Padrão: 60 minutos." in descriptions["battery_grace_minutes"]
+    assert "Padrão: 60 segundos." in descriptions["update_interval"]
+
+
+@pytest.mark.parametrize("category", ["config", "options", "issues", "exceptions"])
+async def test_brazilian_portuguese_dialog_translations(
+    hass, category: str, portuguese_translation: dict[str, Any]
+) -> None:
+    """HA loads every supplied dialog string in Brazilian Portuguese."""
+    expected = _translation_leaves({category: portuguese_translation[category]})
+    loaded = await async_get_translations(hass, "pt-BR", category, integrations=["haghs"])
+    for path, text in expected.items():
+        assert loaded[f"component.haghs.{path}"] == text
 
 
 def test_lookup_miss_uses_const_default(hass) -> None:
