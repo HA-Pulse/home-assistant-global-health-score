@@ -111,6 +111,10 @@ REC_DEAD_DEVICES = (
 # default. The coordinator uses this as the final fallback when no translation
 # is available for the configured language.
 REC_TEMPLATES: dict[str, str] = {
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Application",
+    "rec_pillar_fallback": "⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.",
+    "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": REC_ALL_CLEAR,
     "rec_backup_stale": REC_BACKUP_STALE,
     "rec_config_audit": REC_CONFIG_AUDIT,
@@ -165,6 +169,8 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_config_audit",
     "rec_repairs",
     "rec_dead_devices",
+    "rec_pillar_fallback",
+    "rec_update_failed",
 )
 
 

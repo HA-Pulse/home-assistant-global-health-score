@@ -139,3 +139,33 @@ async def test_update_cycle_resolves_translations(hass, monkeypatch) -> None:
         result = await coord._async_update_data_inner()
     assert "rec_all_clear" in coord._rec_translations
     assert result["recommendations"] == REC_ALL_CLEAR
+
+
+@pytest.mark.parametrize("language", ["en", "zz"])
+async def test_failure_translation_lookup_and_placeholders(hass, language):
+    """New warning and pillar keys resolve through HA, then the const fallback."""
+    hass.config.language = language
+    coord = make_coordinator(hass)
+    loaded = await coord._async_load_rec_translations()
+    for key in (
+        "pillar_hardware",
+        "pillar_application",
+        "rec_pillar_fallback",
+        "rec_update_failed",
+    ):
+        assert loaded.get(key) == REC_TEMPLATES[key]
+    coord._rec_translations = loaded
+    coord._pillar_fallbacks = {"application", "hardware"}
+    assert coord._failure_recommendations() == [
+        REC_TEMPLATES["rec_pillar_fallback"].format(pillars="Hardware, Application")
+    ]
+    coord._rec_translations = {
+        "pillar_hardware": "Gerät",
+        "pillar_application": "Anwendung",
+        "rec_pillar_fallback": "Fehler: {pillars}",
+    }
+    assert coord._failure_recommendations() == ["Fehler: Gerät, Anwendung"]
+    coord._rec_translations = {}
+    assert coord._failure_recommendations() == [
+        REC_TEMPLATES["rec_pillar_fallback"].format(pillars="Hardware, Application")
+    ]

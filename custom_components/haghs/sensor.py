@@ -73,5 +73,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "repairs": data["repairs"],
             "pending_updates": data["pending_updates"],
             "recommendations": data["recommendations"],
+            "pillar_fallback_count": data["pillar_fallback_count"],
+            "pillar_fallbacks": data["pillar_fallbacks"],
+            "update_cycle_failed": data["update_cycle_failed"],
             **{k: data[k] for k in REC_FLAG_KEYS},
         }
