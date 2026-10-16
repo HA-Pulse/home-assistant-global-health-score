@@ -525,6 +525,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
             "recommendations": "",
+            "pillar_fallbacks": [],
+            "pillar_fallback_count": 0,
+            "update_cycle_failed": False,
             **{key: False for key in REC_FLAG_KEYS},
         }
 

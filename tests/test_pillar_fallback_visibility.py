@@ -35,6 +35,16 @@ async def test_application_failure_is_visible_without_invented_diagnosis(hass, m
     assert "✅" not in result["recommendations"]
 
 
+async def test_neutral_result_includes_empty_failure_attributes(hass):
+    coord = make_coordinator(hass)
+    result = coord._neutral_result()
+    assert result["pillar_fallbacks"] == []
+    assert result["pillar_fallback_count"] == 0
+    assert result["update_cycle_failed"] is False
+    assert result["rec_pillar_fallback"] is False
+    assert result["rec_update_failed"] is False
+
+
 async def test_sensor_exports_current_failures(hass, monkeypatch):
     coord = make_coordinator(hass)
     monkeypatch.setattr(coord, "_async_calc_hardware", AsyncMock(side_effect=RuntimeError("boom")))
