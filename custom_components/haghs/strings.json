@@ -1,5 +1,9 @@
 {
   "common": {
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Application",
+    "rec_pillar_fallback": "⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.",
+    "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": "✅ System optimized",
     "rec_backup_stale": "🚨 Security: Stale backup detected!",
     "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder purge days / entity filter).",

@@ -251,6 +251,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Empty until the first update cycle; the const.py defaults always
         # apply as the final fallback.
         self._rec_translations: dict[str, str] = {}
+        self._pillar_fallbacks: set[str] = set()
 
         # Grace windows are user-configurable in the Options Flow. Both
         # values are stored in minutes for friendlier UX, multiplied to
@@ -371,13 +372,33 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         neutral result is returned. Every failure is logged with a full
         traceback so silent stalls become diagnosable.
         """
+        self._pillar_fallbacks.clear()
         try:
             return await self._async_update_data_inner()
         except Exception:
             _LOGGER.exception("HAGHS: update cycle failed — keeping last result")
-            if self.data:
-                return self.data
-            return self._neutral_result()
+            result = dict(self.data) if self.data else self._neutral_result()
+            result.update(self._failure_attributes())
+            result["update_cycle_failed"] = True
+            result["rec_update_failed"] = True
+            # Do not reuse failed result, flag or advice builders. Text lookup
+            # and formatting may themselves be the cause of the outer failure.
+            try:
+                warnings = self._failure_recommendations()
+                warnings.append(self._rec("rec_update_failed"))
+                result["recommendations"] = "\n".join(warnings)
+            except Exception:
+                pillars = result["pillar_fallbacks"]
+                warnings = []
+                if pillars:
+                    warnings.append(
+                        REC_TEMPLATES["rec_pillar_fallback"].format(
+                            pillars=", ".join(REC_TEMPLATES[f"pillar_{name}"] for name in pillars)
+                        )
+                    )
+                warnings.append(REC_TEMPLATES["rec_update_failed"])
+                result["recommendations"] = "\n".join(warnings)
+            return result
 
     async def _async_update_data_inner(self) -> dict[str, Any]:
         """Run the guarded sub-calculations and assemble the result.
@@ -386,6 +407,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         exception the affected pillar falls back to a neutral score
         (100 / no penalty) and a warning is logged.
         """
+        self._pillar_fallbacks: set[str] = set()
         # Recorder info — read before app pillar so config audit can use it
         self.recorder_info = self._read_recorder_info()
 
@@ -439,8 +461,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
             "recommendations": ("\n".join(advice) if advice else self._rec("rec_all_clear")),
+            **self._failure_attributes(),
             **rec_flags,
         }
+
+    def _failure_attributes(self) -> dict[str, Any]:
+        """Describe only the pillar failures observed in this attempt."""
+        pillars = [
+            name
+            for name in ("hardware", "application")
+            if name in getattr(self, "_pillar_fallbacks", set())
+        ]
+        return {
+            "pillar_fallback_count": len(pillars),
+            "pillar_fallbacks": pillars,
+            "update_cycle_failed": False,
+            "rec_pillar_fallback": bool(pillars),
+            "rec_update_failed": False,
+        }
+
+    def _failure_recommendations(self) -> list[str]:
+        """Render the affected pillars with the normal translation lookup."""
+        pillars = self._failure_attributes()["pillar_fallbacks"]
+        if not pillars:
+            return []
+        return [
+            self._rec("rec_pillar_fallback").format(
+                pillars=", ".join(self._rec(f"pillar_{name}") for name in pillars)
+            )
+        ]
 
     def _neutral_result(self) -> dict[str, Any]:
         """Neutral result for the very first failed update.
@@ -475,7 +524,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "repair_count": app.repair_count,
             "repairs": app.repair_list,
             "pending_updates": app.pending_updates,
-            "recommendations": self._rec("rec_all_clear"),
+            "recommendations": "",
             **{key: False for key in REC_FLAG_KEYS},
         }
 
@@ -489,6 +538,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             return await asyncio.wait_for(coro, timeout=PILLAR_TIMEOUT)
         except TimeoutError:
+            self._pillar_fallbacks.add(name)
             _LOGGER.warning(
                 "HAGHS: %s calculation timed out after %ss — using neutral score",
                 name,
@@ -496,6 +546,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             return fallback
         except Exception:
+            self._pillar_fallbacks.add(name)
             _LOGGER.warning(
                 "HAGHS: %s calculation failed — using neutral score",
                 name,
@@ -1376,13 +1427,13 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._rec("rec_integration_health").format(count=app.integration_unhealthy_count)
             )
         missing_bonus = CONFIG_AUDIT_MAX_BONUS - app.config_bonus
-        if missing_bonus > 0:
+        if missing_bonus > 0 and "application" not in getattr(self, "_pillar_fallbacks", set()):
             advice.append(self._rec("rec_config_audit").format(missing=missing_bonus))
         if app.p_repairs > 0:
             advice.append(self._rec("rec_repairs").format(count=app.repair_count))
         if app.dead_device_count > 0:
             advice.append(self._rec("rec_dead_devices").format(count=app.dead_device_count))
-        return advice
+        return advice + self._failure_recommendations()
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
         """Return True if the SD-card / eMMC low-disk threshold is met."""
@@ -1421,9 +1472,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_zombie": app.zombie_count > 0,
             "rec_core_lag": app.p_core_lag > 0,
             "rec_integration_health": app.integration_unhealthy_count > 0,
-            "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0,
+            "rec_config_audit": (CONFIG_AUDIT_MAX_BONUS - app.config_bonus) > 0
+            and "application" not in getattr(self, "_pillar_fallbacks", set()),
             "rec_repairs": app.p_repairs > 0,
             "rec_dead_devices": app.dead_device_count > 0,
+            "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
+            "rec_update_failed": False,
         }
 
     # ------------------------------------------------------------------
