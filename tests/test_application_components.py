@@ -72,6 +72,67 @@ def test_integration_health_is_capped_at_15(hass) -> None:
     assert coord._calc_integration_health() == 15
 
 
+@pytest.mark.parametrize(
+    "state",
+    [ConfigEntryState.SETUP_ERROR, ConfigEntryState.SETUP_RETRY, ConfigEntryState.FAILED_UNLOAD],
+)
+@pytest.mark.parametrize("excluded_index", [0, 1])
+def test_integration_health_excludes_only_selected_adb_entry(hass, state, excluded_index) -> None:
+    """An entry without devices can be excluded without excluding its sibling."""
+    entries = [MockConfigEntry(domain="androidtv", title="Fire TV", data={}) for _ in range(2)]
+    for entry in entries:
+        entry.add_to_hass(hass)
+        object.__setattr__(entry, "state", state)
+    coord = make_coordinator(
+        hass,
+        options={"ignored_integration_entries": [entries[excluded_index].entry_id]},
+    )
+    assert coord._count_unhealthy_integrations() == 1
+    assert coord._calc_integration_health() == 5
+
+
+@pytest.mark.parametrize("selection", [None, [], ["removed-entry"]])
+def test_empty_or_stale_exclusions_preserve_integration_health(hass, selection) -> None:
+    _unhealthy_entry(hass, 0, ConfigEntryState.SETUP_ERROR)
+    coord = make_coordinator(hass, options={"ignored_integration_entries": selection})
+    assert coord._count_unhealthy_integrations() == 1
+    assert coord._calc_integration_health() == 5
+
+
+def test_integration_health_exclusion_preserves_cap_and_full_count(hass) -> None:
+    entries = [MockConfigEntry(domain="androidtv", title="Fire TV", data={}) for _ in range(5)]
+    for entry in entries:
+        entry.add_to_hass(hass)
+        object.__setattr__(entry, "state", ConfigEntryState.SETUP_ERROR)
+    coord = make_coordinator(hass, options={"ignored_integration_entries": [entries[0].entry_id]})
+    assert coord._count_unhealthy_integrations() == 4
+    assert coord._calc_integration_health() == 15
+
+
+def test_excluding_all_failed_entries_leaves_healthy_states_unchanged(hass) -> None:
+    excluded = MockConfigEntry(domain="androidtv", data={})
+    excluded.add_to_hass(hass)
+    object.__setattr__(excluded, "state", ConfigEntryState.SETUP_ERROR)
+    for state in ConfigEntryState:
+        if state not in {
+            ConfigEntryState.SETUP_ERROR,
+            ConfigEntryState.SETUP_RETRY,
+            ConfigEntryState.FAILED_UNLOAD,
+        }:
+            other = MockConfigEntry(domain="androidtv", data={})
+            other.add_to_hass(hass)
+            object.__setattr__(other, "state", state)
+            coord = make_coordinator(
+                hass, options={"ignored_integration_entries": [excluded.entry_id]}
+            )
+            assert coord._count_unhealthy_integrations() == 0
+            # No actual integration was loaded: avoid fake loaded/unloading states at teardown.
+            object.__setattr__(other, "state", ConfigEntryState.NOT_LOADED)
+    coord = make_coordinator(hass, options={"ignored_integration_entries": [excluded.entry_id]})
+    assert coord._count_unhealthy_integrations() == 0
+    assert coord._calc_integration_health() == 0
+
+
 # ----------------------------------------------------------------------------
 # Maintenance / database
 # ----------------------------------------------------------------------------

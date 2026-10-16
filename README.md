@@ -182,12 +182,21 @@ After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Conf
 * Storage type
 * **Ignore labels** (multi-select)
 * **Ignore entity-id patterns** (glob list)
+* **Exclude integration entries from Integration Health** (multi-select, empty by default). Select individual entries by title, domain and entry ID. Other entries from the same integration remain included.
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
 * **Zombie grace period** (1–240 minutes, default: 5) - how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
 * **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
+
+### Excluding individual integration entries
+
+If an integration entry is expected to fail while a device is powered off, select that specific entry in **Exclude integration entries from Integration Health**. For example, excluding one ADB entry does not exclude another ADB entry. Entries remain selectable even if setup failed before any devices or entities were created. The entry ID distinguishes entries with the same name.
+
+Excluded entries no longer contribute to Integration Health's unhealthy count, penalty, recommendation or rec_integration_health flag. Other entries still cost 5 points each, capped at 15. Clear the entire selection to include all entries again; the empty selection persists after restart. Removed entries do not cause errors.
+
+This exclusion only affects Integration Health. Zombie and device detection, update checks and Repairs are separate. Device and entity ignore labels are not automatically applied to integration entries. HAGHS does not detect intentional power-off or test network reachability.
 
 <details>
 <summary><b>External Database (MariaDB / PostgreSQL)</b> - full SQL-sensor walkthrough</summary>
@@ -258,6 +267,8 @@ To use ignore labels:
     * **Note on `hidden_by`:** Hiding an entity from auto-generated dashboards does **not** exclude it from HAGHS. To exclude a hidden entity, disable it or apply an ignore label.
 
 ### Dynamic exclusions via automation
+
+Device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
 
 Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
 native label services - HAGHS does not need its own service. List a label like
@@ -596,6 +607,10 @@ cards:
 
 ## FAQ
 
+**Why do I still see zombies or Repairs after excluding an integration entry?**
+
+The integration-entry exclusion only changes Integration Health. It does not suppress entity or device detection, update checks or Repairs. Review those findings separately and use their existing exclusion or ignore mechanisms where appropriate.
+
 **Why is my score so low?**
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
 
@@ -648,6 +663,8 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 ### [v2.4.0] - 2026-09-29
 
 **Highlights**
+
+* **Exclude individual integration entries from Integration Health.** The new options multi-select excludes only the selected entry IDs from the unhealthy count, penalty, recommendation and flag. The selection is empty by default, can be cleared permanently and does not affect zombie detection or Repairs.
 
 * **Repairs now count in the score (#97).** Open repair issues cost 5 points each (cap 10) and hard-cap the application score at 99 while any repair is open. HA's native *Ignore* action takes a repair out of the count. New attributes `repair_count` / `repairs`, new flag `rec_repairs`.
 * **Dead devices are flagged (#120).** A device whose entities are all `unavailable` / `unknown` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`. Informational only, the entity-level zombie points stay authoritative.
