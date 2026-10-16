@@ -39,6 +39,7 @@ from .const import (
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
+    CONF_IGNORED_INTEGRATION_ENTRIES,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
@@ -238,6 +239,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
         self.ignore_labels: list[str] = list(opts.get(CONF_IGNORE_LABELS) or [])
+        self._ignored_integration_entries: set[str] = set(
+            opts.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
+        )
         self._ignore_patterns: list[re.Pattern[str]] = _compile_patterns(
             opts.get(CONF_IGNORE_PATTERNS)
         )
@@ -790,8 +794,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ) = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
-        p_integration = self._calc_integration_health()
         integration_unhealthy_count = self._count_unhealthy_integrations()
+        p_integration = self._calc_integration_health(integration_unhealthy_count)
 
         # C. MAINTENANCE — DB size auto-detected (blocking I/O → executor)
         db_mb, p_db, db_limit_mb = await self._async_calc_maintenance()
@@ -1061,16 +1065,19 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             1
             for entry in self.hass.config_entries.async_entries()
             if entry.state in unhealthy_states
+            and entry.entry_id not in self._ignored_integration_entries
         )
 
-    def _calc_integration_health(self) -> int:
+    def _calc_integration_health(self, unhealthy_count: int | None = None) -> int:
         """Count unhealthy integrations via native ConfigEntry states.
 
         Checks for integrations stuck in SETUP_ERROR, SETUP_RETRY, or
-        FAILED_UNLOAD — the same states HA shows as "error" in the UI.
+        FAILED_UNLOAD, excluding individually selected entry IDs.
         Penalty: 5 pts per unhealthy integration, capped at 15.
         """
-        return min(15, self._count_unhealthy_integrations() * 5)
+        if unhealthy_count is None:
+            unhealthy_count = self._count_unhealthy_integrations()
+        return min(15, unhealthy_count * 5)
 
     async def _async_calc_maintenance(self) -> tuple[float, int, float]:
         """Calculate DB penalty with dynamic limit based on entity count."""

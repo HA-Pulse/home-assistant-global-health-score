@@ -7,9 +7,19 @@ the test, so future pillars cannot silently reappear (see #92, #97).
 
 from __future__ import annotations
 
-import pytest
+from datetime import timedelta
 
-from custom_components.haghs.coordinator import _ApplicationResult, _HardwareResult
+import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.core import CoreState
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.haghs.coordinator import _ApplicationResult, _HardwareResult, _RecorderInfo
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 
@@ -69,3 +79,126 @@ async def test_result_and_neutral_result_have_the_same_keys(hass) -> None:
     built = coord._build_result(_HardwareResult(), _ApplicationResult())
     neutral = coord._neutral_result()
     assert set(built) == set(neutral)
+
+
+@pytest.mark.parametrize("excluded_count", [0, 1, 2])
+async def test_exclusions_keep_count_score_recommendation_and_flag_consistent(
+    hass, excluded_count, monkeypatch
+) -> None:
+    entries = [MockConfigEntry(domain="androidtv", title="Fire TV", data={}) for _ in range(2)]
+    for entry in entries:
+        entry.add_to_hass(hass)
+        object.__setattr__(entry, "state", ConfigEntryState.SETUP_RETRY)
+    coord = make_coordinator(
+        hass,
+        options={"ignored_integration_entries": [e.entry_id for e in entries[:excluded_count]]},
+    )
+    # Count calls at the real filter, not at a replacement scoring implementation.
+    count_calls = []
+    original_count = coord._count_unhealthy_integrations
+
+    def count_once() -> int:
+        count_calls.append(True)
+        return original_count()
+
+    monkeypatch.setattr(coord, "_count_unhealthy_integrations", count_once)
+    app = await coord._async_calc_application()
+    assert count_calls == [True]
+    remaining = 2 - excluded_count
+    assert app.config_bonus == 0
+    assert app.app_score == 100 - 5 * remaining
+    result = coord._build_result(_HardwareResult(), app)
+    assert result["integration_unhealthy_count"] == remaining
+    assert result["application_score"] == app.app_score
+    assert result["rec_integration_health"] is (remaining > 0)
+    advice = coord._build_recommendations(_HardwareResult(), app)
+    template = coord._rec("rec_integration_health")
+    if remaining:
+        assert template.format(count=remaining) in advice
+        assert template.format(count=remaining) in result["recommendations"]
+    else:
+        assert not any(line.startswith(template.split("{")[0]) for line in advice)
+
+
+async def test_entry_exclusion_does_not_change_zombies_devices_repairs_or_caps(hass) -> None:
+    hass.set_state(CoreState.running)
+    entry = MockConfigEntry(domain="androidtv", data={})
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.SETUP_ERROR)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("androidtv", "exclusion_probe")},
+        name="Exclusion probe",
+    )
+    entity = er.async_get(hass).async_get_or_create(
+        "media_player",
+        "androidtv",
+        "exclusion_probe",
+        config_entry=entry,
+        device_id=device.id,
+    )
+    hass.states.async_set(entity.entity_id, STATE_UNAVAILABLE)
+    hass.states.get(entity.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
+    ir.async_create_issue(
+        hass,
+        "androidtv",
+        "exclusion_probe",
+        is_fixable=False,
+        is_persistent=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="test",
+    )
+    results = []
+    for selection in [[], [entry.entry_id]]:
+        coord = make_coordinator(hass, options={"ignored_integration_entries": selection})
+        app = await coord._async_calc_application()
+        assert app.zombie_count == 1
+        assert app.zombie_list == [entity.entity_id]
+        assert app.dead_device_count == 1
+        assert app.dead_device_list == ["Exclusion probe"]
+        assert app.p_zombie == 20
+        assert app.repair_count == 1
+        assert app.repair_list == ["androidtv/exclusion_probe"]
+        assert app.p_repairs == 5
+        results.append((app.zombie_count, app.p_zombie, app.dead_device_list, app.repair_list))
+        # Both existing caps remain effective even when Integration Health is excluded.
+        coord.recorder_info = _RecorderInfo(keep_days=10, entity_filter_active=True, available=True)
+        coord._zombie_grace_seconds = 240 * 60
+        capped = await coord._async_calc_application()
+        assert capped.zombie_count == 0
+        assert capped.app_score == 99
+        ir.async_get(hass).async_ignore("androidtv", "exclusion_probe", True)
+        coord._zombie_grace_seconds = 5 * 60
+        capped = await coord._async_calc_application()
+        assert capped.repair_count == 0
+        # Enough healthy entities dilute the zombie penalty, leaving the zombie hard cap.
+        for index in range(200):
+            hass.states.async_set(f"sensor.healthy_{index}", "1")
+        capped = await coord._async_calc_application()
+        assert capped.zombie_count == 1
+        assert capped.app_score == 99
+        ir.async_get(hass).async_ignore("androidtv", "exclusion_probe", False)
+        for index in range(200):
+            hass.states.async_remove(f"sensor.healthy_{index}")
+    assert results[0] == results[1]
+
+
+def test_entity_and_device_ignore_labels_do_not_exclude_config_entries(hass) -> None:
+    entry = MockConfigEntry(domain="androidtv", data={})
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.SETUP_ERROR)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("androidtv", "label_probe")},
+    )
+    dr.async_get(hass).async_update_device(device.id, labels={"custom_ignore_id"})
+    entity = er.async_get(hass).async_get_or_create(
+        "media_player", "androidtv", "label_probe", config_entry=entry, device_id=device.id
+    )
+    er.async_get(hass).async_update_entity(entity.entity_id, labels={"custom_ignore_id"})
+    coord = make_coordinator(hass, options={"ignore_labels": ["custom_ignore_id"]})
+    assert (
+        coord._is_ignored(entity.entity_id, er.async_get(hass).async_get(entity.entity_id)) is True
+    )
+    assert coord._count_unhealthy_integrations() == 1
+    assert coord._calc_integration_health() == 5

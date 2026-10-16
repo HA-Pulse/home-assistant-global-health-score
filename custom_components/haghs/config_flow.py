@@ -17,6 +17,7 @@ from .const import (
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
+    CONF_IGNORED_INTEGRATION_ENTRIES,
     CONF_RAM_SENSOR,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
@@ -82,8 +83,11 @@ _NULLABLE_OPTIONAL_KEYS: tuple[str, ...] = (
     CONF_RAM_SENSOR,
     CONF_IGNORE_LABELS,
     CONF_IGNORE_PATTERNS,
+    CONF_IGNORED_INTEGRATION_ENTRIES,
 )
-_LIST_OPTIONAL_KEYS: frozenset[str] = frozenset({CONF_IGNORE_LABELS, CONF_IGNORE_PATTERNS})
+_LIST_OPTIONAL_KEYS: frozenset[str] = frozenset(
+    {CONF_IGNORE_LABELS, CONF_IGNORE_PATTERNS, CONF_IGNORED_INTEGRATION_ENTRIES}
+)
 
 
 def _normalize_optional(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -199,13 +203,52 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Manage the options."""
+        entries = sorted(
+            self.hass.config_entries.async_entries(),
+            key=lambda entry: (entry.title, entry.domain, entry.entry_id),
+        )
+        entry_ids = {entry.entry_id for entry in entries}
         if user_input is not None:
+            user_input[CONF_IGNORED_INTEGRATION_ENTRIES] = [
+                entry_id
+                for entry_id in user_input.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
+                if entry_id in entry_ids
+            ]
             return self.async_create_entry(title="", data=_normalize_optional(user_input))
 
         # Current values: options take priority, then data, then defaults
         current = {**self._config_entry.data, **self._config_entry.options}
+        current[CONF_IGNORED_INTEGRATION_ENTRIES] = [
+            entry_id
+            for entry_id in current.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
+            if entry_id in entry_ids
+        ]
         psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
-        schema = _schema_with_psi(psi.available).extend(_EXTRA_OPTIONS_SCHEMA)
+        schema = (
+            _schema_with_psi(psi.available)
+            .extend(_EXTRA_OPTIONS_SCHEMA)
+            .extend(
+                {
+                    vol.Optional(CONF_IGNORED_INTEGRATION_ENTRIES): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=entry.entry_id,
+                                    label=(
+                                        f"{entry.title or entry.domain} "
+                                        f"({entry.domain}, {entry.entry_id})"
+                                    ),
+                                )
+                                for entry in entries
+                            ],
+                            multiple=True,
+                            custom_value=False,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            )
+        )
 
         return self.async_show_form(
             step_id="init",
