@@ -40,6 +40,15 @@ async def test_update_data_never_raises_on_recommendations_failure(
     monkeypatch.setattr(coordinator, "_build_recommendations", _raise)
 
     result = await coordinator._async_update_data()
+    assert result["stale_candidates"] == result["stale_watch_entities"] == []
+    assert (
+        result["stale_watch_count"]
+        == result["stale_candidate_count"]
+        == result["stale_penalty"]
+        == 0
+    )
+    assert result["stale_threshold_hours"] == 24
+    assert result["rec_stale"] is False
 
     assert result is not None
     assert "global_score" in result

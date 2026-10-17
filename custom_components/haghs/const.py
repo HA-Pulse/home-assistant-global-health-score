@@ -19,6 +19,13 @@ CONF_STORAGE_TYPE = "storage_type"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ZOMBIE_GRACE_MINUTES = "zombie_grace_minutes"
 CONF_BATTERY_GRACE_MINUTES = "battery_grace_minutes"
+CONF_STALE_THRESHOLD_HOURS = "stale_threshold_hours"
+CONF_STALE_WATCH_LABELS = "stale_watch_labels"
+DEFAULT_STALE_THRESHOLD_HOURS = 24
+STALE_THRESHOLD_MAX_HOURS = 8760
+STALE_LIST_CAP = 100
+STALE_PENALTY_PER_ENTITY = 5
+STALE_PENALTY_CAP = 10
 
 # Defaults
 DEFAULT_NAME = "System: HA - Global Health Score"
@@ -123,6 +130,10 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
     "rec_dead_devices": REC_DEAD_DEVICES,
+    "rec_stale": (
+        "Stale reporting: {count} watched entity/entities have not reported for more than "
+        "{hours} hour(s); application penalty {penalty} point(s) before the configuration bonus."
+    ),
     "rec_disk_sd_low": REC_DISK_SD_LOW,
     "rec_disk_ssd_low": REC_DISK_SSD_LOW,
     "rec_integration_health": REC_INTEGRATION_HEALTH,
@@ -169,6 +180,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_config_audit",
     "rec_repairs",
     "rec_dead_devices",
+    "rec_stale",
     "rec_pillar_fallback",
     "rec_update_failed",
 )

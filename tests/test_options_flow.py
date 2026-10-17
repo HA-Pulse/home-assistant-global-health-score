@@ -10,6 +10,7 @@ value from ``entry.data``.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.haghs.config_flow import HaghsOptionsFlowHandler
 from custom_components.haghs.const import (
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
@@ -32,6 +34,61 @@ from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator, _Psi
 
 _PSI_AVAILABLE = _PsiData(cpu=0.5, memory=0.5, io=0.5)
 _PSI_UNAVAILABLE = _PsiData()
+
+
+async def test_stale_options_defaults_and_clearing(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={"stale_watch_labels": ["old_watch"]})
+    entry.add_to_hass(hass)
+    with patch.object(HaghsDataUpdateCoordinator, "_read_psi_sync", return_value=_PSI_AVAILABLE):
+        form = await hass.config_entries.options.async_init(entry.entry_id)
+        schema = form["data_schema"]
+        defaults = schema({CONF_STORAGE_TYPE: "sd-card"})
+        assert defaults.get("stale_threshold_hours") == 24
+        result = await hass.config_entries.options.async_configure(
+            form["flow_id"], user_input={CONF_STORAGE_TYPE: "sd-card"}
+        )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["stale_watch_labels"] == []
+    assert _merged(entry)["stale_watch_labels"] == []
+    assert HaghsDataUpdateCoordinator(hass, entry).stale_watch_labels == set()
+    saved = json.loads(json.dumps(entry.as_dict()))
+    restarted = MockConfigEntry(domain=DOMAIN, data=saved["data"], options=saved["options"])
+    restarted.add_to_hass(hass)
+    coord = HaghsDataUpdateCoordinator(hass, restarted)
+    assert coord.stale_watch_labels == set()
+    assert coord.stale_threshold_hours == 24
+
+
+@pytest.mark.parametrize("value", [0, 8761, 1.5, True, "invalid"])
+async def test_stale_threshold_invalid_submission(hass, value):
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    with patch.object(HaghsDataUpdateCoordinator, "_read_psi_sync", return_value=_PSI_AVAILABLE):
+        flow = HaghsOptionsFlowHandler(entry)
+        flow.hass = hass
+        result = await flow.async_step_init(
+            {CONF_STORAGE_TYPE: "sd-card", "stale_threshold_hours": value}
+        )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"stale_threshold_hours": "invalid_stale_threshold"}
+
+
+@pytest.mark.parametrize("value", [1, 24, 8760, 24.0])
+async def test_stale_threshold_valid_submission(hass, value):
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    await _run_options_flow(
+        hass,
+        entry,
+        {
+            CONF_STORAGE_TYPE: "sd-card",
+            "stale_threshold_hours": value,
+            "stale_watch_labels": ["watch_id"],
+        },
+    )
+    assert type(entry.options["stale_threshold_hours"]) is int
+    assert entry.options["stale_threshold_hours"] == value
+    assert entry.options["stale_watch_labels"] == ["watch_id"]
 
 
 def _merged(entry: MockConfigEntry) -> dict:

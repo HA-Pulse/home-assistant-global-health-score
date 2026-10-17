@@ -19,7 +19,12 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.coordinator import _ApplicationResult, _HardwareResult, _RecorderInfo
+from custom_components.haghs.coordinator import (
+    _ApplicationResult,
+    _HardwareResult,
+    _RecorderInfo,
+    _StaleResult,
+)
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 
@@ -27,6 +32,10 @@ from tests.factories import make_coordinator, patch_disk, patch_psi
     "app",
     [
         pytest.param(_ApplicationResult(p_zombie=5, zombie_count=1, app_score=95), id="zombie"),
+        pytest.param(
+            _ApplicationResult(stale=_StaleResult(watch_count=1, penalty=5), app_score=95),
+            id="stale",
+        ),
         pytest.param(_ApplicationResult(p_backup=30, app_score=70), id="backup_stale"),
         pytest.param(_ApplicationResult(update_count=1, app_score=95), id="updates"),
         pytest.param(_ApplicationResult(p_core_lag=20, app_score=80), id="core_lag"),

@@ -41,6 +41,8 @@ from .const import (
     CONF_IGNORE_PATTERNS,
     CONF_IGNORED_INTEGRATION_ENTRIES,
     CONF_RAM_SENSOR,
+    CONF_STALE_THRESHOLD_HOURS,
+    CONF_STALE_WATCH_LABELS,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
@@ -49,6 +51,7 @@ from .const import (
     DATA_UPDATE_FIRST_SEEN,
     DEAD_DEVICE_LIST_CAP,
     DEFAULT_BATTERY_GRACE_MINUTES,
+    DEFAULT_STALE_THRESHOLD_HOURS,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
@@ -58,6 +61,9 @@ from .const import (
     REPAIR_LIST_CAP,
     REPAIR_PENALTY_CAP,
     REPAIR_PENALTY_PER_ISSUE,
+    STALE_LIST_CAP,
+    STALE_PENALTY_CAP,
+    STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
@@ -158,10 +164,22 @@ class _HardwareResult:
 
 
 @dataclass
+class _StaleResult:
+    """Complete counts and bounded current reporting findings."""
+
+    candidate_count: int = 0
+    candidates: list[str] = field(default_factory=list)
+    watch_count: int = 0
+    watch_entities: list[str] = field(default_factory=list)
+    penalty: int = 0
+
+
+@dataclass
 class _ApplicationResult:
     """Result of the application pillar calculation."""
 
     app_score: int = 100
+    stale: _StaleResult = field(default_factory=_StaleResult)
     zombie_count: int = 0
     zombie_list: list[str] = field(default_factory=list)
     zombie_per_domain: dict[str, int] = field(default_factory=dict)
@@ -238,6 +256,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.cpu_id: str | None = opts.get(CONF_CPU_SENSOR)
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
+        self.stale_threshold_hours: int = opts.get(
+            CONF_STALE_THRESHOLD_HOURS, DEFAULT_STALE_THRESHOLD_HOURS
+        )
+        self.stale_watch_labels: set[str] = set(opts.get(CONF_STALE_WATCH_LABELS) or [])
         self.ignore_labels: list[str] = list(opts.get(CONF_IGNORE_LABELS) or [])
         self._ignored_integration_entries: set[str] = set(
             opts.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
@@ -463,6 +485,18 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recommendations": ("\n".join(advice) if advice else self._rec("rec_all_clear")),
             **self._failure_attributes(),
             **rec_flags,
+            **self._stale_attributes(app.stale),
+        }
+
+    def _stale_attributes(self, stale: _StaleResult) -> dict[str, Any]:
+        """Expose current findings and the effective reporting threshold."""
+        return {
+            "stale_candidate_count": stale.candidate_count,
+            "stale_candidates": stale.candidates,
+            "stale_watch_count": stale.watch_count,
+            "stale_watch_entities": stale.watch_entities,
+            "stale_penalty": stale.penalty,
+            "stale_threshold_hours": self.stale_threshold_hours,
         }
 
     def _failure_attributes(self) -> dict[str, Any]:
@@ -529,6 +563,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pillar_fallback_count": 0,
             "update_cycle_failed": False,
             **{key: False for key in REC_FLAG_KEYS},
+            **self._stale_attributes(app.stale),
         }
 
     async def _safe_calc(
@@ -836,6 +871,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_calc_application(self) -> _ApplicationResult:
         """Calculate the application pillar score."""
+        stale = self._calc_stale_entities()
         # A. ZOMBIES + UNREGISTERED ENTITIES (#98)
         (
             zombie_list,
@@ -877,6 +913,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 - p_updates
                 - p_db
                 - p_repairs
+                - stale.penalty
                 + config_bonus,
             ),
         )
@@ -886,11 +923,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # that config_bonus fully offsets it, which would otherwise hide
         # existing zombies behind a 100 score. Open repairs block the cap
         # too: the bonus must never mask a broken integration.
-        if zombie_count > 0 or repair_count > 0:
+        if zombie_count > 0 or repair_count > 0 or stale.watch_count > 0:
             app_final = min(99, app_final)
 
         return _ApplicationResult(
             app_score=app_final,
+            stale=stale,
             zombie_count=zombie_count,
             zombie_list=zombie_list,
             zombie_per_domain=zombie_per_domain,
@@ -916,6 +954,41 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
     # Application sub-calculations
     # ------------------------------------------------------------------
+
+    def _calc_stale_entities(self) -> _StaleResult:
+        """Inspect state reports locally after registry loading."""
+        if not self._registries_ready:
+            return _StaleResult()
+        registry = er.async_get(self.hass)
+        now = dt_util.utcnow()
+        threshold = timedelta(hours=self.stale_threshold_hours)
+        candidates: list[str] = []
+        watched: list[str] = []
+        for state in self.hass.states.async_all():
+            if state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                continue
+            entry = registry.async_get(state.entity_id)
+            if self._is_ignored(state.entity_id, entry) or (
+                entry is not None and entry.platform == DOMAIN
+            ):
+                continue
+            reported = getattr(state, "last_reported", None)
+            if not isinstance(reported, datetime) or reported.utcoffset() is None:
+                continue
+            if now - reported > threshold:
+                if state.domain in {"sensor", "binary_sensor"}:
+                    candidates.append(state.entity_id)
+                if entry is not None and self.stale_watch_labels.intersection(entry.labels):
+                    watched.append(state.entity_id)
+        candidates.sort()
+        watched.sort()
+        return _StaleResult(
+            candidate_count=len(candidates),
+            candidates=candidates[:STALE_LIST_CAP],
+            watch_count=len(watched),
+            watch_entities=watched[:STALE_LIST_CAP],
+            penalty=min(STALE_PENALTY_CAP, STALE_PENALTY_PER_ENTITY * len(watched)),
+        )
 
     def _past_grace(self, state: State, now: datetime) -> bool:
         """Return True if *state* has been stale longer than the grace window.
@@ -1391,6 +1464,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         const.py defaults are the final fallback.
         """
         advice: list[str] = []
+        if app.stale.watch_count > 0:
+            advice.append(
+                self._rec("rec_stale").format(
+                    count=app.stale.watch_count,
+                    hours=self.stale_threshold_hours,
+                    penalty=app.stale.penalty,
+                )
+            )
         if hw.p_cpu > 0:
             cpu_key = "rec_cpu_load_psi" if hw.cpu_used_psi else "rec_cpu_load_classic"
             advice.append(self._rec(cpu_key).format(cpu_pct=hw.cpu))
@@ -1479,6 +1560,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and "application" not in getattr(self, "_pillar_fallbacks", set()),
             "rec_repairs": app.p_repairs > 0,
             "rec_dead_devices": app.dead_device_count > 0,
+            "rec_stale": app.stale.watch_count > 0,
             "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
             "rec_update_failed": False,
         }
