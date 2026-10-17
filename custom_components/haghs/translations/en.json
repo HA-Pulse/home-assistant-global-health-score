@@ -1,5 +1,6 @@
 {
   "common": {
+    "rec_stale": "Stale reporting: {count} watched entity/entities have not reported for more than {hours} hour(s); application penalty {penalty} point(s) before the configuration bonus.",
     "pillar_hardware": "Hardware",
     "pillar_application": "Application",
     "rec_pillar_fallback": "⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.",
@@ -77,6 +78,9 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_stale_threshold": "Enter a whole number of hours from 1 to 8760."
+    },
     "step": {
       "init": {
         "title": "HAGHS Options",
@@ -89,6 +93,8 @@
           "ignore_patterns": "Ignore entity-id patterns",
           "db_sensor": "Database size sensor (optional)",
           "update_interval": "Update interval",
+          "stale_threshold_hours": "Stale threshold (hours)",
+          "stale_watch_labels": "Stale watch labels",
           "zombie_grace_minutes": "Zombie grace period (minutes)",
           "ignored_integration_entries": "Exclude integration entries from Integration Health",
           "battery_grace_minutes": "Battery-class grace period (minutes)"
@@ -101,6 +107,8 @@
           "ignore_patterns": "Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size').",
           "update_interval": "How often HAGHS recalculates the health score, in seconds. Lower values mean faster updates but slightly more CPU usage. Default: 60 seconds.",
+          "stale_threshold_hours": "Time since the last state report, not the last value change. Whole hours from 1 to 8760; default: 24. Passive findings cover sensor and binary_sensor only and do not affect the score.",
+          "stale_watch_labels": "Opt entities in to stale scoring using labels applied directly to entities in any domain. Device and area labels do not opt in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus; application score is at most 99 while any are overdue. Leave empty to disable stale scoring.",
           "zombie_grace_minutes": "How long an entity must stay in 'unavailable' or 'unknown' before HAGHS counts it as a zombie. Allowed range: 1 to 240 minutes. Lower values make detection more aggressive (more false positives from briefly-offline devices). Higher values mask short outages but let real failures linger. Default: 5 minutes.",
           "ignored_integration_entries": "Select individual integration entries to exclude from the Integration Health count, penalty and recommendation. Each entry is identified by its title, domain and entry ID. Leave empty to include all entries. This does not exclude entities or devices from zombie detection, and does not ignore Repairs. Device and entity ignore labels do not exclude integration entries.",
           "battery_grace_minutes": "Extended grace period specifically for entities with 'device_class: battery'. Zigbee and Homematic radios routinely take longer than the regular window to re-poll battery devices, so flagging them as zombies after only 5 minutes produces false positives. Allowed range: 1 to 240 minutes. If you set this lower than the regular grace, it effectively disables the extension. Default: 60 minutes."

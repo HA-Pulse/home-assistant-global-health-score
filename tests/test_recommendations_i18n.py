@@ -24,8 +24,24 @@ from custom_components.haghs.coordinator import (
     _ApplicationResult,
     _HardwareResult,
     _RecorderInfo,
+    _StaleResult,
 )
 from tests.factories import make_coordinator, patch_disk, patch_psi
+
+
+@pytest.mark.parametrize("translated", [False, True])
+def test_stale_template_formats_counts_threshold_and_raw_penalty(hass, translated):
+    coord = make_coordinator(hass, options={"stale_threshold_hours": 48})
+    app = _ApplicationResult(config_bonus=10, stale=_StaleResult(watch_count=3, penalty=10))
+    template = "Meldungen: {count}; Stunden: {hours}; Abzug: {penalty}"
+    if translated:
+        coord._rec_translations = {"rec_stale": template}
+    else:
+        template = REC_TEMPLATES["rec_stale"]
+    assert coord._build_recommendations(_HardwareResult(), app) == [
+        template.format(count=3, hours=48, penalty=10)
+    ]
+    assert coord._build_rec_flags(_HardwareResult(), app)["rec_stale"] is True
 
 
 def _app_with_full_bonus() -> _ApplicationResult:

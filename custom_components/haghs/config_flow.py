@@ -19,15 +19,19 @@ from .const import (
     CONF_IGNORE_PATTERNS,
     CONF_IGNORED_INTEGRATION_ENTRIES,
     CONF_RAM_SENSOR,
+    CONF_STALE_THRESHOLD_HOURS,
+    CONF_STALE_WATCH_LABELS,
     CONF_STORAGE_TYPE,
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
     DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_IGNORE_LABEL_NAME,
+    DEFAULT_STALE_THRESHOLD_HOURS,
     DEFAULT_STORAGE_TYPE,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
+    STALE_THRESHOLD_MAX_HOURS,
     STORAGE_TYPES,
 )
 from .coordinator import HaghsDataUpdateCoordinator
@@ -100,6 +104,20 @@ def _normalize_optional(user_input: dict[str, Any]) -> dict[str, Any]:
 
 
 _EXTRA_OPTIONS_SCHEMA = {
+    vol.Optional(
+        CONF_STALE_THRESHOLD_HOURS, default=DEFAULT_STALE_THRESHOLD_HOURS
+    ): selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1,
+            max=STALE_THRESHOLD_MAX_HOURS,
+            step=1,
+            unit_of_measurement=UnitOfTime.HOURS,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    ),
+    vol.Optional(CONF_STALE_WATCH_LABELS): selector.LabelSelector(
+        selector.LabelSelectorConfig(multiple=True)
+    ),
     vol.Optional(
         CONF_UPDATE_INTERVAL,
         default=DEFAULT_UPDATE_INTERVAL,
@@ -208,16 +226,32 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
             key=lambda entry: (entry.title, entry.domain, entry.entry_id),
         )
         entry_ids = {entry.entry_id for entry in entries}
+        errors: dict[str, str] = {}
         if user_input is not None:
-            user_input[CONF_IGNORED_INTEGRATION_ENTRIES] = [
-                entry_id
-                for entry_id in user_input.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
-                if entry_id in entry_ids
-            ]
-            return self.async_create_entry(title="", data=_normalize_optional(user_input))
+            threshold = user_input.get(CONF_STALE_THRESHOLD_HOURS, DEFAULT_STALE_THRESHOLD_HOURS)
+            if (
+                isinstance(threshold, bool)
+                or not isinstance(threshold, (int, float))
+                or not 1 <= threshold <= STALE_THRESHOLD_MAX_HOURS
+                or threshold != int(threshold)
+            ):
+                errors[CONF_STALE_THRESHOLD_HOURS] = "invalid_stale_threshold"
+            else:
+                user_input[CONF_STALE_THRESHOLD_HOURS] = int(threshold)
+                user_input[CONF_STALE_WATCH_LABELS] = list(
+                    user_input.get(CONF_STALE_WATCH_LABELS) or []
+                )
+                user_input[CONF_IGNORED_INTEGRATION_ENTRIES] = [
+                    entry_id
+                    for entry_id in user_input.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
+                    if entry_id in entry_ids
+                ]
+                return self.async_create_entry(title="", data=_normalize_optional(user_input))
 
         # Current values: options take priority, then data, then defaults
         current = {**self._config_entry.data, **self._config_entry.options}
+        if user_input is not None:
+            current.update(user_input)
         current[CONF_IGNORED_INTEGRATION_ENTRIES] = [
             entry_id
             for entry_id in current.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
@@ -252,6 +286,7 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
+            errors=errors,
             data_schema=self.add_suggested_values_to_schema(
                 schema,
                 current,

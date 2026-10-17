@@ -151,40 +151,17 @@ All work below is committed on `dev` and described in detail in
 
 ## Planned
 
-### Stale-sensor detection (v2.5)
+### Implemented on dev
 
-**Problem:** Sensors can fail silently: they stop reporting but Home
-Assistant keeps showing the last valid value. The current zombie
-detector only catches `unavailable` / `unknown`, so this class of
-failure goes unnoticed.
+HAGHS checks when Home Assistant last received a state report, not when the value last changed. Passive checks cover only sensor and binary_sensor entities. The default stale threshold is 24 hours; you can set it from 1 to 8760 whole hours in the integration options. A state is a candidate only after this threshold has been exceeded.
 
-**Approach: hybrid design (Option D from the v2.3 design session):**
+The passive list does not affect your score. To opt in to scoring, select Stale watch labels in the integration options and apply one of those labels directly to each entity that must keep reporting. Watched entities can belong to any domain. Device and area labels do not opt entities in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus. While a watched entity is overdue, the application score cannot exceed 99. These are explicit project rules, not validated failure probabilities.
 
-- **Always-on, passive layer:** A new `stale_candidates` state
-  attribute lists every entity whose `state.last_reported` is older
-  than a configurable threshold (default 24 h). No score impact, no
-  penalty, pure transparency, no false-positive risk for unmodified
-  setups.
-- **Opt-in, score-impacting layer:** A new `stale_watch_labels` option
-  mirrors the existing multi-label `ignore_labels` pattern. Entities
-  carrying any of these labels and exceeding the threshold contribute
-  to a new penalty bucket. Zero false positives by design: the user
-  explicitly marks which sensors must keep reporting.
+The sensor exposes stale_candidate_count and stale_candidates for passive findings in sensor and binary_sensor, stale_watch_count and stale_watch_entities for opted-in findings in any domain, stale_penalty for the raw application deduction, stale_threshold_hours for the active threshold, and rec_stale for the watched-entity recommendation. Both lists are sorted and limited to 100 entity IDs; their counts remain complete. Watched entities outside sensor and binary_sensor appear only in the watched list and count, not in the passive list and count. The two entity-ID lists remain visible as current attributes but are excluded from recorder history; the counts remain recorded.
 
-**Why not auto-detect by device class:** Every commonly cited "safe"
-device class (`temperature`, `humidity`, `pressure`, `power`,
-`illuminance`, …) has legitimate long-quiet scenarios (climate-stable
-rooms, idle devices, nighttime). No single threshold works across
-them, and a magic default would violate the "no obfuscated thresholds"
-rule from `HAGHS_PHILOSOPHY.md`.
+Unknown, unavailable, disabled, ignored and HAGHS-owned entities are excluded from this check. Entities without registry entries may appear in the passive list only if they belong to sensor or binary_sensor, but cannot opt in through entity labels. Old reports are a reason to investigate, not proof of a broken device: quiet integrations and devices can legitimately stop reporting. Restarts can reset the report timestamp, so HAGHS does not reconstruct downtime across restarts.
 
-**Technical primitive:** `state.last_reported` (HA Core 2024.4+).
-Updates on every backend message regardless of whether the value or
-attributes changed, so it survives Zigbee2MQTT's `force_update=False`
-default, which `state.last_updated` does not.
-
-**Prerequisite:** `hacs.json` min HA version ≥ 2024.4 (done: the file now
-requires 2024.10.0).
+Data source: Home Assistant state.last_reported. No recorder queries, external requests or device polling are added.
 
 ### Repairs penalties: severity weighting and a grace window (v2.5 candidate)
 

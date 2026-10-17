@@ -310,6 +310,18 @@ Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are
 
 ---
 
+### Stale reporting
+
+HAGHS checks when Home Assistant last received a state report, not when the value last changed. Passive checks cover only sensor and binary_sensor entities. The default stale threshold is 24 hours; you can set it from 1 to 8760 whole hours in the integration options. A state is a candidate only after this threshold has been exceeded.
+
+The passive list does not affect your score. To opt in to scoring, select Stale watch labels in the integration options and apply one of those labels directly to each entity that must keep reporting. Watched entities can belong to any domain. Device and area labels do not opt entities in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus. While a watched entity is overdue, the application score cannot exceed 99. These are explicit project rules, not validated failure probabilities.
+
+The sensor exposes stale_candidate_count and stale_candidates for passive findings in sensor and binary_sensor, stale_watch_count and stale_watch_entities for opted-in findings in any domain, stale_penalty for the raw application deduction, stale_threshold_hours for the active threshold, and rec_stale for the watched-entity recommendation. Both lists are sorted and limited to 100 entity IDs; their counts remain complete. Watched entities outside sensor and binary_sensor appear only in the watched list and count, not in the passive list and count. The two entity-ID lists remain visible as current attributes but are excluded from recorder history; the counts remain recorded.
+
+Unknown, unavailable, disabled, ignored and HAGHS-owned entities are excluded from this check. Entities without registry entries may appear in the passive list only if they belong to sensor or binary_sensor, but cannot opt in through entity labels. Old reports are a reason to investigate, not proof of a broken device: quiet integrations and devices can legitimately stop reporting. Restarts can reset the report timestamp, so HAGHS does not reconstruct downtime across restarts.
+
+Data source: Home Assistant state.last_reported. No recorder queries, external requests or device polling are added.
+
 ## Sensor Attributes
 
 HAGHS exposes the following attributes for use in dashboard cards, automations, and templates:
@@ -318,6 +330,13 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 |---|---|---|
 | `hardware_score` | int | Hardware pillar score (0–100), averaged from CPU, RAM, I/O (if PSI), and Disk |
 | `application_score` | int | Application pillar score (0–100) |
+| `stale_candidate_count` | int | Complete passive count of overdue sensor and binary_sensor entities |
+| `stale_candidates` | list | Alphabetically sorted passive entity IDs, capped at 100; current only, excluded from recorder history |
+| `stale_watch_count` | int | Complete count of overdue directly labelled watched entities in any domain |
+| `stale_watch_entities` | list | Alphabetically sorted overdue watched entity IDs, capped at 100; current only, excluded from recorder history |
+| `stale_penalty` | int | Raw application deduction before the configuration bonus, 5 per overdue watched entity, capped at 10 |
+| `stale_threshold_hours` | int | Effective reporting threshold in whole hours, default 24 |
+| `rec_stale` | bool | An overdue watched entity triggers the reporting recommendation; passive candidates alone do not |
 | `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
 | `zombie_entities`| list | Entity IDs of zombies (capped at 100) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |

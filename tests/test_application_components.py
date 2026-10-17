@@ -46,6 +46,23 @@ def _unhealthy_entry(hass, index: int, state: ConfigEntryState) -> None:
     object.__setattr__(entry, "state", state)
 
 
+async def test_stale_failure_uses_visible_application_fallback(hass, monkeypatch):
+    coord = make_coordinator(hass)
+
+    def fail():
+        raise RuntimeError("stale calculation failed")
+
+    monkeypatch.setattr(coord, "_calc_stale_entities", fail)
+    result = await coord._async_update_data()
+    assert result["application_score"] == 100
+    assert result["pillar_fallbacks"] == ["application"]
+    assert result["rec_pillar_fallback"] is True
+    assert result["stale_candidate_count"] == result["stale_watch_count"] == 0
+    assert result["stale_candidates"] == result["stale_watch_entities"] == []
+    assert result["stale_penalty"] == 0
+    assert result["rec_stale"] is False
+
+
 def test_integration_health_zero_without_entries(hass) -> None:
     coord = make_coordinator(hass)
     assert coord._calc_integration_health() == 0

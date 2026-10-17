@@ -13,6 +13,24 @@ from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator
 
 
+async def test_stale_defaults_in_application_fallback(hass, monkeypatch):
+    coord = make_coordinator(hass)
+    monkeypatch.setattr(
+        coord, "_async_calc_application", AsyncMock(side_effect=RuntimeError("stale calculation"))
+    )
+    result = await coord._async_update_data()
+    assert result["pillar_fallbacks"] == ["application"]
+    assert (
+        result["stale_candidate_count"]
+        == result["stale_watch_count"]
+        == result["stale_penalty"]
+        == 0
+    )
+    assert result["stale_candidates"] == result["stale_watch_entities"] == []
+    assert result["stale_threshold_hours"] == 24
+    assert result["rec_stale"] is False
+
+
 async def test_application_failure_is_visible_without_invented_diagnosis(hass, monkeypatch):
     """An unmeasured application pillar must not imply a missing audit bonus."""
     coord = make_coordinator(hass)
