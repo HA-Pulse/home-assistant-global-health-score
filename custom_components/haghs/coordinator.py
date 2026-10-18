@@ -20,6 +20,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import CoreState, Event, HomeAssistant, State, callback
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import (
     device_registry as dr,
 )
@@ -339,13 +340,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> bool:
         """Return True if an entity should be excluded from health checks.
 
-        Four exclusion sources, checked in cheapest-first order:
+        Five exclusion sources, checked in cheapest-first order:
           1. Disabled in the entity registry (user clicked "Disable entity"
              or the integration disabled it). Clear user-intent signal that
              takes precedence over the other checks.
           2. Glob patterns on entity_id (no registry lookup required)
           3. Any of the configured ignore labels on the entity's registry entry
           4. Any of the configured ignore labels on the entity's device
+          5. Any of the configured ignore labels on the effective entity area
 
         Note: ``hidden_by`` is intentionally not treated as ignore. Hidden
         entities are still functional; the user only hid them from
@@ -371,15 +373,28 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if any(label in entity_labels for label in self.ignore_labels):
             return True
 
+        dev_reg = dr.async_get(self.hass)
+        device_entry = None
         if entity_entry.device_id:
-            dev_reg = dr.async_get(self.hass)
             device_entry = dev_reg.async_get(entity_entry.device_id)
             if device_entry:
                 device_labels = device_entry.labels or set()
                 if any(label in device_labels for label in self.ignore_labels):
                     return True
 
-        return False
+        # Use HA's own inheritance rules where available. Older supported
+        # cores only provide explicit entity and device area assignments.
+        resolve_area = getattr(er, "async_get_effective_area_id", None)
+        if resolve_area is not None:
+            area_id = resolve_area(self.hass, entity_entry, dev_reg=dev_reg)
+        else:
+            area_id = entity_entry.area_id or (device_entry.area_id if device_entry else None)
+        if area_id is None:
+            return False
+        area_entry = ar.async_get(self.hass).async_get_area(area_id)
+        return area_entry is not None and any(
+            label in area_entry.labels for label in self.ignore_labels
+        )
 
     # ------------------------------------------------------------------
     # Main update — orchestrates sub-calculations with safety net

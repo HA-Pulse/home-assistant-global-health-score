@@ -6,7 +6,10 @@ from datetime import timedelta
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE
 from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -957,3 +960,40 @@ async def test_battery_grace_can_be_set_below_zombie_grace(
     # Only the battery sensor: 30 > 10, while normal sensor is still inside
     # its 60 min window.
     assert zombie_count == 1
+
+
+async def test_area_ignore_zombie_results_follow_effective_area(hass: HomeAssistant) -> None:
+    """Keep an own-area control on the same device and observe label changes."""
+    label = lr.async_get(hass).async_create("Zombie area exclusion")
+    assert label.label_id != label.name
+    areas = ar.async_get(hass)
+    ignored = areas.async_create("Zombie ignored room", labels={label.label_id})
+    control = areas.async_create("Zombie control room")
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_IGNORE_LABELS: [label.label_id]})
+    entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={("test", "area_zombies")}
+    )
+    dr.async_get(hass).async_update_device(device.id, area_id=ignored.id)
+    registry = er.async_get(hass)
+    for object_id in ("area_zombie_ignored", "area_zombie_control"):
+        registry.async_get_or_create(
+            "sensor",
+            "test_platform",
+            object_id,
+            suggested_object_id=object_id,
+            device_id=device.id,
+        )
+        _make_zombie(hass, f"sensor.{object_id}", age_minutes=30)
+    registry.async_update_entity("sensor.area_zombie_control", area_id=control.id)
+    coord = _coordinator_with_boot_age(hass, entry)
+    for labels, expected_ids, expected_count in (
+        ({label.label_id}, ["sensor.area_zombie_control"], 1),
+        (set(), ["sensor.area_zombie_control", "sensor.area_zombie_ignored"], 2),
+        ({label.label_id}, ["sensor.area_zombie_control"], 1),
+    ):
+        areas.async_update(ignored.id, labels=labels)
+        result = coord._calc_zombies()
+        actual = (sorted(result[0]), result[2], result[3], result[4], result[5])
+        expected = (expected_ids, expected_count, {"sensor": expected_count}, [], 0)
+        assert actual == expected, f"actual={actual}, expected={expected}"

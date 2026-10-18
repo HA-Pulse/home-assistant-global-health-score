@@ -196,7 +196,7 @@ If an integration entry is expected to fail while a device is powered off, selec
 
 Excluded entries no longer contribute to Integration Health's unhealthy count, penalty, recommendation or rec_integration_health flag. Other entries still cost 5 points each, capped at 15. Clear the entire selection to include all entries again; the empty selection persists after restart. Removed entries do not cause errors.
 
-This exclusion only affects Integration Health. Zombie and device detection, update checks and Repairs are separate. Device and entity ignore labels are not automatically applied to integration entries. HAGHS does not detect intentional power-off or test network reachability.
+This exclusion only affects Integration Health. Zombie and device detection, update checks and Repairs are separate. Area, device and entity ignore labels are not automatically applied to integration entries. HAGHS does not detect intentional power-off or test network reachability.
 
 <details>
 <summary><b>External Database (MariaDB / PostgreSQL)</b> - full SQL-sensor walkthrough</summary>
@@ -261,14 +261,15 @@ To use ignore labels:
 1.  Go to **Settings > Areas, labels & zones > Labels**.
 2.  The `haghs_ignore` label is created automatically during setup. Create additional labels if needed (e.g. `vacation`, `guest_mode`).
 3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
-4.  Assign any of those labels to any **Device**, **Entity**, or **Update Entity**.
+4.  Assign any of those labels to any **Area**, **Device**, **Entity**, or **Update Entity**.
     * **Pro Tip:** Assigning a label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
+    * **Area Tip:** An ignore label on an area excludes entities whose effective Home Assistant area is that area. An entity's own area takes precedence over its device's area; entities without their own area inherit the effective device area. Existing entity and device ignore labels remain independent exclusion rules. Area and label changes take effect on the next regular evaluation.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
     * **Note on `hidden_by`:** Hiding an entity from auto-generated dashboards does **not** exclude it from HAGHS. To exclude a hidden entity, disable it or apply an ignore label.
 
 ### Dynamic exclusions via automation
 
-Device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
+Area, device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
 
 Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
 native label services - HAGHS does not need its own service. List a label like

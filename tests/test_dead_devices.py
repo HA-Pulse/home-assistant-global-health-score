@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
@@ -471,3 +472,36 @@ async def test_dead_device_translation_and_fallback(
         [expected.format(count=count)] if count else []
     )
     assert coord._build_rec_flags(hw, app)["rec_dead_devices"] is bool(count)
+
+
+async def test_area_ignore_dead_device_results_preserve_full_outage_rule(
+    hass: HomeAssistant,
+) -> None:
+    """An ignored live entity still prevents a partial outage being called dead."""
+    label = lr.async_get(hass).async_create("Dead device area exclusion")
+    assert label.label_id != label.name
+    areas = ar.async_get(hass)
+    ignored = areas.async_create("Dead ignored room", labels={label.label_id})
+    control = areas.async_create("Dead control room")
+    ignored_device = _make_device(hass, "area_dead_ignored")
+    _make_entity(hass, ignored_device.id, "area_dead_ignored_entity")
+    devices = dr.async_get(hass)
+    devices.async_update_device(ignored_device.id, area_id=ignored.id)
+    control_device = _make_device(hass, "area_dead_control")
+    control_id = _make_entity(hass, control_device.id, "area_dead_control_entity")
+    devices.async_update_device(control_device.id, area_id=ignored.id)
+    registry = er.async_get(hass)
+    registry.async_update_entity(control_id, area_id=control.id)
+    partial = _make_device(hass, "area_partial")
+    _make_entity(hass, partial.id, "area_partial_dead")
+    live_id = _make_entity(hass, partial.id, "area_partial_live", unavailable_age_minutes=None)
+    registry.async_update_entity(live_id, area_id=ignored.id)
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    for labels, expected in (
+        ({label.label_id}, (["area_dead_control"], 1)),
+        (set(), (["area_dead_control", "area_dead_ignored"], 2)),
+        ({label.label_id}, (["area_dead_control"], 1)),
+    ):
+        areas.async_update(ignored.id, labels=labels)
+        actual = coord._calc_dead_devices()
+        assert actual == expected, f"actual={actual}, expected={expected}"
