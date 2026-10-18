@@ -245,3 +245,77 @@ async def test_unwatched_other_domain_and_unregistered_passive(hass):
     result = coord._calc_stale_entities()
     assert result.candidates == ["binary_sensor.quiet", "sensor.quiet"]
     assert result.watch_count == result.penalty == 0
+
+
+async def test_area_ignore_stale_results_preserve_direct_watch_opt_in(hass) -> None:
+    """Area/device watch labels never opt in, while area ignore silences both lists."""
+    labels = lr.async_get(hass)
+    ignore = labels.async_create("Stale area exclusion")
+    watch = labels.async_create("Direct stale monitoring")
+    assert ignore.label_id != ignore.name
+    assert watch.label_id != watch.name
+    areas = ar.async_get(hass)
+    ignored = areas.async_create("Stale ignored room", labels={ignore.label_id, watch.label_id})
+    control = areas.async_create("Stale control room", labels={watch.label_id})
+    coord = make_coordinator(
+        hass,
+        options={"ignore_labels": [ignore.label_id], "stale_watch_labels": [watch.label_id]},
+    )
+    owner = hass.config_entries.async_entries("haghs")[0]
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test", "area_stale")}
+    )
+    dr.async_get(hass).async_update_device(device.id, area_id=ignored.id, labels={watch.label_id})
+    registry = er.async_get(hass)
+    for object_id in ("area_stale_ignored", "area_stale_control", "area_stale_passive"):
+        entry = registry.async_get_or_create(
+            "sensor",
+            "test",
+            object_id,
+            suggested_object_id=object_id,
+            device_id=device.id,
+            original_name=object_id,
+        )
+        if object_id != "area_stale_passive":
+            registry.async_update_entity(entry.entity_id, labels={watch.label_id})
+        if object_id != "area_stale_ignored":
+            registry.async_update_entity(entry.entity_id, area_id=control.id)
+        hass.states.async_set(entry.entity_id, "42")
+        hass.states.get(entry.entity_id).last_reported = dt_util.utcnow() - timedelta(hours=25)
+    for area_labels, candidates, candidate_count, watched, watch_count, penalty in (
+        (
+            {ignore.label_id, watch.label_id},
+            ["sensor.area_stale_control", "sensor.area_stale_passive"],
+            2,
+            ["sensor.area_stale_control"],
+            1,
+            5,
+        ),
+        (
+            {watch.label_id},
+            ["sensor.area_stale_control", "sensor.area_stale_ignored", "sensor.area_stale_passive"],
+            3,
+            ["sensor.area_stale_control", "sensor.area_stale_ignored"],
+            2,
+            10,
+        ),
+        (
+            {ignore.label_id, watch.label_id},
+            ["sensor.area_stale_control", "sensor.area_stale_passive"],
+            2,
+            ["sensor.area_stale_control"],
+            1,
+            5,
+        ),
+    ):
+        areas.async_update(ignored.id, labels=area_labels)
+        result = coord._calc_stale_entities()
+        actual = (
+            result.candidates,
+            result.candidate_count,
+            result.watch_entities,
+            result.watch_count,
+            result.penalty,
+        )
+        expected = (candidates, candidate_count, watched, watch_count, penalty)
+        assert actual == expected, f"actual={actual}, expected={expected}"
