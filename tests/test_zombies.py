@@ -983,6 +983,7 @@ async def test_area_ignore_zombie_results_follow_effective_area(hass: HomeAssist
             object_id,
             suggested_object_id=object_id,
             device_id=device.id,
+            original_name=object_id,
         )
         _make_zombie(hass, f"sensor.{object_id}", age_minutes=30)
     registry.async_update_entity("sensor.area_zombie_control", area_id=control.id)

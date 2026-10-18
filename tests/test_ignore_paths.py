@@ -211,7 +211,11 @@ async def test_area_ignore_matrix(hass, scenario: str, expected: bool) -> None:
     )
     registry = er.async_get(hass)
     entry = registry.async_get_or_create(
-        "sensor", "test_platform", "area_matrix", device_id=device.id
+        "sensor",
+        "test_platform",
+        "area_matrix",
+        original_name="Area matrix entity",
+        device_id=device.id,
     )
     if scenario in {"device_area", "own_unlabeled_area"}:
         devices.async_update_device(device.id, area_id=ignored_area.id)
@@ -283,10 +287,18 @@ async def test_area_ignore_repeated_device_lookups_keep_entity_areas_separate(ha
     )
     registry = er.async_get(hass)
     plain = registry.async_get_or_create(
-        "sensor", "test_platform", "plain_sibling", device_id=device.id
+        "sensor",
+        "test_platform",
+        "plain_sibling",
+        original_name="Plain sibling",
+        device_id=device.id,
     )
     labeled = registry.async_get_or_create(
-        "sensor", "test_platform", "labeled_sibling", device_id=device.id
+        "sensor",
+        "test_platform",
+        "labeled_sibling",
+        original_name="Labeled sibling",
+        device_id=device.id,
     )
     registry.async_update_entity(plain.entity_id, area_id=control.id)
     registry.async_update_entity(labeled.entity_id, area_id=ignored.id)
@@ -317,7 +329,11 @@ async def test_area_ignore_changes_apply_on_next_lookup(hass, change: str) -> No
     )
     registry = er.async_get(hass)
     entry = registry.async_get_or_create(
-        "sensor", "test_platform", "dynamic_area", device_id=device.id
+        "sensor",
+        "test_platform",
+        "dynamic_area",
+        original_name="Dynamic entity",
+        device_id=device.id,
     )
     if change == "area_labels":
         devices.async_update_device(device.id, area_id=room.id)
@@ -349,12 +365,20 @@ async def test_area_ignore_native_parent_device_inheritance(hass) -> None:
         config_entry_id=owner.entry_id, identifiers={("test", "area_parent")}
     )
     devices.async_update_device(parent.id, area_id=area.id)
-    child = devices.async_get_or_create(
-        config_entry_id=owner.entry_id,
-        identifiers={("test", "area_child")},
-        via_device=("test", "area_parent"),
-    )
-    assert child.via_device_id == parent.id
+    if native_available:
+        child = devices.async_get_or_create_child(
+            config_entry_id=owner.entry_id,
+            identifiers={("test", "area_child")},
+            parent_device_id=parent.id,
+        )
+        assert child.parent_device_id == parent.id
+    else:
+        child = devices.async_get_or_create(
+            config_entry_id=owner.entry_id,
+            identifiers={("test", "area_child")},
+            via_device=("test", "area_parent"),
+        )
+        assert child.via_device_id == parent.id
     registry = er.async_get(hass)
     entry = registry.async_get_or_create(
         "sensor", "test_platform", "parent_area_entity", device_id=child.id
@@ -388,7 +412,7 @@ async def test_area_ignore_native_routing_or_legacy_fallback(
     actual = coord._is_ignored(entry.entity_id, entry)
     assert actual is native_available
     if native_available:
-        resolver.assert_called_once()
+        resolver.assert_called_once_with(hass, entry)
     else:
         entry = registry.async_update_entity(entry.entity_id, area_id=ignored.id)
         assert coord._is_ignored(entry.entity_id, entry) is True

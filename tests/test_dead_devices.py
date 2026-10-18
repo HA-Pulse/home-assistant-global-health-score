@@ -491,11 +491,11 @@ async def test_area_ignore_dead_device_results_preserve_full_outage_rule(
     control_id = _make_entity(hass, control_device.id, "area_dead_control_entity")
     devices.async_update_device(control_device.id, area_id=ignored.id)
     registry = er.async_get(hass)
-    registry.async_update_entity(control_id, area_id=control.id)
+    registry.async_update_entity(control_id, original_name="Area dead control", area_id=control.id)
     partial = _make_device(hass, "area_partial")
     _make_entity(hass, partial.id, "area_partial_dead")
     live_id = _make_entity(hass, partial.id, "area_partial_live", unavailable_age_minutes=None)
-    registry.async_update_entity(live_id, area_id=ignored.id)
+    registry.async_update_entity(live_id, original_name="Area partial live", area_id=ignored.id)
     coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
     for labels, expected in (
         ({label.label_id}, (["area_dead_control"], 1)),

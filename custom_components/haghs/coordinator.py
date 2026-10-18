@@ -386,7 +386,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # cores only provide explicit entity and device area assignments.
         resolve_area = getattr(er, "async_get_effective_area_id", None)
         if resolve_area is not None:
-            area_id = resolve_area(self.hass, entity_entry, dev_reg=dev_reg)
+            area_id = resolve_area(self.hass, entity_entry)
         else:
             area_id = entity_entry.area_id or (device_entry.area_id if device_entry else None)
         if area_id is None:

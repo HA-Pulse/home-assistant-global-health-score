@@ -269,7 +269,12 @@ async def test_area_ignore_stale_results_preserve_direct_watch_opt_in(hass) -> N
     registry = er.async_get(hass)
     for object_id in ("area_stale_ignored", "area_stale_control", "area_stale_passive"):
         entry = registry.async_get_or_create(
-            "sensor", "test", object_id, suggested_object_id=object_id, device_id=device.id
+            "sensor",
+            "test",
+            object_id,
+            suggested_object_id=object_id,
+            device_id=device.id,
+            original_name=object_id,
         )
         if object_id != "area_stale_passive":
             registry.async_update_entity(entry.entity_id, labels={watch.label_id})

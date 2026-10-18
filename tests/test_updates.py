@@ -253,6 +253,7 @@ async def test_area_ignore_update_results_and_tracking(hass: HomeAssistant) -> N
             object_id,
             suggested_object_id=object_id,
             device_id=device.id,
+            original_name=name,
         )
         hass.states.async_set(entry.entity_id, "on", {"friendly_name": name})
         _set_first_seen(hass, entry.entity_id, days_ago=UPDATE_GRACE_DAYS + 1)
