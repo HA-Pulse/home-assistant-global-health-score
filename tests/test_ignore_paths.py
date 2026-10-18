@@ -386,7 +386,10 @@ async def test_area_ignore_native_parent_device_inheritance(hass) -> None:
     coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
     actual = coord._is_ignored(entry.entity_id, registry.async_get(entry.entity_id))
     assert actual is native_available
-    devices.async_update_device(child.id, area_id=control.id)
+    if native_available:
+        devices.async_update_child_device(child.id, area_id=control.id)
+    else:
+        devices.async_update_device(child.id, area_id=control.id)
     assert coord._is_ignored(entry.entity_id, registry.async_get(entry.entity_id)) is False
 
 
