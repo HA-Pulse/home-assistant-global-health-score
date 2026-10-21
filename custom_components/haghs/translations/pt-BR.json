@@ -1,5 +1,10 @@
 {
   "common": {
+    "rec_stale": "Relatórios desatualizados: {count} entidade(s) monitorada(s) não envia(m) relatórios há mais de {hours} hora(s); penalidade de {penalty} ponto(s) na pontuação de aplicação antes do bônus de configuração.",
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Aplicação",
+    "rec_pillar_fallback": "⚠️ Cálculo: falha ou tempo limite excedido em {pillars}; os valores neutros de fallback não são medições.",
+    "rec_update_failed": "⚠️ Cálculo: o ciclo de atualização falhou; os resultados anteriores ou valores iniciais neutros são exibidos.",
     "rec_all_clear": "✅ Sistema otimizado",
     "rec_backup_stale": "🚨 Segurança: backup obsoleto detectado!",
     "rec_config_audit": "🔧 Config-Audit: {missing} ponto(s) de bônus não ganhos (dias de retenção do Recorder / filtro de entidades).",
@@ -73,6 +78,9 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_stale_threshold": "Insira um número inteiro de horas de 1 a 8760."
+    },
     "step": {
       "init": {
         "title": "Opções do HAGHS",
@@ -85,7 +93,10 @@
           "ignore_patterns": "Ignorar padrões de entity_id",
           "db_sensor": "Sensor de tamanho do banco de dados (opcional)",
           "update_interval": "Intervalo de atualização",
+          "stale_threshold_hours": "Limite de tempo sem relatórios (horas)",
+          "stale_watch_labels": "Rótulos para monitorar relatórios desatualizados",
           "zombie_grace_minutes": "Período de tolerância para zumbis (minutos)",
+          "ignored_integration_entries": "Excluir entradas de integração da avaliação de integridade das integrações",
           "battery_grace_minutes": "Período de tolerância para entidades da classe battery (minutos)"
         },
         "data_description": {
@@ -96,7 +107,10 @@
           "ignore_patterns": "Lista opcional de padrões glob correspondentes ao entity_id (um por linha). Entidades cujo ID corresponde a qualquer padrão são excluídas da detecção de zumbis, da listagem de entidades não registradas e das penalidades por atualizações pendentes. Use isso para entidades sem um ID único, que não podem receber um rótulo (por exemplo, 'sensor.docker_*'). Os curingas * e ? são suportados.",
           "db_sensor": "Necessário apenas para bancos de dados externos (MariaDB, PostgreSQL). Deixe vazio para usar a detecção automática do SQLite embutido. O sensor deve informar o tamanho do banco de dados em MB (por exemplo, 'sensor.mariadb_size').",
           "update_interval": "Com que frequência o HAGHS recalcula a pontuação de integridade, em segundos. Valores mais baixos significam atualizações mais rápidas, mas um pouco mais de uso da CPU. Padrão: 60 segundos.",
+          "stale_threshold_hours": "Tempo desde o último relatório de estado, não desde a última mudança de valor. Horas inteiras de 1 a 8760; padrão: 24. As detecções passivas abrangem apenas sensor e binary_sensor e não afetam a pontuação.",
+          "stale_watch_labels": "Inclua entidades na pontuação por relatórios desatualizados usando rótulos aplicados diretamente às entidades de qualquer domínio. Rótulos de dispositivos e áreas não as incluem. As regras de exclusão têm prioridade. Cada entidade monitorada com atraso custa 5 pontos de aplicação, com limite de 10 antes do bônus de configuração; a pontuação de aplicação é de no máximo 99 enquanto houver alguma entidade com atraso. Deixe vazio para desativar essa pontuação.",
           "zombie_grace_minutes": "Quanto tempo uma entidade deve permanecer em 'unavailable' ou 'unknown' antes que o HAGHS a considere um zumbi. Faixa permitida: 1 a 240 minutos. Valores mais baixos tornam a detecção mais agressiva (mais falsos positivos de dispositivos off-line por um breve período). Valores mais altos mascaram interrupções curtas, mas permitem que falhas reais persistam. Padrão: 5 minutos.",
+          "ignored_integration_entries": "Selecione entradas individuais de integração para excluir da contagem, penalidade e recomendação de integridade das integrações. Cada entrada é identificada pelo título, domínio e ID da entrada. Deixe vazio para incluir todas as entradas. Isso não exclui entidades ou dispositivos da detecção de zumbis e não ignora Reparos. Rótulos de exclusão de dispositivos e entidades não excluem entradas de integração.",
           "battery_grace_minutes": "Período de tolerância estendido especificamente para entidades com 'device_class: battery'. Os rádios Zigbee e Homematic normalmente demoram mais do que a janela normal para consultar novamente os dispositivos a bateria, portanto, sinalizá-los como zumbis após apenas 5 minutos produz falsos positivos. Faixa permitida: 1 a 240 minutos. Se você definir um valor inferior ao período de tolerância normal, a extensão será efetivamente desativada. Padrão: 60 minutos."
         }
       }
