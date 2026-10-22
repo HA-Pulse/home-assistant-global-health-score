@@ -344,6 +344,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
 | `zombie_entities`| list | Entity IDs of zombies (capped at 100) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
+| `zombie_count_per_integration` | dict | Zombies per integration, keyed by the entity's integration (e.g. {"matter": 12, "mqtt": 40}); always reflects the full count regardless of the list cap; informational, no score impact |
 | `unregistered_count` | int | Number of detected entities without an entity-registry entry (informational only, does not affect the score) |
 | `unregistered_entities` | list | Entity IDs of unregistered entities (capped at 100) |
 | `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
