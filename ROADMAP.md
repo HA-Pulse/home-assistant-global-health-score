@@ -63,9 +63,10 @@ All work below is committed on `dev` and described in detail in
   to the penalty after `UPDATE_GRACE_DAYS = 7`; pending list is
   unaffected so users still see what is queued.
 - **Multi-label ignore + dynamic toggling**: `ignore_labels` accepts
-  multiple labels. Inclusion/exclusion is toggled at runtime via HA's
-  native `homeassistant.add_label_to_entity` /
-  `homeassistant.remove_label_from_entity` service actions, so automations
+  multiple labels. Inclusion/exclusion is toggled at runtime via the
+  `homeassistant.add_label_to_entity` /
+  `homeassistant.remove_label_from_entity` service actions of the Spook
+  custom integration (HA itself has no label service), so automations
   can flip exclusions (e.g. a `vacation` label) without reloading the
   integration. Migration `(3,2)→(3,3)` converts the legacy single-label
   setting transparently.
