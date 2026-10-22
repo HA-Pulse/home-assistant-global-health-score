@@ -66,6 +66,7 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "zombie_count": data["zombie_count"],
             "zombie_entities": data["zombie_entities"],
             "zombie_count_per_domain": data["zombie_count_per_domain"],
+            "zombie_count_per_integration": data["zombie_count_per_integration"],
             "unregistered_count": data["unregistered_count"],
             "unregistered_entities": data["unregistered_entities"],
             "unregistered_count_per_domain": data["unregistered_count_per_domain"],
