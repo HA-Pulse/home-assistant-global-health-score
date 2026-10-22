@@ -271,28 +271,31 @@ To use ignore labels:
 
 Area, device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
 
-Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
-native label services - HAGHS does not need its own service. List a label like
-`vacation` in the HAGHS *Ignore labels* field, then assign/remove it from
-automations:
+Home Assistant itself has no service actions for assigning labels. The label
+actions used below are provided by the [Spook](https://spook.boo) custom
+integration; HAGHS does not need its own service. Without Spook, assign or remove
+the labels in the UI. List a label like `vacation` in the HAGHS *Ignore labels*
+field, then assign/remove it from automations:
 
 ```yaml
-# Toggle the `vacation` label on a group of entities
-# (use homeassistant.remove_label_from_entity with the same target when vacation ends)
+# Toggle the `vacation` label on a group of entities (requires Spook)
+# (use homeassistant.remove_label_from_entity with the same data when vacation ends)
 - alias: HAGHS vacation start
   trigger:
     - platform: time
       at: "08:00:00"
   action:
-    - service: homeassistant.add_label_to_entity
+    - action: homeassistant.add_label_to_entity
       data:
         label_id: vacation
-        target:
-          entity_id:
-            - light.terrace
-            - switch.coffee_machine
-            - vacuum.robot
+        entity_id:
+          - light.terrace
+          - switch.coffee_machine
+          - vacuum.robot
 ```
+
+For device labels, Spook provides `homeassistant.add_label_to_device` and
+`homeassistant.remove_label_from_device` with `label_id` and `device_id`.
 
 HAGHS picks up the change automatically on its next refresh; no reload needed.
 
@@ -723,7 +726,7 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 **Highlights**
 
-* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via HA-native `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` services (no custom HAGHS service). Migration from the legacy single-label config is automatic.
+* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via the `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` services of the Spook custom integration (no custom HAGHS service). Migration from the legacy single-label config is automatic.
 * **Disabled-entity auto-ignore.** Entities marked *Disable entity* in the entity registry are now excluded from zombie detection and update penalties — no `haghs_ignore` label required.
 * **Pattern-based ignore (#64).** New `ignore_patterns` field accepts glob patterns for entities without a unique ID (e.g. `sensor.docker_*`, `sensor.torque_*`).
 * **Configurable zombie + battery grace periods.** Two new Options Flow fields (1–240 min each, defaults 5 / 60). Battery-class entities get the longer window because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices.
