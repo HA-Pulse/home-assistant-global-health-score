@@ -1,35 +1,28 @@
-# HAGHS Developer System
-You are the lead developer for HAGHS (Home Assistant Global Health Score).
+# HAGHS: notes for developers and coding agents
 
-BEFORE you start any task, respond to an issue, or write code, you must read and internalize these two files:
-1. `HAGHS_PHILOSOPHY.md` (Vision & Alignment)
-2. `DEVELOPMENT_GUIDELINES.md` (Hard Coding Rules)
+Read `HAGHS_PHILOSOPHY.md` (vision and alignment) and `DEVELOPMENT_GUIDELINES.md`
+(coding rules) before changing code. `CONTRIBUTING.md` and `RELEASING.md` describe the
+full workflow.
 
-CRITICAL RULE: On feature branches, plan approval covers all code changes. Never commit directly to `dev` or `main`. Merge and release only after explicit OK. Do not fabricate technical feasibility: be honest when something is not possible in Home Assistant, and explain possible workarounds instead.
+## Repository facts
+- Integration code lives in `custom_components/haghs/`, tests in `tests/` (pytest,
+  dependencies in `requirements_test.txt`).
+- CI runs Ruff (`ruff check`, `ruff format --check`), Pytest with the coverage limits
+  in `.github/workflows/ci.yml`, hassfest and HACS validation.
+- The runtime is local-only: no outbound network calls and no external APIs.
+- User-facing text belongs in `strings.json` and `translations/*.json`, never
+  hardcoded in Python.
+- Verify Home Assistant APIs against the current HA Core documentation and check the
+  HA release notes (https://www.home-assistant.io/blog/) for breaking changes before
+  relying on config flows, coordinators, entity platforms or selectors. If something is
+  not possible in Home Assistant, say so and describe the workaround.
 
-Additional rules:
-- When instructions are ambiguous, ask before assuming.
-- Always verify against the latest HA Core documentation before suggesting API usage.
-- Before modifying integration code that touches HA Core APIs (config flows, coordinators, entity platforms, selectors), check the latest HA release notes for breaking changes: https://www.home-assistant.io/blog/
-- The trigger "Are you sure?" is your command to perform a full re-evaluation of your sources and reasoning.
-
-Workflow rules:
-- Always develop on a feature branch cut from `dev` (`feat/*`, `fix/*`, `chore/*`, `release/*`). Never commit directly to `dev` or `main`.
-- Every change lands via pull request into `dev` (squash merge). `main` only receives release PRs from `dev` (merge commit).
-- Keep the active changelog for the next release updated for every change (on the feature branch, never directly on `dev`).
-- Write all GitHub comments and community responses in English.
-
-## File-Level Autonomy Rules
-
-### I may update without asking (on feature branches, never directly on `dev`):
-- `ROADMAP.md` — add/update planned features, declined items, or the date, based on session context (issues, community feedback, conversations)
-- the active changelog for the next release: document changes already made in the session
-
-### I must always ask first:
-- Any `*.py` file outside an approved feature-branch plan (scoring logic, config flow, coordinator, constants)
-- `README.md` — owner manages this manually; never commit changes to it without explicit instruction
-- `HAGHS_PHILOSOPHY.md` — foundational document, changes affect everything downstream
-- `DEVELOPMENT_GUIDELINES.md` — same as above
-- Any push to `main` — only with explicit instruction per session
-- Any branch merge — always requires confirmation
-- Deleting files or reverting commits
+## Workflow
+- Branch from `dev` (`feat/*`, `fix/*`, `chore/*`, `release/*`). Every change lands via a
+  pull request into `dev` (squash merge). `main` only receives release PRs from `dev`
+  (merge commit). Never push to `dev` or `main` directly.
+- Update the active changelog for the next release in the same PR.
+- Merges and releases need the maintainer's explicit OK.
+- `README.md`, `HAGHS_PHILOSOPHY.md` and `DEVELOPMENT_GUIDELINES.md` are maintained by the
+  owner; propose changes instead of committing them.
+- Write GitHub comments and community responses in English.
