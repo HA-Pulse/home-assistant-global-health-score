@@ -1029,7 +1029,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _calc_zombies(
         self,
-    ) -> tuple[list[str], int, int, dict[str, int], list[str], int, dict[str, int]]:
+    ) -> tuple[list[str], int, int, dict[str, int], list[str], int, dict[str, int], dict[str, int]]:
         """Detect zombie and unregistered entities, respecting ignore labels.
 
         Zombies: entities in ZOMBIE_DOMAINS that have been unavailable /
