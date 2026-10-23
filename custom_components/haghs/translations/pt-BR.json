@@ -22,7 +22,7 @@
     "rec_ram_pressure_psi": "⚡ Otimização: o tempo de espera por memória medido pelo PSI está afetando a pontuação ({ram_pct:.1f}%).",
     "rec_repairs": "🛠️ Reparos: {count} problemas de reparo abertos detectados.",
     "rec_updates_pending": "📦 Manutenção: {count} atualizações pendentes.",
-    "rec_zombies": "🧟 Higiene: {count} zumbi(s) detectado(s)."
+    "rec_zombies": "🧟 Higiene: {count} zumbi(s) detectado(s). Verifique antes de excluir: indisponível não significa sem uso."
   },
   "config": {
     "step": {
