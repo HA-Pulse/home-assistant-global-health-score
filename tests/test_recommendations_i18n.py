@@ -185,3 +185,29 @@ async def test_failure_translation_lookup_and_placeholders(hass, language):
     assert coord._failure_recommendations() == [
         REC_TEMPLATES["rec_pillar_fallback"].format(pillars="Hardware, Application")
     ]
+
+
+ZOMBIE_EN = (
+    "\U0001f9df Hygiene: {count} zombie(s) detected. "
+    "Check before deleting: unavailable is not the same as unused."
+)
+ZOMBIE_PT_BR = (
+    "\U0001f9df Higiene: {count} zumbi(s) detectado(s). "
+    "Verifique antes de excluir: indisponível não significa sem uso."
+)
+
+
+def test_zombie_recommendation_is_not_a_deletion_list(hass) -> None:
+    """#154: the zombie line says that unavailable does not mean unused (en, pt-BR)."""
+    integration_dir = Path(__file__).resolve().parents[1] / "custom_components" / "haghs"
+    for filename, expected in (
+        ("strings.json", ZOMBIE_EN),
+        ("translations/en.json", ZOMBIE_EN),
+        ("translations/pt-BR.json", ZOMBIE_PT_BR),
+    ):
+        value = json.loads((integration_dir / filename).read_text(encoding="utf-8"))
+        assert value["common"]["rec_zombies"] == expected, filename
+    assert REC_TEMPLATES["rec_zombies"] == ZOMBIE_EN
+    coord = make_coordinator(hass)
+    app = _ApplicationResult(config_bonus=CONFIG_AUDIT_MAX_BONUS, p_zombie=4, zombie_count=218)
+    assert coord._build_recommendations(_HardwareResult(), app) == [ZOMBIE_EN.format(count=218)]

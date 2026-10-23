@@ -22,7 +22,7 @@
     "rec_ram_pressure_psi": "⚡ Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%).",
     "rec_repairs": "🛠️ Repairs: {count} open repair issue(s) detected.",
     "rec_updates_pending": "📦 Maintenance: {count} update(s) pending.",
-    "rec_zombies": "🧟 Hygiene: {count} zombie(s) detected."
+    "rec_zombies": "🧟 Hygiene: {count} zombie(s) detected. Check before deleting: unavailable is not the same as unused."
   },
   "config": {
     "step": {
