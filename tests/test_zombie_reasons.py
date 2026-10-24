@@ -12,10 +12,16 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.haghs.const import DOMAIN, ZOMBIE_LIST_CAP, ZOMBIE_REASONS
+from custom_components.haghs.const import (
+    CONF_IGNORE_LABELS,
+    DOMAIN,
+    ZOMBIE_LIST_CAP,
+    ZOMBIE_REASONS,
+)
 from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
@@ -41,8 +47,12 @@ EXPECTED_REASONS = {
 }
 
 
-async def _scenario_result(hass, monkeypatch, extra=0):
-    """One real case per reason; extra adds capped-case zombies on a loaded integration."""
+async def _scenario_result(hass, monkeypatch, extra=0, *, long_ids=False):
+    """One real case per reason; extra adds capped-case zombies on a loaded integration.
+
+    long_ids gives the extra zombies long entity ids (worst case for attribute size); the
+    pinned dev scenarios use the short ids.
+    """
     coord = make_coordinator(hass)
     coord._registries_ready = True
     devices = dr.async_get(hass)
@@ -88,8 +98,13 @@ async def _scenario_result(hass, monkeypatch, extra=0):
     registered(live, "offline")
     registered(None, "yaml_restored", restored=True)
     registered(None, "yaml_offline")
+    prefix = (
+        "living_room_ceiling_rgbww_led_strip_segment_with_a_very_long_name_"
+        if long_ids
+        else "segment_"
+    )
     for index in range(extra):  # capped case
-        registered(live, f"segment_{index:03d}", domain="light")
+        registered(live, f"{prefix}{index:03d}", domain="light")
     original = hass.config_entries.async_get_entry
     monkeypatch.setattr(
         hass.config_entries,
@@ -229,6 +244,50 @@ async def test_capped_with_the_entity_list_and_counts_stay_full(
     assert len(result["zombie_reasons"]) == ZOMBIE_LIST_CAP
     assert sum(result["zombie_count_per_reason"].values()) == 113
     assert result["zombie_count_per_reason"]["unavailable"] == 2 + 105
+
+
+async def test_ignored_disabled_and_unregistered_get_no_reason(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Excluded entities are absent from zombie_reasons and not counted in zombie_count_per_reason."""
+    label = lr.async_get(hass).async_create("Vacation")
+    coord = make_coordinator(hass, options={CONF_IGNORE_LABELS: [label.label_id]})
+    coord._registries_ready = True
+    entry = MockConfigEntry(domain="liveint", data={})
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    devices = dr.async_get(hass)
+    registry = er.async_get(hass)
+    now = dt_util.utcnow()
+
+    def registered(object_id):
+        device = devices.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={("liveint", object_id)}, name=object_id
+        )
+        created = registry.async_get_or_create(
+            "sensor",
+            "liveint",
+            f"uid_{object_id}",
+            suggested_object_id=object_id,
+            config_entry=entry,
+            device_id=device.id,
+        )
+        hass.states.async_set(created.entity_id, STATE_UNAVAILABLE)
+        hass.states.get(created.entity_id).last_changed = now - timedelta(minutes=30)
+        return created.entity_id
+
+    kept = registered("kept")
+    labelled = registered("labelled")
+    disabled = registered("disabled")
+    registry.async_update_entity(labelled, labels={label.label_id})
+    registry.async_update_entity(disabled, disabled_by=er.RegistryEntryDisabler.USER)
+    hass.states.async_set("sensor.yaml_template", STATE_UNAVAILABLE)
+    hass.states.get("sensor.yaml_template").last_changed = now - timedelta(minutes=30)
+    result = coord._calc_zombies()
+    assert result[10] == {kept: "unavailable"}
+    assert result[9] == {"unavailable": 1}
+    assert result[5] == 1  # the unregistered entity is reported separately
+    object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)
 
 
 async def test_empty_cases_and_sensor(hass: HomeAssistant) -> None:
