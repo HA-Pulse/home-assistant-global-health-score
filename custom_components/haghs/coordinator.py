@@ -185,6 +185,7 @@ class _ApplicationResult:
     zombie_list: list[str] = field(default_factory=list)
     zombie_per_domain: dict[str, int] = field(default_factory=dict)
     zombie_per_integration: dict[str, int] = field(default_factory=dict)
+    zombie_since: dict[str, str] = field(default_factory=dict)
     unregistered_count: int = 0
     unregistered_list: list[str] = field(default_factory=list)
     unregistered_per_domain: dict[str, int] = field(default_factory=dict)
@@ -485,6 +486,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_entities": app.zombie_list,
             "zombie_count_per_domain": app.zombie_per_domain,
             "zombie_count_per_integration": app.zombie_per_integration,
+            "zombie_since": app.zombie_since,
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
@@ -562,6 +564,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_entities": app.zombie_list,
             "zombie_count_per_domain": app.zombie_per_domain,
             "zombie_count_per_integration": app.zombie_per_integration,
+            "zombie_since": app.zombie_since,
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
@@ -900,6 +903,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unregistered_count,
             unregistered_per_domain,
             zombie_per_integration,
+            zombie_since,
         ) = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
@@ -952,6 +956,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zombie_list=zombie_list,
             zombie_per_domain=zombie_per_domain,
             zombie_per_integration=zombie_per_integration,
+            zombie_since=zombie_since,
             unregistered_count=unregistered_count,
             unregistered_list=unregistered_list,
             unregistered_per_domain=unregistered_per_domain,
@@ -1010,6 +1015,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             penalty=min(STALE_PENALTY_CAP, STALE_PENALTY_PER_ENTITY * len(watched)),
         )
 
+    def _effective_seen(self, state: State) -> datetime:
+        """Unavailable/unknown at least since: last_changed, floored at the boot time.
+
+        Shared by the grace period and the zombie_since attribute (#154), so
+        both always use the same baseline.
+        """
+        return max(state.last_changed, self._boot_time)
+
     def _past_grace(self, state: State, now: datetime) -> bool:
         """Return True if *state* has been stale longer than the grace window.
 
@@ -1019,7 +1032,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         time as the floor. Battery-class entities use a separate, typically
         longer window (configurable in the Options Flow).
         """
-        effective_seen = max(state.last_changed, self._boot_time)
+        effective_seen = self._effective_seen(state)
         grace_seconds = (
             self._battery_grace_seconds
             if state.attributes.get("device_class") == "battery"
@@ -1029,7 +1042,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _calc_zombies(
         self,
-    ) -> tuple[list[str], int, int, dict[str, int], list[str], int, dict[str, int], dict[str, int]]:
+    ) -> tuple[
+        list[str],
+        int,
+        int,
+        dict[str, int],
+        list[str],
+        int,
+        dict[str, int],
+        dict[str, int],
+        dict[str, str],
+    ]:
         """Detect zombie and unregistered entities, respecting ignore labels.
 
         Zombies: entities in ZOMBIE_DOMAINS that have been unavailable /
@@ -1043,7 +1066,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Returns (zombie_list_capped, p_zombie, zombie_count, zombie_per_domain,
         unregistered_list_capped, unregistered_count, unregistered_per_domain,
-        zombie_per_integration). Both lists are capped because the HA state
+        zombie_per_integration, zombie_since). Both lists are capped because the HA state
         machine caps an attribute payload at 16 KB; the counts, the per-domain
         dicts and the per-integration dict (keyed by the registry platform,
         #154) always reflect the full numbers.
@@ -1053,13 +1076,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # be missing, producing false positives right after boot (#13).
         if not self._registries_ready:
             _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
-            return [], 0, 0, {}, [], 0, {}, {}
+            return [], 0, 0, {}, [], 0, {}, {}, {}
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
         zombie_list: list[str] = []
         zombie_per_domain: dict[str, int] = {}
         zombie_per_integration: dict[str, int] = {}
+        zombie_since: dict[str, str] = {}
         unregistered_list: list[str] = []
         unregistered_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
@@ -1112,6 +1136,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     zombie_per_integration.get(entity_entry.platform, 0) + 1
                 )
                 zombie_list.append(entity_id)
+                zombie_since[entity_id] = self._effective_seen(state).isoformat()
 
         zombie_count = len(zombie_list)
         unregistered_count = len(unregistered_list)
@@ -1135,6 +1160,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unregistered_count,
             unregistered_per_domain,
             dict(sorted(zombie_per_integration.items())),
+            # Same entries and order as the capped zombie list (#154).
+            {entity_id: zombie_since[entity_id] for entity_id in zombie_list[:ZOMBIE_LIST_CAP]},
         )
 
     def _calc_dead_devices(self) -> tuple[list[str], int]:
