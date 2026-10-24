@@ -26,9 +26,11 @@ from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 NEW_KEYS = {"zombie_count_per_reason", "zombie_reasons"}
+FROZEN = "2026-10-24T08:00:00+00:00"  # clock of the dev capture
 # Complete results of the same scenarios on dev 1a6de2c before this change, captured on a
-# clean checkout of that commit without PR code: 8 zombies (one per case), and 113 zombies
-# (list capped). Score, every existing attribute and every rec_* flag must stay as they were.
+# clean checkout of that commit without PR code, clock frozen at FROZEN: 8 zombies (one per
+# case), and 113 zombies (list capped). Score, every existing attribute (zombie_since values
+# included) and every rec_* flag must stay as they were.
 DEV_RESULTS = {
     extra: json.loads(
         (Path(__file__).parent / "data" / f"zombie_reasons_dev_{extra}.json").read_text()
@@ -123,25 +125,19 @@ async def _scenario_result(hass, monkeypatch, extra=0, *, long_ids=False):
 
 @pytest.mark.parametrize("extra", [0, 105])
 async def test_score_and_existing_attributes_are_unchanged(
-    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, extra: int
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, freezer, extra: int
 ) -> None:
-    """Only the two reason keys are added; everything else equals the pinned dev result.
+    """Only the two reason keys are added; every other value equals the pinned dev result.
 
-    zombie_since holds wall-clock timestamps (its values are covered by test_zombie_since.py)
-    and the pins are stored with sorted keys, so here its key set is compared and its order
-    against zombie_entities; every other value exactly.
+    The clock is frozen at the capture time, so zombie_since values are compared exactly too.
+    The pins are stored with sorted keys, so its order is checked against zombie_entities.
     """
+    freezer.move_to(FROZEN)
     _, result = await _scenario_result(hass, monkeypatch, extra)
     assert set(result) == set(DEV_RESULTS[extra]) | NEW_KEYS
-
-    def comparable(value: dict) -> dict:
-        return {
-            key: (sorted(item) if key == "zombie_since" else item)
-            for key, item in value.items()
-            if key not in NEW_KEYS
-        }
-
-    assert comparable(result) == comparable(DEV_RESULTS[extra])
+    assert {key: value for key, value in result.items() if key not in NEW_KEYS} == DEV_RESULTS[
+        extra
+    ]
     assert list(result["zombie_since"]) == result["zombie_entities"]
 
 
