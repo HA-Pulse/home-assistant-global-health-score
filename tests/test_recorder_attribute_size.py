@@ -171,5 +171,6 @@ async def test_current_attributes_are_unchanged(hass: HomeAssistant, freezer) ->
     """Only the recorder exclusion changes; the state keeps every key and value as on dev."""
     freezer.move_to(FROZEN)
     sensor, entry = await _worst_case(hass, length=80)
-    assert sensor.extra_state_attributes == DEV_ATTRIBUTES
+    # The only key added since the dev capture (#134); this scenario has no unhealthy entry.
+    assert sensor.extra_state_attributes == {**DEV_ATTRIBUTES, "integration_unhealthy_entries": []}
     object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)

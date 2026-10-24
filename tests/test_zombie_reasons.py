@@ -26,6 +26,8 @@ from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 NEW_KEYS = {"zombie_count_per_reason", "zombie_reasons"}
+# Added after #154-d by a later plan (#134); compared exactly below.
+ADDED_LATER = {"integration_unhealthy_entries"}
 FROZEN = "2026-10-24T08:00:00+00:00"  # clock of the dev capture
 # Complete results of the same scenarios on dev 1a6de2c before this change, captured on a
 # clean checkout of that commit without PR code, clock frozen at FROZEN: 8 zombies (one per
@@ -134,10 +136,11 @@ async def test_score_and_existing_attributes_are_unchanged(
     """
     freezer.move_to(FROZEN)
     _, result = await _scenario_result(hass, monkeypatch, extra)
-    assert set(result) == set(DEV_RESULTS[extra]) | NEW_KEYS
-    assert {key: value for key, value in result.items() if key not in NEW_KEYS} == DEV_RESULTS[
-        extra
-    ]
+    assert set(result) == set(DEV_RESULTS[extra]) | NEW_KEYS | ADDED_LATER
+    added = NEW_KEYS | ADDED_LATER
+    assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
+    # The SETUP_ERROR and SETUP_RETRY entries; NOT_LOADED and LOADED entries are not counted.
+    assert result["integration_unhealthy_entries"] == ["brokenint: brokenint", "retryint: retryint"]
     assert list(result["zombie_since"]) == result["zombie_entities"]
 
 

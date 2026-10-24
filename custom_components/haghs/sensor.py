@@ -41,6 +41,7 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "dead_devices",
             "repairs",
             "pending_updates",
+            "integration_unhealthy_entries",
         }
     )
 
@@ -95,6 +96,7 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "recorder_keep_days": data["recorder_keep_days"],
             "recorder_filter_active": data["recorder_filter_active"],
             "integration_unhealthy_count": data["integration_unhealthy_count"],
+            "integration_unhealthy_entries": data["integration_unhealthy_entries"],
             "config_audit_bonus": data["config_audit_bonus"],
             "repair_count": data["repair_count"],
             "repairs": data["repairs"],
