@@ -27,8 +27,21 @@ async def async_setup_entry(
 class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
     """Representation of the HAGHS Sensor."""
 
+    # Capped lists and per-entity maps stay out of recorder history: together they can exceed
+    # the recorder's 16 KB attribute limit, and HA then stores no attributes at all. Their counts
+    # and breakdowns stay recorded; the current values stay in the state.
     _unrecorded_attributes = frozenset(
-        {"stale_candidates", "stale_watch_entities", "zombie_since", "zombie_reasons"}
+        {
+            "stale_candidates",
+            "stale_watch_entities",
+            "zombie_since",
+            "zombie_reasons",
+            "zombie_entities",
+            "unregistered_entities",
+            "dead_devices",
+            "repairs",
+            "pending_updates",
+        }
     )
 
     def __init__(
