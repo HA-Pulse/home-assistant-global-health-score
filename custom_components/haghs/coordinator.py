@@ -68,6 +68,7 @@ from .const import (
     UNREGISTERED_LIST_CAP,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
+    ZOMBIE_REASONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -186,6 +187,8 @@ class _ApplicationResult:
     zombie_per_domain: dict[str, int] = field(default_factory=dict)
     zombie_per_integration: dict[str, int] = field(default_factory=dict)
     zombie_since: dict[str, str] = field(default_factory=dict)
+    zombie_per_reason: dict[str, int] = field(default_factory=dict)
+    zombie_reasons: dict[str, str] = field(default_factory=dict)
     unregistered_count: int = 0
     unregistered_list: list[str] = field(default_factory=list)
     unregistered_per_domain: dict[str, int] = field(default_factory=dict)
@@ -487,6 +490,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_count_per_domain": app.zombie_per_domain,
             "zombie_count_per_integration": app.zombie_per_integration,
             "zombie_since": app.zombie_since,
+            "zombie_count_per_reason": app.zombie_per_reason,
+            "zombie_reasons": app.zombie_reasons,
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
@@ -565,6 +570,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zombie_count_per_domain": app.zombie_per_domain,
             "zombie_count_per_integration": app.zombie_per_integration,
             "zombie_since": app.zombie_since,
+            "zombie_count_per_reason": app.zombie_per_reason,
+            "zombie_reasons": app.zombie_reasons,
             "unregistered_count": app.unregistered_count,
             "unregistered_entities": app.unregistered_list,
             "unregistered_count_per_domain": app.unregistered_per_domain,
@@ -904,6 +911,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unregistered_per_domain,
             zombie_per_integration,
             zombie_since,
+            zombie_per_reason,
+            zombie_reasons,
         ) = self._calc_zombies()
 
         # B. INTEGRATION HEALTH
@@ -957,6 +966,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zombie_per_domain=zombie_per_domain,
             zombie_per_integration=zombie_per_integration,
             zombie_since=zombie_since,
+            zombie_per_reason=zombie_per_reason,
+            zombie_reasons=zombie_reasons,
             unregistered_count=unregistered_count,
             unregistered_list=unregistered_list,
             unregistered_per_domain=unregistered_per_domain,
@@ -1052,6 +1063,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dict[str, int],
         dict[str, int],
         dict[str, str],
+        dict[str, int],
+        dict[str, str],
     ]:
         """Detect zombie and unregistered entities, respecting ignore labels.
 
@@ -1066,17 +1079,18 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Returns (zombie_list_capped, p_zombie, zombie_count, zombie_per_domain,
         unregistered_list_capped, unregistered_count, unregistered_per_domain,
-        zombie_per_integration, zombie_since). Both lists are capped because the HA state
-        machine caps an attribute payload at 16 KB; the counts, the per-domain
-        dicts and the per-integration dict (keyed by the registry platform,
-        #154) always reflect the full numbers.
+        zombie_per_integration, zombie_since, zombie_per_reason, zombie_reasons).
+        Both lists are capped because the HA state machine caps an attribute
+        payload at 16 KB; the counts, the per-domain dicts, the per-integration
+        dict (keyed by the registry platform, #154) and the per-reason dict
+        always reflect the full numbers.
         """
         # Defer detection until HA is fully running. Otherwise the entity
         # registry may not yet be loaded from storage and ignore labels would
         # be missing, producing false positives right after boot (#13).
         if not self._registries_ready:
             _LOGGER.debug("HAGHS: HA still starting up — deferring zombie detection")
-            return [], 0, 0, {}, [], 0, {}, {}, {}
+            return [], 0, 0, {}, [], 0, {}, {}, {}, {}, {}
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
@@ -1084,6 +1098,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         zombie_per_domain: dict[str, int] = {}
         zombie_per_integration: dict[str, int] = {}
         zombie_since: dict[str, str] = {}
+        zombie_reasons: dict[str, str] = {}
         unregistered_list: list[str] = []
         unregistered_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
@@ -1137,8 +1152,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 zombie_list.append(entity_id)
                 zombie_since[entity_id] = self._effective_seen(state).isoformat()
+                zombie_reasons[entity_id] = self._zombie_reason(state, entity_entry)
 
         zombie_count = len(zombie_list)
+        zombie_per_reason: dict[str, int] = {}
+        for reason in ZOMBIE_REASONS:  # fixed ranking order, only reasons that occur
+            count = sum(1 for value in zombie_reasons.values() if value == reason)
+            if count:
+                zombie_per_reason[reason] = count
         unregistered_count = len(unregistered_list)
 
         # Ratio-based penalty: percentage of zombies relative to entities in
@@ -1162,7 +1183,27 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             dict(sorted(zombie_per_integration.items())),
             # Same entries and order as the capped zombie list (#154).
             {entity_id: zombie_since[entity_id] for entity_id in zombie_list[:ZOMBIE_LIST_CAP]},
+            zombie_per_reason,
+            {entity_id: zombie_reasons[entity_id] for entity_id in zombie_list[:ZOMBIE_LIST_CAP]},
         )
+
+    def _zombie_reason(self, state: State, entity_entry: er.RegistryEntry) -> str:
+        """Why a zombie is reported, from Home Assistant facts only (#154).
+
+        The first rule in ZOMBIE_REASONS that applies wins: a missing config
+        entry, then an entry that is not loaded, then a state HA only restored
+        (no running integration provides the entity), else plainly unavailable.
+        Only the first is a strong hint of an orphaned entity.
+        """
+        if entity_entry.config_entry_id is not None:
+            config_entry = self.hass.config_entries.async_get_entry(entity_entry.config_entry_id)
+            if config_entry is None:
+                return ZOMBIE_REASONS[0]
+            if config_entry.state is not ConfigEntryState.LOADED:
+                return ZOMBIE_REASONS[1]
+        if state.attributes.get("restored") is True:
+            return ZOMBIE_REASONS[2]
+        return ZOMBIE_REASONS[3]
 
     def _calc_dead_devices(self) -> tuple[list[str], int]:
         """Detect devices with every monitored entity unavailable past grace.

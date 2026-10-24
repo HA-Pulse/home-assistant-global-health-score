@@ -27,7 +27,9 @@ async def async_setup_entry(
 class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
     """Representation of the HAGHS Sensor."""
 
-    _unrecorded_attributes = frozenset({"stale_candidates", "stale_watch_entities", "zombie_since"})
+    _unrecorded_attributes = frozenset(
+        {"stale_candidates", "stale_watch_entities", "zombie_since", "zombie_reasons"}
+    )
 
     def __init__(
         self,
@@ -68,6 +70,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "zombie_count_per_domain": data["zombie_count_per_domain"],
             "zombie_count_per_integration": data["zombie_count_per_integration"],
             "zombie_since": data["zombie_since"],
+            "zombie_count_per_reason": data["zombie_count_per_reason"],
+            "zombie_reasons": data["zombie_reasons"],
             "unregistered_count": data["unregistered_count"],
             "unregistered_entities": data["unregistered_entities"],
             "unregistered_count_per_domain": data["unregistered_count_per_domain"],
