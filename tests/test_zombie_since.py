@@ -24,6 +24,8 @@ from tests.factories import make_coordinator, patch_disk, patch_psi
 # Complete results of the same scenarios on dev before this change (22d6d2b), pinned:
 # score, every existing attribute and every rec_* flag must stay exactly as they were.
 # 0 extra zombies: 3 zombies; 105 extra: 108 zombies, the list capped at ZOMBIE_LIST_CAP.
+# Keys added after #154-c by a later plan (#154-d); they have their own pinned test.
+ADDED_LATER = {"zombie_count_per_reason", "zombie_reasons"}
 DEV_RESULTS = {
     0: {
         "application_score": 80,
@@ -291,6 +293,7 @@ async def _scenario_result(hass, extra=0):
 async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, extra: int) -> None:
     """Only zombie_since is added; everything else equals the pinned dev result, capped case included."""
     _, result = await _scenario_result(hass, extra)
+    result = {key: value for key, value in result.items() if key not in ADDED_LATER}
     assert set(result) == set(DEV_RESULTS[extra]) | {"zombie_since"}
     assert {key: value for key, value in result.items() if key != "zombie_since"} == DEV_RESULTS[
         extra
@@ -356,6 +359,6 @@ async def test_sensor_exposes_it_and_keeps_it_out_of_the_recorder(hass: HomeAssi
     sensor = HaghsSensor(coord, hass.config_entries.async_entries(DOMAIN)[0])
     assert sensor.extra_state_attributes["zombie_since"] == since
     assert "zombie_since" in HaghsSensor._unrecorded_attributes
-    assert set(sensor.extra_state_attributes) - {"zombie_since"} == set(DEV_RESULTS[0]) - {
-        "global_score"
-    }
+    assert set(sensor.extra_state_attributes) - {"zombie_since"} - ADDED_LATER == set(
+        DEV_RESULTS[0]
+    ) - {"global_score"}

@@ -56,6 +56,16 @@ DEFAULT_BATTERY_GRACE_MINUTES = 60
 # listing is capped.
 ZOMBIE_LIST_CAP = 100
 
+# Why a zombie is reported (#154), from Home Assistant facts only, in fixed
+# ranking order: the first that applies wins. Only "config_entry_missing" is a
+# strong hint of an orphaned entity; the others are no reason to delete.
+ZOMBIE_REASONS = (
+    "config_entry_missing",  # the entity's config entry no longer exists
+    "integration_not_loaded",  # the entry exists but is not loaded
+    "not_provided",  # HA only restored the state; no running integration provides it
+    "unavailable",  # the integration runs and reports unavailable/unknown
+)
+
 # Maximum number of entity ids carried in the `unregistered_entities`
 # state attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count
 # and the per-domain breakdown always reflect the full number.

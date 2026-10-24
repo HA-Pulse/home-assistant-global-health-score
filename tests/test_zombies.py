@@ -341,6 +341,8 @@ async def test_unregistered_entity_not_counted_as_zombie(
         unregistered_per_domain,
         _zombie_per_integration,
         _zombie_since,
+        _zombie_per_reason,
+        _zombie_reasons,
     ) = coordinator._calc_zombies()
 
     assert zombie_count == 0
@@ -370,6 +372,8 @@ async def test_registered_zombie_counted_with_plain_id(hass: HomeAssistant) -> N
         _u_pd,
         _z_pi,
         _z_since,
+        _z_pr,
+        _z_r,
     ) = coordinator._calc_zombies()
 
     assert zombie_count == 1
@@ -388,7 +392,7 @@ async def test_unregistered_ignored_by_pattern(hass: HomeAssistant) -> None:
     _make_unregistered(hass, "sensor.ghost_one", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd, _z_pi, _z_since = (
+    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd, _z_pi, _z_since, _z_pr, _z_r = (
         coordinator._calc_zombies()
     )
 
@@ -406,7 +410,7 @@ async def test_unregistered_per_domain_breakdown(hass: HomeAssistant) -> None:
     _make_unregistered(hass, "lock.u_three", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _z_list, _p, _z_count, z_pd, _u_list, u_count, u_pd, _z_pi, _z_since = (
+    _z_list, _p, _z_count, z_pd, _u_list, u_count, u_pd, _z_pi, _z_since, _z_pr, _z_r = (
         coordinator._calc_zombies()
     )
 
@@ -426,7 +430,7 @@ async def test_mixed_zombie_and_unregistered_classified_separately(
     _make_unregistered(hass, "sensor.yaml_entity", age_minutes=60)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    z_list, p_zombie, z_count, z_pd, u_list, u_count, u_pd, _z_pi, _z_since = (
+    z_list, p_zombie, z_count, z_pd, u_list, u_count, u_pd, _z_pi, _z_since, _z_pr, _z_r = (
         coordinator._calc_zombies()
     )
 
@@ -452,7 +456,7 @@ async def test_unregistered_list_capped_but_count_is_full(
         _make_unregistered(hass, f"sensor.u_bulk_{i}", age_minutes=30)
 
     coordinator = _coordinator_with_boot_age(hass, entry)
-    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd, _z_pi, _z_since = (
+    _z_list, _p, _z_count, _z_pd, u_list, u_count, _u_pd, _z_pi, _z_since, _z_pr, _z_r = (
         coordinator._calc_zombies()
     )
 
