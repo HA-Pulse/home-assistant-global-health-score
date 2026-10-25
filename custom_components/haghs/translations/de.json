@@ -1,0 +1,119 @@
+{
+  "common": {
+    "rec_stale": "Veraltete Meldungen: {count} beobachtete Entität(en) haben seit mehr als {hours} Stunde(n) nichts gemeldet; Abzug im Application-Score {penalty} Punkt(e) vor dem Konfigurationsbonus.",
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Anwendung",
+    "rec_pillar_fallback": "⚠️ Berechnung: {pillars} fehlgeschlagen oder Zeitlimit überschritten; die neutralen Ersatzwerte sind keine Messwerte.",
+    "rec_update_failed": "⚠️ Berechnung: Der Aktualisierungszyklus ist fehlgeschlagen; angezeigt werden die vorherigen Ergebnisse oder neutrale Startwerte.",
+    "rec_all_clear": "✅ System optimiert",
+    "rec_backup_stale": "🚨 Sicherheit: Veraltetes Backup erkannt!",
+    "rec_config_audit": "🔧 Config-Audit: {missing} Bonuspunkt(e) nicht erreicht (Recorder-Aufbewahrungstage / Entitätsfilter).",
+    "rec_core_lag": "👴 Veraltet: Die Core-Version ist ≥3 Monate alt.",
+    "rec_cpu_load_classic": "⚡ Optimierung: Die CPU-Auslastung wirkt sich auf den Score aus ({cpu_pct:.1f}%).",
+    "rec_cpu_load_psi": "⚡ Optimierung: Die PSI-CPU-Wartezeit wirkt sich auf den Score aus ({cpu_pct:.1f}%).",
+    "rec_db_over_limit": "🗄️ Datenbank: Die Datenbank ({db_gb:.1f} GB) überschreitet das dynamische Limit ({limit_gb:.1f} GB).",
+    "rec_dead_devices": "🔌 Geräte: {count} Gerät(e), deren überwachte Entitäten nach Ablauf der Wartezeit alle nicht verfügbar sind.",
+    "rec_disk_sd_low": "⚠️ Speicherplatz: Nur noch {free_gb:.1f} GB frei auf {storage_type}!",
+    "rec_disk_ssd_low": "⚠️ Speicherplatz: Weniger als 10% frei ({free_gb:.1f} GB)!",
+    "rec_integration_health": "🧩 Integrationen: {count} Integrationseintrag/-einträge konnten nicht eingerichtet werden.",
+    "rec_io_pressure": "⚡ Optimierung: Der I/O-Druck wirkt sich auf den Score aus ({io_pct:.1f}%).",
+    "rec_power_unstable": "⚠️ Stromversorgung: Unterspannung erkannt: instabiles Netzteil!",
+    "rec_ram_pressure_classic": "⚡ Optimierung: Die Speicherauslastung wirkt sich auf den Score aus ({ram_pct:.1f}%).",
+    "rec_ram_pressure_psi": "⚡ Optimierung: Die PSI-Speicher-Wartezeit wirkt sich auf den Score aus ({ram_pct:.1f}%).",
+    "rec_repairs": "🛠️ Reparaturen: {count} offene Reparaturmeldung(en) erkannt.",
+    "rec_updates_pending": "📦 Wartung: {count} Update(s) ausstehend.",
+    "rec_zombies": "🧟 Hygiene: {count} Zombie(s) erkannt. Vor dem Löschen prüfen: nicht verfügbar heißt nicht unbenutzt."
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Global Health Score einrichten",
+        "description": "HAGHS überwacht deine Home-Assistant-Instanz und berechnet einen Health Score von 0 bis 100. Datenbankgröße, Speicherbelegung und Update-Status werden automatisch erkannt, du musst nur die beiden Felder unten ausfüllen.",
+        "data": {
+          "cpu_sensor": "Sensor für die CPU-Auslastung",
+          "ram_sensor": "Sensor für die RAM-Auslastung",
+          "storage_type": "Speichertyp",
+          "ignore_labels": "Ignorier-Labels",
+          "ignore_patterns": "Ignorier-Muster für Entitäts-IDs",
+          "db_sensor": "Sensor für die Datenbankgröße (optional)"
+        },
+        "data_description": {
+          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
+          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
+          "storage_type": "Wähle den Speichertyp, auf dem deine HA-Instanz läuft. SD-Karte ist die sichere Voreinstellung für Raspberry-Pi-Setups. SSD verwendet prozentuale Schwellen statt absolutem freiem Speicher.",
+          "ignore_labels": "Wähle eines oder mehrere deiner Home-Assistant-Labels. Entitäten und Geräte mit einem dieser Labels werden bei der Zombie-Erkennung und bei Update-Abzügen nicht berücksichtigt. Ausnahmen lassen sich per Automation mit den Aktionen 'homeassistant.add_label_to_entity' und 'homeassistant.remove_label_from_entity' der Custom-Integration Spook umschalten (Home Assistant selbst hat keine Label-Aktion), z. B. ein Label 'Urlaub' einschalten, solange du verreist bist. Lege die Labels zuerst unter Einstellungen → Labels an, falls sie noch nicht existieren.",
+          "ignore_patterns": "Optionale Liste von Glob-Mustern, die mit der entity_id verglichen werden (eines pro Zeile). Entitäten, deren ID auf ein Muster passt, werden bei der Zombie-Erkennung, der Liste unregistrierter Entitäten und bei Update-Abzügen nicht berücksichtigt. Gedacht für Entitäten ohne eindeutige ID, die kein Label tragen können (z. B. 'sensor.docker_*'). Die Platzhalter * und ? werden unterstützt.",
+          "db_sensor": "Nur für externe Datenbanken (MariaDB, PostgreSQL) nötig. Leer lassen, um die eingebaute SQLite-Erkennung zu nutzen. Der Sensor muss die Datenbankgröße in MB melden (z. B. 'sensor.mariadb_size')."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "fallback_missing": {
+      "message": "PSI ist nicht verfügbar, und es sind keine CPU- und RAM-Ersatzsensoren konfiguriert."
+    }
+  },
+  "issues": {
+    "fallback_missing": {
+      "title": "PSI ist nicht verfügbar und Ersatzsensoren fehlen",
+      "fix_flow": {
+        "abort": {
+          "config_entry_missing": "Der HAGHS-Konfigurationseintrag existiert nicht mehr."
+        },
+        "step": {
+          "confirm": {
+            "title": "CPU- und RAM-Ersatzsensoren konfigurieren",
+            "description": "HAGHS kann nicht starten, weil keine Linux-PSI-Daten verfügbar sind und keine CPU-/RAM-Ersatzsensoren konfiguriert sind. Wähle unten beide Sensoren und bestätige, um ohne Neustart von Home Assistant fortzufahren.",
+            "data": {
+              "cpu_sensor": "Sensor für die CPU-Auslastung",
+              "ram_sensor": "Sensor für die RAM-Auslastung"
+            },
+            "data_description": {
+              "cpu_sensor": "Wähle den Sensor, der die CPU-Auslastung in Prozent meldet.",
+              "ram_sensor": "Wähle den Sensor, der die Speicherauslastung in Prozent meldet."
+            }
+          }
+        }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_stale_threshold": "Gib eine ganze Zahl von Stunden zwischen 1 und 8760 ein."
+    },
+    "step": {
+      "init": {
+        "title": "HAGHS-Optionen",
+        "description": "Laufzeiteinstellungen anpassen. Änderungen gelten sofort nach dem Speichern.",
+        "data": {
+          "cpu_sensor": "Sensor für die CPU-Auslastung",
+          "ram_sensor": "Sensor für die RAM-Auslastung",
+          "storage_type": "Speichertyp",
+          "ignore_labels": "Ignorier-Labels",
+          "ignore_patterns": "Ignorier-Muster für Entitäts-IDs",
+          "db_sensor": "Sensor für die Datenbankgröße (optional)",
+          "update_interval": "Aktualisierungsintervall",
+          "stale_threshold_hours": "Schwelle für veraltete Meldungen (Stunden)",
+          "stale_watch_labels": "Beobachtungs-Labels für veraltete Meldungen",
+          "zombie_grace_minutes": "Zombie-Wartezeit (Minuten)",
+          "ignored_integration_entries": "Integrationseinträge von der Integration Health ausnehmen",
+          "battery_grace_minutes": "Wartezeit für Batterie-Entitäten (Minuten)"
+        },
+        "data_description": {
+          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
+          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
+          "storage_type": "Wähle den Speichertyp, auf dem deine HA-Instanz läuft. SD-Karte ist die sichere Voreinstellung für Raspberry-Pi-Setups. SSD verwendet prozentuale Schwellen statt absolutem freiem Speicher.",
+          "ignore_labels": "Wähle eines oder mehrere deiner Home-Assistant-Labels. Entitäten und Geräte mit einem dieser Labels werden bei der Zombie-Erkennung und bei Update-Abzügen nicht berücksichtigt. Ausnahmen lassen sich per Automation mit den Aktionen 'homeassistant.add_label_to_entity' und 'homeassistant.remove_label_from_entity' der Custom-Integration Spook umschalten (Home Assistant selbst hat keine Label-Aktion), z. B. ein Label 'Urlaub' einschalten, solange du verreist bist. Lege die Labels zuerst unter Einstellungen → Labels an, falls sie noch nicht existieren.",
+          "ignore_patterns": "Optionale Liste von Glob-Mustern, die mit der entity_id verglichen werden (eines pro Zeile). Entitäten, deren ID auf ein Muster passt, werden bei der Zombie-Erkennung, der Liste unregistrierter Entitäten und bei Update-Abzügen nicht berücksichtigt. Gedacht für Entitäten ohne eindeutige ID, die kein Label tragen können (z. B. 'sensor.docker_*'). Die Platzhalter * und ? werden unterstützt.",
+          "db_sensor": "Nur für externe Datenbanken (MariaDB, PostgreSQL) nötig. Leer lassen, um die eingebaute SQLite-Erkennung zu nutzen. Der Sensor muss die Datenbankgröße in MB melden (z. B. 'sensor.mariadb_size').",
+          "update_interval": "Wie oft HAGHS den Health Score neu berechnet, in Sekunden. Kleinere Werte bedeuten schnellere Aktualisierung, aber etwas mehr CPU-Last. Standard: 60 Sekunden.",
+          "stale_threshold_hours": "Zeit seit der letzten Statusmeldung, nicht seit der letzten Wertänderung. Ganze Stunden von 1 bis 8760; Standard: 24. Passive Funde betreffen nur sensor und binary_sensor und wirken sich nicht auf den Score aus.",
+          "stale_watch_labels": "Nimmt Entitäten über Labels, die direkt an Entitäten beliebiger Domains hängen, in die Bewertung veralteter Meldungen auf. Geräte- und Bereichs-Labels zählen nicht. Ignorier-Regeln haben Vorrang. Jede überfällige beobachtete Entität kostet 5 Punkte im Application-Score, höchstens 10 vor dem Konfigurationsbonus; solange eine überfällig ist, liegt der Application-Score bei höchstens 99. Leer lassen, um die Bewertung abzuschalten.",
+          "zombie_grace_minutes": "Wie lange eine Entität 'unavailable' oder 'unknown' sein muss, bevor HAGHS sie als Zombie zählt. Erlaubt: 1 bis 240 Minuten. Kleinere Werte machen die Erkennung aggressiver (mehr Fehlalarme durch kurz getrennte Geräte). Größere Werte verdecken kurze Ausfälle, lassen echte Fehler aber länger stehen. Standard: 5 Minuten.",
+          "ignored_integration_entries": "Wähle einzelne Integrationseinträge, die bei Zählung, Abzug und Empfehlung der Integration Health nicht berücksichtigt werden. Jeder Eintrag ist an Titel, Domain und Eintrags-ID erkennbar. Leer lassen, um alle Einträge einzubeziehen. Entitäten und Geräte bleiben dabei in der Zombie-Erkennung, und Reparaturen werden nicht ignoriert. Ignorier-Labels von Geräten und Entitäten nehmen keine Integrationseinträge aus.",
+          "battery_grace_minutes": "Verlängerte Wartezeit speziell für Entitäten mit 'device_class: battery'. Zigbee- und Homematic-Funk fragt Batteriegeräte oft erst nach dem normalen Zeitfenster wieder ab, daher führt eine Zombie-Meldung nach nur 5 Minuten zu Fehlalarmen. Erlaubt: 1 bis 240 Minuten. Liegt der Wert unter der normalen Wartezeit, ist die Verlängerung praktisch abgeschaltet. Standard: 60 Minuten."
+        }
+      }
+    }
+  }
+}
