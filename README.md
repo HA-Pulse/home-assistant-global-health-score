@@ -374,7 +374,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_updates_pending` | bool | At least one non-ignored update entity has been pending past the 7-day grace period |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
-| `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
+| `rec_integration_health` | bool | At least one integration config entry is in an unhealthy state (source of the Integration Health penalty) |
 | `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
 | `rec_repairs` | bool | At least one open repair issue from another integration is counted |
 | `rec_dead_devices` | bool | At least one dead device (all monitored entities in `ZOMBIE_DOMAINS` unavailable past their respective grace periods) is reported; unknown does not count as an outage (informational, no score impact) |
@@ -449,7 +449,7 @@ cards:
 
       {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
 
-      {% if integrations > 0 %} 🧩 {{ integrations }} integration(s) in error, [Open Integrations]({{ _int }}) {% endif %}
+      {% if integrations > 0 %} 🧩 {{ integrations }} integration entry(ies) in error, [Open Integrations]({{ _int }}) {% endif %}
 
       {# Hide recommendation lines already shown as a status line with a link above. #}
       {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
@@ -526,7 +526,7 @@ cards:
       <hr>
 
 
-      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration(s) failed to set up, [→ Open Integrations]({{ _int }}){% for i in i_list %}<br>&nbsp;&nbsp; • <a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a>{% endfor %}{% if i_count > i_list | length and i_list | length > 0 %}<br>*(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)*{% endif %} {% endif %} {% endif %}
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration entry(ies) failed to set up, [→ Open Integrations]({{ _int }}){% for i in i_list %}<br>&nbsp;&nbsp; • <a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a>{% endfor %}{% if i_count > i_list | length and i_list | length > 0 %}<br>*(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)*{% endif %} {% endif %} {% endif %}
   - type: markdown
     title: 📦 Updates & Maintenance
     content: >

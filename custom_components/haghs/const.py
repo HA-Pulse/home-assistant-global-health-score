@@ -115,7 +115,7 @@ REC_ZOMBIES = (
 REC_CORE_LAG = "\U0001f474 Legacy: Core version is ≥3 months old."
 REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected: unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
-REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration(s) failed to set up."
+REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration entry(ies) failed to set up."
 REC_CONFIG_AUDIT = (
     "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
     "(recorder purge days / entity filter)."

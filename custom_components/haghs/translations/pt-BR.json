@@ -15,7 +15,7 @@
     "rec_dead_devices": "🔌 Dispositivos: {count} dispositivo(s) com todas as entidades monitoradas indisponíveis após o término dos respectivos períodos de tolerância.",
     "rec_disk_sd_low": "⚠️ Espaço em disco: apenas {free_gb:.1f} GB livres em {storage_type}!",
     "rec_disk_ssd_low": "⚠️ Espaço em disco: menos de 10% livre ({free_gb:.1f} GB)!",
-    "rec_integration_health": "🧩 Integrações: falha na configuração de {count} integração(ões).",
+    "rec_integration_health": "🧩 Integrações: falha na configuração de {count} entrada(s) de integração.",
     "rec_io_pressure": "⚡ Otimização: a pressão de E/S está afetando a pontuação ({io_pct:.1f}%).",
     "rec_power_unstable": "⚠️ Energia: subtensão detectada: fonte de alimentação instável!",
     "rec_ram_pressure_classic": "⚡ Otimização: a utilização da memória está afetando a pontuação ({ram_pct:.1f}%).",

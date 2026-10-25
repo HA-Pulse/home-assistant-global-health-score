@@ -15,7 +15,7 @@
     "rec_dead_devices": "🔌 Devices: {count} device(s) with all monitored entities unavailable past the grace period.",
     "rec_disk_sd_low": "⚠️ Disk Space: Only {free_gb:.1f} GB free on {storage_type}!",
     "rec_disk_ssd_low": "⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!",
-    "rec_integration_health": "🧩 Integrations: {count} integration(s) failed to set up.",
+    "rec_integration_health": "🧩 Integrations: {count} integration entry(ies) failed to set up.",
     "rec_io_pressure": "⚡ Optimization: I/O pressure is impacting score ({io_pct:.1f}%).",
     "rec_power_unstable": "⚠️ Power: Under-voltage detected: unstable power supply!",
     "rec_ram_pressure_classic": "⚡ Optimization: Memory utilization is impacting score ({ram_pct:.1f}%).",

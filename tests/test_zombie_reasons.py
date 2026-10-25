@@ -39,6 +39,22 @@ DEV_RESULTS = {
     )
     for extra in (0, 105)
 }
+# Reworded after the capture (plan HAGHS-20261025-001): the count is config entries, not integrations.
+OLD_INTEGRATION_LINE = "🧩 Integrations: 2 integration(s) failed to set up."
+NEW_INTEGRATION_LINE = "🧩 Integrations: 2 integration entry(ies) failed to set up."
+
+
+def _expected(extra: int) -> dict:
+    """The pinned dev result with exactly the reworded recommendation line replaced."""
+    expected = dict(DEV_RESULTS[extra])
+    lines = expected["recommendations"].split("\n")
+    assert lines.count(OLD_INTEGRATION_LINE) == 1
+    expected["recommendations"] = "\n".join(
+        NEW_INTEGRATION_LINE if line == OLD_INTEGRATION_LINE else line for line in lines
+    )
+    return expected
+
+
 EXPECTED_REASONS = {
     "sensor.orphan": "config_entry_missing",
     "sensor.broken": "integration_not_loaded",
@@ -138,7 +154,7 @@ async def test_score_and_existing_attributes_are_unchanged(
     _, result = await _scenario_result(hass, monkeypatch, extra)
     assert set(result) == set(DEV_RESULTS[extra]) | NEW_KEYS | ADDED_LATER
     added = NEW_KEYS | ADDED_LATER
-    assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
+    assert {key: value for key, value in result.items() if key not in added} == _expected(extra)
     # The SETUP_ERROR and SETUP_RETRY entries; NOT_LOADED and LOADED entries are not counted.
     assert result["integration_unhealthy_entries"] == ["brokenint: brokenint", "retryint: retryint"]
     assert list(result["zombie_since"]) == result["zombie_entities"]
