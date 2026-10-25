@@ -705,29 +705,37 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 **Highlights**
 
 * **Exclude individual integration entries from Integration Health.** The new options multi-select excludes only the selected entry IDs from the unhealthy count, penalty, recommendation and flag. The selection is empty by default, can be cleared permanently and does not affect zombie detection or Repairs.
-
+* **Unhealthy integration entries are listed (#134).** New attribute `integration_unhealthy_entries` names the counted config entries as `domain: title`; the Pro card lists them with a link to each integration page.
+* **Why and since when each zombie is reported (#154).** New attributes `zombie_count_per_integration`, `zombie_since`, `zombie_count_per_reason` and `zombie_reasons`. Only `config_entry_missing` is a strong hint of an orphaned entity; a zombie is an availability signal, not a deletion list.
+* **Opt-in stale entity monitoring (discussion #79).** Passive `stale_candidates` for sensors that stopped reporting, and watch labels that make overdue entities cost points (5 each, cap 10).
+* **Ignore labels on areas (discussion #96).** Ignore labels set on an area exclude the entities in that area.
 * **Repairs now count in the score (#97).** Open repair issues cost 5 points each (cap 10) and hard-cap the application score at 99 while any repair is open. HA's native *Ignore* action takes a repair out of the count. New attributes `repair_count` / `repairs`, new flag `rec_repairs`.
-* **Dead devices are flagged (#120).** A device whose entities are all `unavailable` / `unknown` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`. Informational only, the entity-level zombie points stay authoritative.
-* **Recommendation texts are translatable (#114).** All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
+* **Dead devices are flagged (#120).** A device whose monitored entities are all `unavailable` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`; `unknown` does not count (#143). Informational only, the entity-level zombie points stay authoritative.
+* **Recommendation texts are translatable (#114)**, with a Brazilian Portuguese translation (#138). All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
 * **Unregistered entities are informational only (#98).** Entities without an entity-registry entry no longer count as zombies and no longer cap the score; they are reported through the `unregistered_*` attributes.
 * **Every missing score point is explained (#92).** New attributes `config_audit_bonus` and `integration_unhealthy_count`, new flags `rec_integration_health` and `rec_config_audit`.
+* **Calculation failures are visible (#135).** A failed or timed-out pillar sets `pillar_fallback_count`, `pillar_fallbacks` and `rec_pillar_fallback` with a warning instead of an all-clear.
 
 **Behavior changes**
 
-* **Zombie grace default shortened to 5 minutes.** Zombies are detected after 5 minutes instead of 15; this also applies to existing installations that never set a custom value. Set the zombie grace period to 15 minutes in the options for the old behaviour.
-* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **Entity lists no longer in recorder history.** `zombie_entities`, `unregistered_entities`, `dead_devices`, `repairs`, `pending_updates` (and the new lists) keep their current values but are no longer recorded, so large instances stay below Home Assistant's 16 KB attribute limit; counts, breakdowns, pillars and flags stay in the history.
+* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with one or both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **Zombie grace default unchanged at 5 minutes.** The b1 notes claimed a change from 15 minutes; the default was already 5 minutes in v2.3.0, and existing custom values are kept.
 
 **Bug fixes**
 
 * Coordinator total safety net so a failing sub-component can no longer stall the sensor (#103).
-* Label service names in the README, translations and docstring corrected to `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` (#99).
+* Label actions: `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` come from the Spook custom integration; README example and texts corrected (#99).
+* Dead-device false positives removed: `unknown` and unmonitored domains no longer count (#143).
+* User-facing punctuation aligned (#136).
 
 **Infrastructure**
 
-* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 257 tests.
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 480 tests.
 
 **Documentation**
 
+* Dashboard cards v1.3 (Lite and Pro) with deep links and more-info links per zombie (#133, #137, #145).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
 
