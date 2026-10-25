@@ -134,6 +134,8 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
   
 * **Dead Devices (informational, no score impact):** Flags devices only when all monitored entities in `ZOMBIE_DOMAINS` are `unavailable` beyond their respective grace periods. `unknown` does not count as an outage, and entities outside the monitored domains are excluded. Devices without monitored entities are not flagged. Reported via `dead_device_count`, `dead_devices` and the `rec_dead_devices` flag. Entity-level zombie points stay authoritative, so no second penalty is added. Respects the same ignore labels and patterns.
 
+* **Empty Devices (informational, no score impact):** Flags devices that have no entity at all in the entity registry (disabled entities included), using Home Assistant facts only: the device is not disabled, not a service entry, no other device is connected through it (hubs and bridges are skipped), and its config entry is loaded. Typical leftovers after removing or re-pairing a device. Respects ignore labels on the device and its area; nothing is checked before the zombie grace period has passed after a restart. Reported via `empty_device_count`, `empty_devices` and the `rec_empty_devices` flag (#93).
+
 * **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database-mariadb) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
   
 * **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (≥3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
@@ -353,6 +355,8 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
 | `dead_device_count` | int | Number of devices whose monitored entities in `ZOMBIE_DOMAINS` are all unavailable past their respective grace periods; unknown does not count as an outage (informational, does not affect the score) |
 | `dead_devices` | list | Device names (capped at 100); current only, excluded from recorder history (`dead_device_count` stays in the history) |
+| `empty_device_count` | int | Number of devices without any entity (disabled entities included), not disabled, not a service, no other device linked through them (hubs), every config entry loaded; informational, no score impact |
+| `empty_devices` | list | Names of those devices, sorted, capped at 100; current only, excluded from recorder history (`empty_device_count` stays in the history) |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
@@ -378,6 +382,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
 | `rec_repairs` | bool | At least one open repair issue from another integration is counted |
 | `rec_dead_devices` | bool | At least one dead device (all monitored entities in `ZOMBIE_DOMAINS` unavailable past their respective grace periods) is reported; unknown does not count as an outage (informational, no score impact) |
+| `rec_empty_devices` | bool | At least one empty device (no entity at all, see `empty_device_count`) is reported; informational, no score impact |
 | `pillar_fallback_count` | int | Number of pillar calculations that failed or timed out during the current refresh attempt |
 | `pillar_fallbacks` | list | Affected pillars in stable order: `hardware`, then `application`; an empty list means no observed pillar failure in this attempt |
 | `update_cycle_failed` | bool | The current update attempt failed outside a guarded pillar calculation; existing numeric results are retained, or neutral values are used on the first update |
@@ -434,7 +439,8 @@ cards:
       'recommendations') | default('', true) %} {% set updates = state_attr(e,
       'pending_updates') | default([], true) | list %} {% set zombies =
       state_attr(e, 'zombie_count') | int(0) %} {% set dead = state_attr(e,
-      'dead_device_count') | int(0) %} {% set repairs = state_attr(e,
+      'dead_device_count') | int(0) %} {% set empty = state_attr(e,
+      'empty_device_count') | int(0) %} {% set repairs = state_attr(e,
       'repair_count') | int(0) %} {% set integrations = state_attr(e,
       'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
       'psi_available') | default(false, true) %}
@@ -447,12 +453,14 @@ cards:
 
       {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
 
+      {% if empty > 0 %} 🗂️ {{ empty }} empty device(s) without any entity (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
+
       {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
 
       {% if integrations > 0 %} 🧩 {{ integrations }} integration entry(ies) in error, [Open Integrations]({{ _int }}) {% endif %}
 
       {# Hide recommendation lines already shown as a status line with a link above. #}
-      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
 
       {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
       {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
@@ -507,7 +515,7 @@ cards:
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set rec = state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
 
       {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
       {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
@@ -575,7 +583,9 @@ cards:
       'unregistered_entities') | default([], true) %} {% set u_count =
       state_attr(e, 'unregistered_count') | int(0) %} {% set d_raw = state_attr(e,
       'dead_devices') | default([], true) %} {% set d_count = state_attr(e,
-      'dead_device_count') | int(0) %} {% set _dev = '/config/devices/dashboard' %}
+      'dead_device_count') | int(0) %} {% set e_raw = state_attr(e,
+      'empty_devices') | default([], true) %} {% set e_count = state_attr(e,
+      'empty_device_count') | int(0) %} {% set _dev = '/config/devices/dashboard' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %} {% if z_raw is string %} {% set
@@ -615,6 +625,17 @@ cards:
       {% for d in d_raw %}
       &nbsp;&nbsp; • {{ d }}
       {% endfor %}
+      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
+      </details>
+      {% endif %}
+
+      {% if e_count > 0 %}
+      <details>
+      <summary>🗂️ Empty devices without any entity (informational, no score impact): {{ e_count }}</summary>
+      {% for d in e_raw %}
+      &nbsp;&nbsp; • {{ d }}
+      {% endfor %}
+      {% if e_count > e_raw | length %}&nbsp;&nbsp; *(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)*{% endif %}
       &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
       </details>
       {% endif %}

@@ -58,6 +58,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
+    EMPTY_DEVICE_LIST_CAP,
     INTEGRATION_UNHEALTHY_LIST_CAP,
     REC_FLAG_KEYS,
     REC_TEMPLATES,
@@ -209,6 +210,19 @@ class _ApplicationResult:
     p_repairs: int = 0
     dead_device_count: int = 0
     dead_device_list: list[str] = field(default_factory=list)
+    empty_device_count: int = 0
+    empty_device_list: list[str] = field(default_factory=list)
+
+
+def _device_config_entry_ids(device: dr.DeviceEntry) -> set[str]:
+    """Config entries of a device across HA versions.
+
+    Newer HA versions (2026.9 at the latest) give a device one config entry (``config_entry_id``); the old
+    ``config_entries`` set is a deprecated shim there. Older versions only have the set.
+    """
+    if hasattr(device, "config_entry_id"):
+        return {device.config_entry_id} if device.config_entry_id else set()
+    return set(device.config_entries or ())
 
 
 @dataclass
@@ -500,6 +514,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count_per_domain": app.unregistered_per_domain,
             "dead_device_count": app.dead_device_count,
             "dead_devices": app.dead_device_list,
+            "empty_device_count": app.empty_device_count,
+            "empty_devices": app.empty_device_list,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -581,6 +597,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count_per_domain": app.unregistered_per_domain,
             "dead_device_count": app.dead_device_count,
             "dead_devices": app.dead_device_list,
+            "empty_device_count": app.empty_device_count,
+            "empty_devices": app.empty_device_list,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -940,6 +958,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # G. DEAD DEVICES (#120) — informational, no score impact
         dead_device_list, dead_device_count = self._calc_dead_devices()
 
+        # H. EMPTY DEVICES (#93) — informational, no score impact
+        empty_device_list, empty_device_count = self._calc_empty_devices()
+
         app_final = max(
             0,
             min(
@@ -992,6 +1013,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_repairs=p_repairs,
             dead_device_count=dead_device_count,
             dead_device_list=dead_device_list,
+            empty_device_count=empty_device_count,
+            empty_device_list=empty_device_list,
         )
 
     # ------------------------------------------------------------------
@@ -1281,6 +1304,62 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dead_names.sort()
         dead_count = len(dead_names)
         return dead_names[:DEAD_DEVICE_LIST_CAP], dead_count
+
+    def _calc_empty_devices(self) -> tuple[list[str], int]:
+        """Detect devices without any entity (#93, "registry cruft").
+
+        Only Home Assistant facts, no name rules. A device counts when it has
+        no entity in the entity registry (disabled ones included), is not
+        disabled, is not a service entry, no other device points to it via
+        ``via_device_id`` (hubs, bridges, coordinators) and every one of its
+        config entries is loaded (a failing or loading integration may not
+        have created its entities yet). Devices with an ignore label on the
+        device or on its area are skipped; entity-id patterns cannot apply
+        because there is no entity. Startup is deferred like the zombie check,
+        plus one zombie grace period after the boot. Informational only.
+
+        Returns (empty_list_capped, empty_count) with device display names.
+        """
+        if not self._registries_ready:
+            return [], 0
+        if (dt_util.utcnow() - self._boot_time).total_seconds() < self._zombie_grace_seconds:
+            return [], 0
+
+        ent_reg = er.async_get(self.hass)
+        dev_reg = dr.async_get(self.hass)
+        area_reg = ar.async_get(self.hass)
+        devices = list(dev_reg.devices.values())
+        parents = {device.via_device_id for device in devices if device.via_device_id}
+        ignore = set(self.ignore_labels)
+
+        names: list[str] = []
+        for device in devices:
+            if (
+                device.disabled_by is not None
+                or device.entry_type is not None
+                or device.id in parents
+            ):
+                continue
+            entry_ids = _device_config_entry_ids(device)
+            if not entry_ids:
+                continue
+            entries = [self.hass.config_entries.async_get_entry(entry_id) for entry_id in entry_ids]
+            if any(
+                entry is None or entry.state is not ConfigEntryState.LOADED for entry in entries
+            ):
+                continue
+            if er.async_entries_for_device(ent_reg, device.id, include_disabled_entities=True):
+                continue
+            if ignore:
+                if ignore & set(device.labels or ()):
+                    continue
+                area = area_reg.async_get_area(device.area_id) if device.area_id else None
+                if area is not None and ignore & set(area.labels or ()):
+                    continue
+            names.append(device.name_by_user or device.name or device.id)
+
+        names.sort()
+        return names[:EMPTY_DEVICE_LIST_CAP], len(names)
 
     def _unhealthy_entries(self) -> Iterator[ConfigEntry]:
         """Yield the config entries in an unhealthy state that are not ignored."""
@@ -1634,6 +1713,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice.append(self._rec("rec_repairs").format(count=app.repair_count))
         if app.dead_device_count > 0:
             advice.append(self._rec("rec_dead_devices").format(count=app.dead_device_count))
+        if app.empty_device_count > 0:
+            advice.append(self._rec("rec_empty_devices").format(count=app.empty_device_count))
         return advice + self._failure_recommendations()
 
     def _is_disk_low_sd(self, hw: _HardwareResult) -> bool:
@@ -1677,6 +1758,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and "application" not in getattr(self, "_pillar_fallbacks", set()),
             "rec_repairs": app.p_repairs > 0,
             "rec_dead_devices": app.dead_device_count > 0,
+            "rec_empty_devices": app.empty_device_count > 0,
             "rec_stale": app.stale.watch_count > 0,
             "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
             "rec_update_failed": False,

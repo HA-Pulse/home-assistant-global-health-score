@@ -76,6 +76,11 @@ UNREGISTERED_LIST_CAP = 100
 # reflects the full number.
 DEAD_DEVICE_LIST_CAP = 100
 
+# Maximum number of device names carried in the `empty_devices` state
+# attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
+# reflects the full number.
+EMPTY_DEVICE_LIST_CAP = 100
+
 # Internal hass.data key holding the per-entity first-seen timestamps for
 # pending updates (#26). Only updates that have been available longer than
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
@@ -125,6 +130,7 @@ REC_DEAD_DEVICES = (
     "\U0001f50c Devices: {count} device(s) with all monitored entities "
     "unavailable past the grace period."
 )
+REC_EMPTY_DEVICES = "\U0001f5c2\ufe0f Devices: {count} device(s) without any entity."
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
@@ -143,6 +149,7 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
     "rec_dead_devices": REC_DEAD_DEVICES,
+    "rec_empty_devices": REC_EMPTY_DEVICES,
     "rec_stale": (
         "Stale reporting: {count} watched entity/entities have not reported for more than "
         "{hours} hour(s); application penalty {penalty} point(s) before the configuration bonus."
@@ -197,6 +204,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_config_audit",
     "rec_repairs",
     "rec_dead_devices",
+    "rec_empty_devices",
     "rec_stale",
     "rec_pillar_fallback",
     "rec_update_failed",
