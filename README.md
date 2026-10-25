@@ -358,6 +358,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
+| `integration_unhealthy_entries` | list | The counted config entries as `domain: title` (bare `domain` when the entry has no title), sorted, capped at 50; entries excluded in the options are not listed; current only, excluded from recorder history (`integration_unhealthy_count` stays in the history) |
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
 | `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
 | `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50); current only, excluded from recorder history (`repair_count` stays in the history) |
@@ -515,7 +516,7 @@ cards:
   - type: markdown
     title: 🔧 Repairs & Integrations
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count = state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e, 'repairs') | default([], true) %} {% set i_count = state_attr(e, 'integration_unhealthy_count') | int(0) %} {% set _rep = '/config/repairs' %} {% set _int = '/config/integrations' %}
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count = state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e, 'repairs') | default([], true) %} {% set i_count = state_attr(e, 'integration_unhealthy_count') | int(0) %} {% set i_list = state_attr(e, 'integration_unhealthy_entries') | default([], true) %} {% set _rep = '/config/repairs' %} {% set _int = '/config/integrations' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %}
@@ -525,7 +526,7 @@ cards:
       <hr>
 
 
-      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration(s) failed to set up, [→ Open Integrations]({{ _int }}) {% endif %} {% endif %}
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration(s) failed to set up, [→ Open Integrations]({{ _int }}){% for i in i_list %}<br>&nbsp;&nbsp; • <a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a>{% endfor %}{% if i_count > i_list | length and i_list | length > 0 %}<br>*(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)*{% endif %} {% endif %} {% endif %}
   - type: markdown
     title: 📦 Updates & Maintenance
     content: >

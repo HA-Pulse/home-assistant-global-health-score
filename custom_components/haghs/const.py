@@ -172,6 +172,10 @@ REPAIR_PENALTY_CAP = 10
 # attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
 # reflects the full number.
 REPAIR_LIST_CAP = 50
+# Maximum number of "domain: title" entries carried in the
+# `integration_unhealthy_entries` state attribute (same 16 KB rationale as
+# ZOMBIE_LIST_CAP). `integration_unhealthy_count` always reflects the full number.
+INTEGRATION_UNHEALTHY_LIST_CAP = 50
 
 # Boolean recommendation flags exposed as state attributes alongside the
 # existing 'recommendations' string. Dashboards and external integrations

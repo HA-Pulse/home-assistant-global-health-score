@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -57,6 +58,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_ZOMBIE_GRACE_MINUTES,
     DOMAIN,
+    INTEGRATION_UNHEALTHY_LIST_CAP,
     REC_FLAG_KEYS,
     REC_TEMPLATES,
     REPAIR_LIST_CAP,
@@ -201,6 +203,7 @@ class _ApplicationResult:
     p_core_lag: int = 0
     p_zombie: int = 0
     integration_unhealthy_count: int = 0
+    integration_unhealthy_list: list[str] = field(default_factory=list)
     repair_count: int = 0
     repair_list: list[str] = field(default_factory=list)
     p_repairs: int = 0
@@ -502,6 +505,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "integration_unhealthy_count": app.integration_unhealthy_count,
+            "integration_unhealthy_entries": app.integration_unhealthy_list,
             "config_audit_bonus": app.config_bonus,
             "repair_count": app.repair_count,
             "repairs": app.repair_list,
@@ -582,6 +586,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "integration_unhealthy_count": app.integration_unhealthy_count,
+            "integration_unhealthy_entries": app.integration_unhealthy_list,
             "config_audit_bonus": app.config_bonus,
             "repair_count": app.repair_count,
             "repairs": app.repair_list,
@@ -917,6 +922,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # B. INTEGRATION HEALTH
         integration_unhealthy_count = self._count_unhealthy_integrations()
+        integration_unhealthy_list = self._list_unhealthy_integrations()
         p_integration = self._calc_integration_health(integration_unhealthy_count)
 
         # C. MAINTENANCE — DB size auto-detected (blocking I/O → executor)
@@ -980,6 +986,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_core_lag=p_core_lag,
             p_zombie=p_zombie,
             integration_unhealthy_count=integration_unhealthy_count,
+            integration_unhealthy_list=integration_unhealthy_list,
             repair_count=repair_count,
             repair_list=repair_list,
             p_repairs=p_repairs,
@@ -1275,19 +1282,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dead_count = len(dead_names)
         return dead_names[:DEAD_DEVICE_LIST_CAP], dead_count
 
-    def _count_unhealthy_integrations(self) -> int:
-        """Return the number of config entries in an unhealthy state."""
+    def _unhealthy_entries(self) -> Iterator[ConfigEntry]:
+        """Yield the config entries in an unhealthy state that are not ignored."""
         unhealthy_states = {
             ConfigEntryState.SETUP_ERROR,
             ConfigEntryState.SETUP_RETRY,
             ConfigEntryState.FAILED_UNLOAD,
         }
-        return sum(
-            1
+        return (
+            entry
             for entry in self.hass.config_entries.async_entries()
             if entry.state in unhealthy_states
             and entry.entry_id not in self._ignored_integration_entries
         )
+
+    def _count_unhealthy_integrations(self) -> int:
+        """Return the number of config entries in an unhealthy state."""
+        return sum(1 for _ in self._unhealthy_entries())
+
+    def _list_unhealthy_integrations(self) -> list[str]:
+        """Return the counted entries as sorted "domain: title" labels (#134), capped.
+
+        The domain alone cannot tell two entries of the same integration apart,
+        hence the title; an entry without a title is listed by its domain.
+        """
+        labels = sorted(
+            f"{entry.domain}: {entry.title}" if entry.title else entry.domain
+            for entry in self._unhealthy_entries()
+        )
+        return labels[:INTEGRATION_UNHEALTHY_LIST_CAP]
 
     def _calc_integration_health(self, unhealthy_count: int | None = None) -> int:
         """Count unhealthy integrations via native ConfigEntry states.
