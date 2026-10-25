@@ -24,7 +24,8 @@ from tests.factories import make_coordinator, patch_disk, patch_psi
 # Complete results of the same scenarios on dev before this change (22d6d2b), pinned:
 # score, every existing attribute and every rec_* flag must stay exactly as they were.
 # 0 extra zombies: 3 zombies; 105 extra: 108 zombies, the list capped at ZOMBIE_LIST_CAP.
-# Keys added after #154-c by later plans (#154-d, #134, #93); they have their own pinned tests.
+# Keys added after #154-c by later plans (#154-d, #134, #93, conditional ignore labels); they have
+# their own pinned tests.
 ADDED_LATER = {
     "zombie_count_per_reason",
     "zombie_reasons",
@@ -32,6 +33,7 @@ ADDED_LATER = {
     "empty_device_count",
     "empty_devices",
     "rec_empty_devices",
+    "conditional_ignore_active",
 }
 DEV_RESULTS = {
     0: {
@@ -304,6 +306,7 @@ async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, 
     assert result["integration_unhealthy_entries"] == []
     assert (result["empty_device_count"], result["empty_devices"]) == (0, [])
     assert result["rec_empty_devices"] is False
+    assert result["conditional_ignore_active"] is False
     added = {"zombie_since"} | ADDED_LATER
     assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
 

@@ -13,6 +13,10 @@ CONF_DB_SENSOR = "db_sensor"
 # step that converts the legacy single label into CONF_IGNORE_LABELS.
 CONF_IGNORE_LABEL = "ignore_label"
 CONF_IGNORE_LABELS = "ignore_labels"
+# Extra ignore labels that apply only while a helper entity is "on" (vacation mode).
+CONF_CONDITIONAL_IGNORE_LABELS = "conditional_ignore_labels"
+CONF_CONDITIONAL_IGNORE_ENTITY = "conditional_ignore_entity"
+CONDITIONAL_IGNORE_DOMAINS: tuple[str, ...] = ("input_boolean", "switch", "binary_sensor")
 CONF_IGNORE_PATTERNS = "ignore_patterns"
 CONF_IGNORED_INTEGRATION_ENTRIES = "ignored_integration_entries"
 CONF_STORAGE_TYPE = "storage_type"

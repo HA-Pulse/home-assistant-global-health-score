@@ -8,7 +8,7 @@ import logging
 import math
 import os
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -17,6 +17,7 @@ import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
+    STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -31,12 +32,15 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     issue_registry as ir,
 )
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_GRACE_MINUTES,
+    CONF_CONDITIONAL_IGNORE_ENTITY,
+    CONF_CONDITIONAL_IGNORE_LABELS,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
@@ -283,7 +287,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             CONF_STALE_THRESHOLD_HOURS, DEFAULT_STALE_THRESHOLD_HOURS
         )
         self.stale_watch_labels: set[str] = set(opts.get(CONF_STALE_WATCH_LABELS) or [])
-        self.ignore_labels: list[str] = list(opts.get(CONF_IGNORE_LABELS) or [])
+        self._base_ignore_labels: list[str] = list(opts.get(CONF_IGNORE_LABELS) or [])
+        self.ignore_labels: list[str] = list(self._base_ignore_labels)
+        # Conditional ignore labels count only while this helper entity is "on".
+        self._conditional_labels: list[str] = list(opts.get(CONF_CONDITIONAL_IGNORE_LABELS) or [])
+        self._conditional_entity: str | None = opts.get(CONF_CONDITIONAL_IGNORE_ENTITY) or None
+        self._conditional_active: bool = False
         self._ignored_integration_entries: set[str] = set(
             opts.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
         )
@@ -349,6 +358,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 EVENT_HOMEASSISTANT_STARTED,
                 self._async_registries_ready,
             )
+
+    def _apply_conditional_labels(self) -> None:
+        """Set the effective ignore labels for this cycle.
+
+        The conditional labels join the configured ignore labels only while the
+        helper entity is exactly "on". "off", "unavailable", "unknown" or a missing
+        entity (deleted or renamed helper) leave them out, so nothing is hidden by an
+        unknown state.
+        """
+        state = self.hass.states.get(self._conditional_entity) if self._conditional_entity else None
+        self._conditional_active = bool(
+            self._conditional_labels and state is not None and state.state == STATE_ON
+        )
+        extra = [
+            label for label in self._conditional_labels if label not in self._base_ignore_labels
+        ]
+        self.ignore_labels = self._base_ignore_labels + (extra if self._conditional_active else [])
+
+    @callback
+    def async_track_conditional_entity(self) -> Callable[[], None]:
+        """Refresh as soon as the helper entity changes; returns the unsubscribe callback."""
+        if not (self._conditional_entity and self._conditional_labels):
+            return lambda: None
+
+        @callback
+        def _changed(_event: Event) -> None:
+            self.hass.async_create_task(self.async_request_refresh())
+
+        return async_track_state_change_event(self.hass, [self._conditional_entity], _changed)
 
     @callback
     def _async_registries_ready(self, _event: Event) -> None:
@@ -433,6 +471,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         self._pillar_fallbacks.clear()
         try:
+            self._apply_conditional_labels()
             return await self._async_update_data_inner()
         except Exception:
             _LOGGER.exception("HAGHS: update cycle failed — keeping last result")
@@ -520,6 +559,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "conditional_ignore_active": self._conditional_active,
             "integration_unhealthy_count": app.integration_unhealthy_count,
             "integration_unhealthy_entries": app.integration_unhealthy_list,
             "config_audit_bonus": app.config_bonus,
@@ -603,6 +643,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
+            "conditional_ignore_active": False,
             "integration_unhealthy_count": app.integration_unhealthy_count,
             "integration_unhealthy_entries": app.integration_unhealthy_list,
             "config_audit_bonus": app.config_bonus,

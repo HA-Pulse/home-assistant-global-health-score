@@ -12,7 +12,10 @@ from homeassistant.helpers import selector
 
 from .const import (
     _CONFIG_VERSION,
+    CONDITIONAL_IGNORE_DOMAINS,
     CONF_BATTERY_GRACE_MINUTES,
+    CONF_CONDITIONAL_IGNORE_ENTITY,
+    CONF_CONDITIONAL_IGNORE_LABELS,
     CONF_CPU_SENSOR,
     CONF_DB_SENSOR,
     CONF_IGNORE_LABELS,
@@ -117,6 +120,14 @@ _EXTRA_OPTIONS_SCHEMA = {
     ),
     vol.Optional(CONF_STALE_WATCH_LABELS): selector.LabelSelector(
         selector.LabelSelectorConfig(multiple=True)
+    ),
+    vol.Optional(CONF_CONDITIONAL_IGNORE_LABELS): selector.LabelSelector(
+        selector.LabelSelectorConfig(multiple=True)
+    ),
+    vol.Optional(CONF_CONDITIONAL_IGNORE_ENTITY): selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            filter=selector.EntityFilterSelectorConfig(domain=list(CONDITIONAL_IGNORE_DOMAINS))
+        )
     ),
     vol.Optional(
         CONF_UPDATE_INTERVAL,
@@ -236,7 +247,13 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
                 or threshold != int(threshold)
             ):
                 errors[CONF_STALE_THRESHOLD_HOURS] = "invalid_stale_threshold"
-            else:
+            labels = list(user_input.get(CONF_CONDITIONAL_IGNORE_LABELS) or [])
+            helper = user_input.get(CONF_CONDITIONAL_IGNORE_ENTITY) or None
+            if bool(labels) != bool(helper):
+                errors[CONF_CONDITIONAL_IGNORE_ENTITY] = "conditional_ignore_incomplete"
+            if not errors:
+                user_input[CONF_CONDITIONAL_IGNORE_LABELS] = labels
+                user_input[CONF_CONDITIONAL_IGNORE_ENTITY] = helper
                 user_input[CONF_STALE_THRESHOLD_HOURS] = int(threshold)
                 user_input[CONF_STALE_WATCH_LABELS] = list(
                     user_input.get(CONF_STALE_WATCH_LABELS) or []
