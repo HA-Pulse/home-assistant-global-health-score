@@ -184,6 +184,7 @@ After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Conf
 * Storage type
 * **Ignore labels** (multi-select)
 * **Ignore entity-id patterns** (glob list)
+* **Conditional ignore labels** and **Active while (helper)** (both empty by default) - extra ignore labels that apply only while the selected `input_boolean`, `switch` or `binary_sensor` is `on`, e.g. a vacation mode. Set both or neither. See [Dynamic exclusions via automation](#dynamic-exclusions-via-automation).
 * **Exclude integration entries from Integration Health** (multi-select, empty by default). Select individual entries by title, domain and entry ID. Other entries from the same integration remain included.
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
@@ -273,11 +274,32 @@ To use ignore labels:
 
 Area, device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
 
-Home Assistant itself has no service actions for assigning labels. The label
-actions used below are provided by the [Spook](https://spook.boo) custom
-integration; HAGHS does not need its own service. Without Spook, assign or remove
-the labels in the UI. List a label like `vacation` in the HAGHS *Ignore labels*
-field, then assign/remove it from automations:
+**Without Spook: conditional ignore labels.** In the HAGHS options, put a label like
+`vacation` into **Conditional ignore labels** and pick a helper (for example
+`input_boolean.vacation_mode`) in **Active while (helper)**. While the helper is `on`,
+entities, devices and areas with that label are excluded exactly like with a normal
+ignore label; when it is `off`, `unavailable`, `unknown` or deleted, they count again.
+An automation only switches the helper with a normal Home Assistant action, and HAGHS
+updates right after the change. The sensor attribute `conditional_ignore_active` shows
+whether the labels currently apply.
+
+```yaml
+# Vacation mode on: the conditional ignore labels apply
+- alias: HAGHS vacation start
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.vacation_mode
+```
+
+**With Spook: switch the label on the entities.** Home Assistant itself has no service
+actions for assigning labels. The label actions used below are provided by the
+[Spook](https://spook.boo) custom integration. Without Spook, assign or remove the
+labels in the UI. List a label like `vacation` in the HAGHS *Ignore labels* field, then
+assign/remove it from automations:
 
 ```yaml
 # Toggle the `vacation` label on a group of entities (requires Spook)
@@ -361,6 +383,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
+| `conditional_ignore_active` | bool | `True` while the conditional ignore labels apply (their helper is `on`); `False` when none are configured or the helper is `off`, unavailable, unknown or missing |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
 | `integration_unhealthy_entries` | list | The counted config entries as `domain: title` (bare `domain` when the entry has no title), sorted, capped at 50; entries excluded in the options are not listed; current only, excluded from recorder history (`integration_unhealthy_count` stays in the history) |
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
@@ -667,6 +690,10 @@ cards:
 **Why do I still see zombies or Repairs after excluding an integration entry?**
 
 The integration-entry exclusion only changes Integration Health. It does not suppress entity or device detection, update checks or Repairs. Review those findings separately and use their existing exclusion or ignore mechanisms where appropriate.
+
+**How do I hide entities during a vacation without Spook?**
+
+Use the **Conditional ignore labels** with a helper such as `input_boolean.vacation_mode`. While the helper is `on`, the labels act as ignore labels; switch it from your vacation automation. Details in [Dynamic exclusions via automation](#dynamic-exclusions-via-automation).
 
 **Can I delete all zombie entities?**
 

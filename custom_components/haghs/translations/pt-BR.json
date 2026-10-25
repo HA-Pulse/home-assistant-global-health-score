@@ -80,7 +80,8 @@
   },
   "options": {
     "error": {
-      "invalid_stale_threshold": "Insira um número inteiro de horas de 1 a 8760."
+      "invalid_stale_threshold": "Insira um número inteiro de horas de 1 a 8760.",
+      "conditional_ignore_incomplete": "Defina os rótulos de ignorar condicionais e o auxiliar, ou deixe ambos vazios."
     },
     "step": {
       "init": {
@@ -96,6 +97,8 @@
           "update_interval": "Intervalo de atualização",
           "stale_threshold_hours": "Limite de tempo sem relatórios (horas)",
           "stale_watch_labels": "Rótulos para monitorar relatórios desatualizados",
+          "conditional_ignore_labels": "Rótulos de ignorar condicionais",
+          "conditional_ignore_entity": "Ativo enquanto (auxiliar)",
           "zombie_grace_minutes": "Período de tolerância para zumbis (minutos)",
           "ignored_integration_entries": "Excluir entradas de integração da avaliação de integridade das integrações",
           "battery_grace_minutes": "Período de tolerância para entidades da classe battery (minutos)"
@@ -110,6 +113,8 @@
           "update_interval": "Com que frequência o HAGHS recalcula a pontuação de integridade, em segundos. Valores mais baixos significam atualizações mais rápidas, mas um pouco mais de uso da CPU. Padrão: 60 segundos.",
           "stale_threshold_hours": "Tempo desde o último relatório de estado, não desde a última mudança de valor. Horas inteiras de 1 a 8760; padrão: 24. As detecções passivas abrangem apenas sensor e binary_sensor e não afetam a pontuação.",
           "stale_watch_labels": "Inclua entidades na pontuação por relatórios desatualizados usando rótulos aplicados diretamente às entidades de qualquer domínio. Rótulos de dispositivos e áreas não as incluem. As regras de exclusão têm prioridade. Cada entidade monitorada com atraso custa 5 pontos de aplicação, com limite de 10 antes do bônus de configuração; a pontuação de aplicação é de no máximo 99 enquanto houver alguma entidade com atraso. Deixe vazio para desativar essa pontuação.",
+          "conditional_ignore_labels": "Rótulos de ignorar extras que valem apenas enquanto o auxiliar abaixo estiver ligado, por exemplo um rótulo 'férias' durante um modo férias. Eles excluem entidades e dispositivos exatamente como os rótulos de ignorar acima. Deixe vazio para desativar.",
+          "conditional_ignore_entity": "Um input_boolean, switch ou binary_sensor. Enquanto estiver 'on', os rótulos de ignorar condicionais valem; 'off', indisponível, desconhecido ou um auxiliar excluído significa que não valem. Alterne-o a partir de uma automação com uma ação normal do Home Assistant (por exemplo input_boolean.turn_on), sem precisar do Spook. O HAGHS atualiza logo após a mudança do auxiliar.",
           "zombie_grace_minutes": "Quanto tempo uma entidade deve permanecer em 'unavailable' ou 'unknown' antes que o HAGHS a considere um zumbi. Faixa permitida: 1 a 240 minutos. Valores mais baixos tornam a detecção mais agressiva (mais falsos positivos de dispositivos off-line por um breve período). Valores mais altos mascaram interrupções curtas, mas permitem que falhas reais persistam. Padrão: 5 minutos.",
           "ignored_integration_entries": "Selecione entradas individuais de integração para excluir da contagem, penalidade e recomendação de integridade das integrações. Cada entrada é identificada pelo título, domínio e ID da entrada. Deixe vazio para incluir todas as entradas. Isso não exclui entidades ou dispositivos da detecção de zumbis e não ignora Reparos. Rótulos de exclusão de dispositivos e entidades não excluem entradas de integração.",
           "battery_grace_minutes": "Período de tolerância estendido especificamente para entidades com 'device_class: battery'. Os rádios Zigbee e Homematic normalmente demoram mais do que a janela normal para consultar novamente os dispositivos a bateria, portanto, sinalizá-los como zumbis após apenas 5 minutos produz falsos positivos. Faixa permitida: 1 a 240 minutos. Se você definir um valor inferior ao período de tolerância normal, a extensão será efetivamente desativada. Padrão: 60 minutos."

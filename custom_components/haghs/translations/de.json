@@ -80,7 +80,8 @@
   },
   "options": {
     "error": {
-      "invalid_stale_threshold": "Gib eine ganze Zahl von Stunden zwischen 1 und 8760 ein."
+      "invalid_stale_threshold": "Gib eine ganze Zahl von Stunden zwischen 1 und 8760 ein.",
+      "conditional_ignore_incomplete": "Setze die bedingten Ignorier-Labels und das Hilfselement, oder lass beide leer."
     },
     "step": {
       "init": {
@@ -96,6 +97,8 @@
           "update_interval": "Aktualisierungsintervall",
           "stale_threshold_hours": "Schwelle für veraltete Meldungen (Stunden)",
           "stale_watch_labels": "Beobachtungs-Labels für veraltete Meldungen",
+          "conditional_ignore_labels": "Bedingte Ignorier-Labels",
+          "conditional_ignore_entity": "Aktiv, solange (Hilfselement)",
           "zombie_grace_minutes": "Zombie-Wartezeit (Minuten)",
           "ignored_integration_entries": "Integrationseinträge von der Integration Health ausnehmen",
           "battery_grace_minutes": "Wartezeit für Batterie-Entitäten (Minuten)"
@@ -110,6 +113,8 @@
           "update_interval": "Wie oft HAGHS den Health Score neu berechnet, in Sekunden. Kleinere Werte bedeuten schnellere Aktualisierung, aber etwas mehr CPU-Last. Standard: 60 Sekunden.",
           "stale_threshold_hours": "Zeit seit der letzten Statusmeldung, nicht seit der letzten Wertänderung. Ganze Stunden von 1 bis 8760; Standard: 24. Passive Funde betreffen nur sensor und binary_sensor und wirken sich nicht auf den Score aus.",
           "stale_watch_labels": "Nimmt Entitäten über Labels, die direkt an Entitäten beliebiger Domains hängen, in die Bewertung veralteter Meldungen auf. Geräte- und Bereichs-Labels zählen nicht. Ignorier-Regeln haben Vorrang. Jede überfällige beobachtete Entität kostet 5 Punkte im Application-Score, höchstens 10 vor dem Konfigurationsbonus; solange eine überfällig ist, liegt der Application-Score bei höchstens 99. Leer lassen, um die Bewertung abzuschalten.",
+          "conditional_ignore_labels": "Zusätzliche Ignorier-Labels, die nur gelten, solange das Hilfselement unten eingeschaltet ist, z. B. ein Label 'Urlaub' während eines Urlaubsmodus. Sie nehmen Entitäten und Geräte genauso aus wie die Ignorier-Labels oben. Leer lassen, um die Funktion abzuschalten.",
+          "conditional_ignore_entity": "Ein input_boolean, switch oder binary_sensor. Solange es 'on' ist, gelten die bedingten Ignorier-Labels; 'off', nicht verfügbar, unbekannt oder ein gelöschtes Hilfselement bedeutet, dass sie nicht gelten. Schalte es per Automation mit einer normalen Home-Assistant-Aktion (z. B. input_boolean.turn_on), Spook ist nicht nötig. HAGHS aktualisiert direkt nach der Änderung des Hilfselements.",
           "zombie_grace_minutes": "Wie lange eine Entität 'unavailable' oder 'unknown' sein muss, bevor HAGHS sie als Zombie zählt. Erlaubt: 1 bis 240 Minuten. Kleinere Werte machen die Erkennung aggressiver (mehr Fehlalarme durch kurz getrennte Geräte). Größere Werte verdecken kurze Ausfälle, lassen echte Fehler aber länger stehen. Standard: 5 Minuten.",
           "ignored_integration_entries": "Wähle einzelne Integrationseinträge, die bei Zählung, Abzug und Empfehlung der Integration Health nicht berücksichtigt werden. Jeder Eintrag ist an Titel, Domain und Eintrags-ID erkennbar. Leer lassen, um alle Einträge einzubeziehen. Entitäten und Geräte bleiben dabei in der Zombie-Erkennung, und Reparaturen werden nicht ignoriert. Ignorier-Labels von Geräten und Entitäten nehmen keine Integrationseinträge aus.",
           "battery_grace_minutes": "Verlängerte Wartezeit speziell für Entitäten mit 'device_class: battery'. Zigbee- und Homematic-Funk fragt Batteriegeräte oft erst nach dem normalen Zeitfenster wieder ab, daher führt eine Zombie-Meldung nach nur 5 Minuten zu Fehlalarmen. Erlaubt: 1 bis 240 Minuten. Liegt der Wert unter der normalen Wartezeit, ist die Verlängerung praktisch abgeschaltet. Standard: 60 Minuten."
