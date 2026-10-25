@@ -170,6 +170,22 @@ async def test_list_is_capped_sorted_and_uses_the_display_name(hass) -> None:
     assert names == ["aaa renamed"] + [f"dev {index:03d}" for index in range(CAP - 1)]
 
 
+async def test_device_without_any_name_is_listed_by_its_id(hass) -> None:
+    owner = _owner(hass)
+    named = _device(hass, "named", owner=owner)
+    registry = dr.async_get(hass)
+    created = registry.async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test_empty_devices", "unnamed")}
+    )
+    # HA names a new device after its config entry; clear it to reach the id fallback.
+    unnamed = registry.async_update_device(created.id, name=None)
+    assert unnamed.name is None
+    assert unnamed.name_by_user is None
+    assert named.name == "named"
+
+    assert _coordinator(hass)._calc_empty_devices() == (sorted(["named", unnamed.id]), 2)
+
+
 @pytest.mark.parametrize("empty", [0, 2])
 async def test_result_flag_and_recommendation_without_score_change(hass, empty: int) -> None:
     for index in range(empty):
