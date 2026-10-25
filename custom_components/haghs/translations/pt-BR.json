@@ -13,6 +13,7 @@
     "rec_cpu_load_psi": "⚡ Otimização: o tempo de espera da CPU medido pelo PSI está afetando a pontuação ({cpu_pct:.1f}%).",
     "rec_db_over_limit": "🗄️ Banco de dados: banco de dados ({db_gb:.1f} GB) excede o limite dinâmico ({limit_gb:.1f} GB).",
     "rec_dead_devices": "🔌 Dispositivos: {count} dispositivo(s) com todas as entidades monitoradas indisponíveis após o término dos respectivos períodos de tolerância.",
+    "rec_empty_devices": "🗂️ Dispositivos: {count} dispositivo(s) sem nenhuma entidade.",
     "rec_disk_sd_low": "⚠️ Espaço em disco: apenas {free_gb:.1f} GB livres em {storage_type}!",
     "rec_disk_ssd_low": "⚠️ Espaço em disco: menos de 10% livre ({free_gb:.1f} GB)!",
     "rec_integration_health": "🧩 Integrações: falha na configuração de {count} entrada(s) de integração.",
