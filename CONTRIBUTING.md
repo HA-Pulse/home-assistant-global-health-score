@@ -131,7 +131,8 @@ Manual validation steps still belong in the PR description under
 
 ## Checks That Must Pass
 
-Three GitHub Actions workflows run on every push and PR. All must be green
+Three GitHub Actions workflows run on pull requests and on pushes (the CI
+workflow on pushes to `main` and `dev`). All must be green
 before merge:
 
 - **Hassfest** (`.github/workflows/hassfest.yaml`) — Home Assistant manifest,
