@@ -218,6 +218,21 @@ class _ApplicationResult:
     empty_device_list: list[str] = field(default_factory=list)
 
 
+def _device_entries(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
+    """All device entries without the deprecated mapping access of ``devices``.
+
+    Newer HA versions yield the entries when ``devices`` is iterated and report its use
+    as a mapping (``.values()``, lookups); older versions yield device ids, resolved here
+    with ``async_get``.
+    """
+    entries = []
+    for item in dev_reg.devices:
+        entry = dev_reg.async_get(item) if isinstance(item, str) else item
+        if entry is not None:
+            entries.append(entry)
+    return entries
+
+
 def _device_config_entry_ids(device: dr.DeviceEntry) -> set[str]:
     """Config entries of a device across HA versions.
 
@@ -226,7 +241,8 @@ def _device_config_entry_ids(device: dr.DeviceEntry) -> set[str]:
     """
     if hasattr(device, "config_entry_id"):
         return {device.config_entry_id} if device.config_entry_id else set()
-    return set(device.config_entries or ())
+    legacy = device.config_entries  # deprecated-fallback: HA < 2026.9 has no config_entry_id
+    return set(legacy or ())
 
 
 @dataclass
@@ -1414,7 +1430,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ent_reg = er.async_get(self.hass)
         dev_reg = dr.async_get(self.hass)
         area_reg = ar.async_get(self.hass)
-        devices = list(dev_reg.devices.values())
+        devices = _device_entries(dev_reg)
         parents = {device.via_device_id for device in devices if device.via_device_id}
         ignore = set(self.ignore_labels)
 
