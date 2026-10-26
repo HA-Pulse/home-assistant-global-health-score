@@ -166,14 +166,26 @@ async def test_dead_device_failure_warns_once_per_streak(hass, monkeypatch, capl
 
 async def test_zombie_reason_failure_keeps_zombies_and_penalty(hass, monkeypatch, caplog) -> None:
     coord = _scenario(hass)
+    # A second zombie: after the first reason failure the lookup must not run again.
+    second = er.async_get(hass).async_get_or_create(
+        "sensor", "test_platform", "uid_lamp", suggested_object_id="lamp_power"
+    )
+    hass.states.async_set(second.entity_id, STATE_UNAVAILABLE)
+    hass.states.get(second.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
     clean = await _update(coord)
+    assert clean["zombie_count"] == 2
+    assert clean["zombie_count_per_reason"] == {"unavailable": 2}
+    original = coord._zombie_reason
+    calls: list[str] = []
 
-    def _raise(_state, _entry):
+    def _raise(state, _entry):
+        calls.append(state.entity_id)
         raise RuntimeError("simulated reason failure")
 
     monkeypatch.setattr(coord, "_zombie_reason", _raise)
     caplog.clear()
     failed = await _update(coord)
+    assert len(calls) == 1
     for key in (
         "zombie_count",
         "zombie_entities",
@@ -185,6 +197,19 @@ async def test_zombie_reason_failure_keeps_zombies_and_penalty(hass, monkeypatch
     ):
         assert failed[key] == clean[key], key
     assert (failed["zombie_reasons"], failed["zombie_count_per_reason"]) == ({}, {})
+    assert _warnings(caplog) == [
+        "HAGHS: zombie reasons check failed; its attributes stay empty and the score is not affected"
+    ]
+
+    # Still failing: no second WARNING; after a clean cycle a new failure warns again.
+    caplog.clear()
+    await _update(coord)
+    assert _warnings(caplog) == []
+    monkeypatch.setattr(coord, "_zombie_reason", original)
+    assert (await _update(coord))["zombie_count_per_reason"] == {"unavailable": 2}
+    monkeypatch.setattr(coord, "_zombie_reason", _raise)
+    caplog.clear()
+    await _update(coord)
     assert _warnings(caplog) == [
         "HAGHS: zombie reasons check failed; its attributes stay empty and the score is not affected"
     ]
