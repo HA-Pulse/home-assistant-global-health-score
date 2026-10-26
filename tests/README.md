@@ -23,7 +23,7 @@ coverage report --include='custom_components/haghs/coordinator.py' --fail-under=
 
 The CI gate fails below 90 % for the package (`--cov-fail-under` in
 `.github/workflows/ci.yml`), and `coordinator.py` is gated at 80 % on top of
-that (issue #107). Current state: `coordinator.py` 100 %, package 93 %.
+that (issue #107). Current state: `coordinator.py` 100 %, package 95 %.
 
 ## Linting
 
@@ -88,13 +88,15 @@ a live instance before a release and after changes to `coordinator.py`,
    zombie entity from step 4 (entity settings dialog, label picker).
    *Expected:* from the next update cycle on, the entity is excluded from
    `zombie_count` and the cap releases.
-6. **Ignore labels (dynamic):** Call the native action
+6. **Ignore labels (dynamic):** With the Spook custom integration installed, call
    `homeassistant.add_label_to_entity` with your label and the test entity
    (**Developer Tools > Actions**), then
    `homeassistant.remove_label_from_entity` again.
    *Expected:* adding the label excludes the entity without editing the
    config entry; removing it brings the entity back. This is the path
-   documented in the README automation example.
+   documented in the README automation example. Without Spook, use the
+   conditional ignore labels with a helper instead (README, Dynamic exclusions
+   via automation).
 7. **Repair flow (hosts without PSI only):** Leave the CPU/RAM fallback
    sensors empty in the options on a host where PSI is not available.
    *Expected:* a repair `fallback_missing` appears under **Settings >
