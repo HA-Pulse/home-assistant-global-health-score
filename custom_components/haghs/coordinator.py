@@ -293,6 +293,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._conditional_labels: list[str] = list(opts.get(CONF_CONDITIONAL_IGNORE_LABELS) or [])
         self._conditional_entity: str | None = opts.get(CONF_CONDITIONAL_IGNORE_ENTITY) or None
         self._conditional_active: bool = False
+        # Informational checks whose failure was already warned about (warn once per failure streak).
+        self._failed_informational: set[str] = set()
         self._ignored_integration_entries: set[str] = set(
             opts.get(CONF_IGNORED_INTEGRATION_ENTRIES) or []
         )
@@ -997,10 +999,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         p_repairs, repair_count, repair_list = self._calc_repairs()
 
         # G. DEAD DEVICES (#120) — informational, no score impact
-        dead_device_list, dead_device_count = self._calc_dead_devices()
+        dead_device_list, dead_device_count = self._informational(
+            "dead devices", self._calc_dead_devices, ([], 0)
+        )
 
         # H. EMPTY DEVICES (#93) — informational, no score impact
-        empty_device_list, empty_device_count = self._calc_empty_devices()
+        empty_device_list, empty_device_count = self._informational(
+            "empty devices", self._calc_empty_devices, ([], 0)
+        )
 
         app_final = max(
             0,
@@ -1170,6 +1176,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         zombie_per_integration: dict[str, int] = {}
         zombie_since: dict[str, str] = {}
         zombie_reasons: dict[str, str] = {}
+        reasons_ok = True  # informational: a failure empties only the reasons
         unregistered_list: list[str] = []
         unregistered_per_domain: dict[str, int] = {}
         # Denominator only counts entities that could ever be flagged as zombies,
@@ -1223,9 +1230,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 zombie_list.append(entity_id)
                 zombie_since[entity_id] = self._effective_seen(state).isoformat()
-                zombie_reasons[entity_id] = self._zombie_reason(state, entity_entry)
+                if reasons_ok:
+                    try:
+                        zombie_reasons[entity_id] = self._zombie_reason(state, entity_entry)
+                    except Exception:
+                        reasons_ok = False
+                        zombie_reasons = {}
+                        self._warn_informational("zombie reasons")
 
         zombie_count = len(zombie_list)
+        if reasons_ok:
+            self._failed_informational.discard("zombie reasons")
         zombie_per_reason: dict[str, int] = {}
         for reason in ZOMBIE_REASONS:  # fixed ranking order, only reasons that occur
             count = sum(1 for value in zombie_reasons.values() if value == reason)
@@ -1255,7 +1270,37 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Same entries and order as the capped zombie list (#154).
             {entity_id: zombie_since[entity_id] for entity_id in zombie_list[:ZOMBIE_LIST_CAP]},
             zombie_per_reason,
-            {entity_id: zombie_reasons[entity_id] for entity_id in zombie_list[:ZOMBIE_LIST_CAP]},
+            {
+                entity_id: zombie_reasons[entity_id]
+                for entity_id in zombie_list[:ZOMBIE_LIST_CAP]
+                if reasons_ok
+            },
+        )
+
+    def _informational(self, name: str, calc: Callable[[], Any], empty: Any) -> Any:
+        """Run an informational check isolated: a failure empties only its own attributes.
+
+        Informational checks (dead devices, empty devices, zombie reasons) carry no
+        points, so an exception there must not take the application pillar down.
+        """
+        try:
+            result = calc()
+        except Exception:
+            self._warn_informational(name)
+            return empty
+        self._failed_informational.discard(name)
+        return result
+
+    def _warn_informational(self, name: str) -> None:
+        """WARNING with traceback once per failure streak, DEBUG while it keeps failing."""
+        if name in self._failed_informational:
+            _LOGGER.debug("HAGHS: %s check still failing", name, exc_info=True)
+            return
+        self._failed_informational.add(name)
+        _LOGGER.warning(
+            "HAGHS: %s check failed; its attributes stay empty and the score is not affected",
+            name,
+            exc_info=True,
         )
 
     def _zombie_reason(self, state: State, entity_entry: er.RegistryEntry) -> str:
