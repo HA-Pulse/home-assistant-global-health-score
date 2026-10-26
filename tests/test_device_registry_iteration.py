@@ -51,3 +51,17 @@ def test_newer_ha_registry_yields_entries() -> None:
     first, second = SimpleNamespace(id="a"), SimpleNamespace(id="b")
     newer = SimpleNamespace(devices=[first, second], async_get=lambda _id: None)
     assert coordinator_module._device_entries(newer) == [first, second]
+
+
+class _BothShapes:
+    """A newer DeviceEntry that still has the deprecated shim; reading it must not happen."""
+
+    config_entry_id = "entry-1"
+
+    @property
+    def config_entries(self) -> set[str]:
+        raise AssertionError("config_entries must not be read when config_entry_id exists")
+
+
+def test_config_entry_id_wins_without_touching_config_entries() -> None:
+    assert coordinator_module._device_config_entry_ids(_BothShapes()) == {"entry-1"}
