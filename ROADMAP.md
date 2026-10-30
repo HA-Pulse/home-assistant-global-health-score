@@ -13,29 +13,47 @@ All work below is committed on `dev` and described in detail in
 
 ### Features
 
-- **Repairs now count in the application score (#97)**: Open repair issues
-  from HA's issue registry cost 5 points each (cap 10), and the hard cap of
-  99 now also applies while repairs are open so the Config-Audit bonus cannot
-  mask a broken integration. New attributes `repair_count` and `repairs`,
-  new flag `rec_repairs`. HA's native "Ignore" action takes a repair out of
-  the count; HAGHS's own repairs are excluded. Visible score change,
-  documented in the changelog.
+- **Repairs count in the application score (#97)**: 5 points per open repair
+  (cap 10), application score capped at 99 while a repair is open; HAGHS's own
+  repairs are excluded, HA's "Ignore" takes a repair out of the count.
+- **Integration entries**: individual config entries can be excluded from
+  Integration Health; the counted entries are listed by name
+  (`integration_unhealthy_entries`, #134) and the recommendation names config
+  entries, not integrations.
+- **Zombies explained (#154)**: grouped by integration, since when each zombie
+  is unavailable, and why it is reported (`config_entry_missing`,
+  `integration_not_loaded`, `not_provided`, `unavailable`).
+- **Dead devices (#120) and empty devices (#93)**: informational markers for
+  devices whose monitored entities are all unavailable and for devices without
+  any entity, from registry facts only.
+- **Stale reporting (discussion #79)**: passive candidates and opt-in watch
+  labels for entities that stopped reporting.
+- **Ignore labels on areas (discussion #96)** and **conditional ignore labels**
+  that apply only while a helper is on (vacation mode without Spook).
+- **Translations (#114, #138, #163)**: recommendation texts translatable;
+  Brazilian Portuguese and German.
+- **Unregistered entities informational (#98)** and **calculation failures
+  visible (#135)**.
 
 ### Bug fixes
 
-- **Every missing score point explained (#92)**: The Config-Audit bonus and
-  the Integration Health penalty now produce a recommendation line and a
-  `rec_*` flag. Two new attributes (`config_audit_bonus`,
-  `integration_unhealthy_count`) expose the raw numbers, and a new invariant
-  test fails whenever a point source would be missing a text and a flag. No
-  score change.
+- **Every missing score point explained (#92)**: Config-Audit bonus and
+  Integration Health produce a recommendation line and a `rec_*` flag.
+- **Coordinator safety net (#103)**, **dead-device false positives (#143)**,
+  **PSI fallback gate (#123)**, **Spook named for the label actions (#99)**,
+  **punctuation (#136)**.
+- **Recorder attribute size (#159)**: entity lists are excluded from recorder
+  history, so large instances stay below the 16 KB limit.
+- **Informational checks isolated**: a failure in dead devices, empty devices
+  or zombie reasons no longer takes the score down.
+- **No deprecated device registry access**: the device registry is read the way
+  Home Assistant supports from 2026.9 on.
 
 ### Infrastructure
 
-- **Pillar test coverage and CI refresh (#107, #117)**: The suite grows from
-  103 to 257 tests and `coordinator.py` reaches 100 % statement and branch
-  coverage. CI runs on Python 3.14 (Home Assistant 2026.9.4 instead of
-  2025.1.4) and gates `coordinator.py` coverage at 80 %.
+- **Pillar test coverage and CI (#107, #117, #128)**: `coordinator.py` at 100 %
+  statement and branch coverage; CI runs on Python 3.14 and gates the package at
+  90 % and `coordinator.py` at 80 %. The suite holds 533 tests.
 
 ## Completed in v2.3
 
@@ -63,9 +81,10 @@ All work below is committed on `dev` and described in detail in
   to the penalty after `UPDATE_GRACE_DAYS = 7`; pending list is
   unaffected so users still see what is queued.
 - **Multi-label ignore + dynamic toggling**: `ignore_labels` accepts
-  multiple labels. Inclusion/exclusion is toggled at runtime via HA's
-  native `homeassistant.add_label_to_entity` /
-  `homeassistant.remove_label_from_entity` service actions, so automations
+  multiple labels. Inclusion/exclusion is toggled at runtime via the
+  `homeassistant.add_label_to_entity` /
+  `homeassistant.remove_label_from_entity` service actions of the Spook
+  custom integration (HA itself has no label service), so automations
   can flip exclusions (e.g. a `vacation` label) without reloading the
   integration. Migration `(3,2)→(3,3)` converts the legacy single-label
   setting transparently.
@@ -151,41 +170,6 @@ All work below is committed on `dev` and described in detail in
 
 ## Planned
 
-### Stale-sensor detection (v2.5)
-
-**Problem:** Sensors can fail silently: they stop reporting but Home
-Assistant keeps showing the last valid value. The current zombie
-detector only catches `unavailable` / `unknown`, so this class of
-failure goes unnoticed.
-
-**Approach: hybrid design (Option D from the v2.3 design session):**
-
-- **Always-on, passive layer:** A new `stale_candidates` state
-  attribute lists every entity whose `state.last_reported` is older
-  than a configurable threshold (default 24 h). No score impact, no
-  penalty, pure transparency, no false-positive risk for unmodified
-  setups.
-- **Opt-in, score-impacting layer:** A new `stale_watch_labels` option
-  mirrors the existing multi-label `ignore_labels` pattern. Entities
-  carrying any of these labels and exceeding the threshold contribute
-  to a new penalty bucket. Zero false positives by design: the user
-  explicitly marks which sensors must keep reporting.
-
-**Why not auto-detect by device class:** Every commonly cited "safe"
-device class (`temperature`, `humidity`, `pressure`, `power`,
-`illuminance`, …) has legitimate long-quiet scenarios (climate-stable
-rooms, idle devices, nighttime). No single threshold works across
-them, and a magic default would violate the "no obfuscated thresholds"
-rule from `HAGHS_PHILOSOPHY.md`.
-
-**Technical primitive:** `state.last_reported` (HA Core 2024.4+).
-Updates on every backend message regardless of whether the value or
-attributes changed, so it survives Zigbee2MQTT's `force_update=False`
-default, which `state.last_updated` does not.
-
-**Prerequisite:** `hacs.json` min HA version ≥ 2024.4 (done: the file now
-requires 2024.10.0).
-
 ### Repairs penalties: severity weighting and a grace window (v2.5 candidate)
 
 **Status:** Deliberately out of scope for #97.
@@ -225,4 +209,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-09-29*
+*Last updated: 2026-10-29*

@@ -1,5 +1,10 @@
 {
   "common": {
+    "rec_stale": "Stale reporting: {count} watched entity/entities have not reported for more than {hours} hour(s); application penalty {penalty} point(s) before the configuration bonus.",
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Application",
+    "rec_pillar_fallback": "⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.",
+    "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": "✅ System optimized",
     "rec_backup_stale": "🚨 Security: Stale backup detected!",
     "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder purge days / entity filter).",
@@ -7,23 +12,24 @@
     "rec_cpu_load_classic": "⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).",
     "rec_cpu_load_psi": "⚡ Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%).",
     "rec_db_over_limit": "🗄️ Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB).",
-    "rec_dead_devices": "🔌 Devices: {count} device(s) with all entities unavailable.",
+    "rec_dead_devices": "🔌 Devices: {count} device(s) with all monitored entities unavailable past the grace period.",
+    "rec_empty_devices": "🗂️ Devices: {count} device(s) without any entity.",
     "rec_disk_sd_low": "⚠️ Disk Space: Only {free_gb:.1f} GB free on {storage_type}!",
     "rec_disk_ssd_low": "⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!",
-    "rec_integration_health": "🧩 Integrations: {count} integration(s) failed to set up.",
+    "rec_integration_health": "🧩 Integrations: {count} integration entry(ies) failed to set up.",
     "rec_io_pressure": "⚡ Optimization: I/O pressure is impacting score ({io_pct:.1f}%).",
-    "rec_power_unstable": "⚠️ Power: Under-voltage detected — unstable power supply!",
+    "rec_power_unstable": "⚠️ Power: Under-voltage detected: unstable power supply!",
     "rec_ram_pressure_classic": "⚡ Optimization: Memory utilization is impacting score ({ram_pct:.1f}%).",
     "rec_ram_pressure_psi": "⚡ Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%).",
     "rec_repairs": "🛠️ Repairs: {count} open repair issue(s) detected.",
     "rec_updates_pending": "📦 Maintenance: {count} update(s) pending.",
-    "rec_zombies": "🧟 Hygiene: {count} zombie(s) detected."
+    "rec_zombies": "🧟 Hygiene: {count} zombie(s) detected. Check before deleting: unavailable is not the same as unused."
   },
   "config": {
     "step": {
       "user": {
         "title": "Set up Global Health Score",
-        "description": "HAGHS monitors your Home Assistant instance and calculates a health score from 0 to 100. Database size, disk usage, and update status are detected automatically — you only need to provide the two fields below.",
+        "description": "HAGHS monitors your Home Assistant instance and calculates a health score from 0 to 100. Database size, disk usage, and update status are detected automatically, you only need to provide the two fields below.",
         "data": {
           "cpu_sensor": "CPU usage sensor",
           "ram_sensor": "RAM usage sensor",
@@ -36,7 +42,7 @@
           "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
           "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
-          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation by calling Home Assistant's native 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions (e.g. switch a 'vacation' label on while you are away). Create the labels first under Settings → Labels if they do not exist yet.",
+          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation with the 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions provided by the Spook custom integration (Home Assistant itself has no label service), e.g. switch a 'vacation' label on while you are away. Create the labels first under Settings → Labels if they do not exist yet.",
           "ignore_patterns": "Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size')."
         }
@@ -73,6 +79,10 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_stale_threshold": "Enter a whole number of hours from 1 to 8760.",
+      "conditional_ignore_incomplete": "Set both the conditional ignore labels and the helper, or leave both empty."
+    },
     "step": {
       "init": {
         "title": "HAGHS Options",
@@ -85,18 +95,28 @@
           "ignore_patterns": "Ignore entity-id patterns",
           "db_sensor": "Database size sensor (optional)",
           "update_interval": "Update interval",
+          "stale_threshold_hours": "Stale threshold (hours)",
+          "stale_watch_labels": "Stale watch labels",
+          "conditional_ignore_labels": "Conditional ignore labels",
+          "conditional_ignore_entity": "Active while (helper)",
           "zombie_grace_minutes": "Zombie grace period (minutes)",
+          "ignored_integration_entries": "Exclude integration entries from Integration Health",
           "battery_grace_minutes": "Battery-class grace period (minutes)"
         },
         "data_description": {
           "cpu_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use').",
           "ram_sensor": "Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). If PSI becomes unavailable and no CPU/RAM fallback sensors are configured, setup will be rejected. Select the sensor that reports memory usage in percent (e.g. 'Memory Use Percent').",
           "storage_type": "Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space.",
-          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation by calling Home Assistant's native 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions (e.g. switch a 'vacation' label on while you are away). Create the labels first under Settings → Labels if they do not exist yet.",
+          "ignore_labels": "Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation with the 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions provided by the Spook custom integration (Home Assistant itself has no label service), e.g. switch a 'vacation' label on while you are away. Create the labels first under Settings → Labels if they do not exist yet.",
           "ignore_patterns": "Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported.",
           "db_sensor": "Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size').",
           "update_interval": "How often HAGHS recalculates the health score, in seconds. Lower values mean faster updates but slightly more CPU usage. Default: 60 seconds.",
+          "stale_threshold_hours": "Time since the last state report, not the last value change. Whole hours from 1 to 8760; default: 24. Passive findings cover sensor and binary_sensor only and do not affect the score.",
+          "stale_watch_labels": "Opt entities in to stale scoring using labels applied directly to entities in any domain. Device and area labels do not opt in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus; application score is at most 99 while any are overdue. Leave empty to disable stale scoring.",
+          "conditional_ignore_labels": "Extra ignore labels that apply only while the helper below is on, e.g. a 'vacation' label during a vacation mode. They exclude entities and devices exactly like the ignore labels above. Leave empty to disable.",
+          "conditional_ignore_entity": "An input_boolean, switch or binary_sensor. While it is 'on', the conditional ignore labels apply; 'off', unavailable, unknown or a deleted helper means they do not. Switch it from an automation with a normal Home Assistant action (e.g. input_boolean.turn_on), no Spook needed. HAGHS updates right after the helper changes.",
           "zombie_grace_minutes": "How long an entity must stay in 'unavailable' or 'unknown' before HAGHS counts it as a zombie. Allowed range: 1 to 240 minutes. Lower values make detection more aggressive (more false positives from briefly-offline devices). Higher values mask short outages but let real failures linger. Default: 5 minutes.",
+          "ignored_integration_entries": "Select individual integration entries to exclude from the Integration Health count, penalty and recommendation. Each entry is identified by its title, domain and entry ID. Leave empty to include all entries. This does not exclude entities or devices from zombie detection, and does not ignore Repairs. Device and entity ignore labels do not exclude integration entries.",
           "battery_grace_minutes": "Extended grace period specifically for entities with 'device_class: battery'. Zigbee and Homematic radios routinely take longer than the regular window to re-poll battery devices, so flagging them as zombies after only 5 minutes produces false positives. Allowed range: 1 to 240 minutes. If you set this lower than the regular grace, it effectively disables the extension. Default: 60 minutes."
         }
       }

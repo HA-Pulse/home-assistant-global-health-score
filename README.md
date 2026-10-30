@@ -51,8 +51,8 @@ HAGHS v2.3 ships a full `async_migrate_entry` handler that converts config entri
 - [Sensor Attributes](#sensor-attributes)
 - [Roadmap](#roadmap)
 - [UI Integration](#ui-integration)
-  - [HAGHS Lite](#haghs-lite-v12-quick-check)
-  - [HAGHS Pro](#haghs-pro-v12-command-center)
+  - [HAGHS Lite](#haghs-lite-v13-quick-check)
+  - [HAGHS Pro](#haghs-pro-v13-command-center)
 - [FAQ](#faq)
 - [Changelog](#changelog)
 
@@ -116,7 +116,7 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 **PSI-aware recommendations:** The advisor text is split into PSI and classic variants for CPU and RAM. On PSI-equipped systems you see "PSI CPU stall time: 12.5%" (the actual blocking time); on fallback systems "CPU utilization: 65%" (the busy-ness). The metric source is always explicit so you know whether you are looking at stalls or load.
 
-**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English.
+**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English. Translations: English (built in), Brazilian Portuguese, German.
 
 **Power supply detection (Raspberry Pi):** HAGHS auto-detects `binary_sensor.rpi_power_status` when available and applies a flat **20-point** hardware penalty while under-voltage is reported. Surfaces silent throttling on undersized power supplies that classic CPU sensors cannot see.
 
@@ -130,15 +130,17 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts. Every point difference below 100 is explained: each deduction and each unearned bonus prints a recommendation line and sets a matching `rec_*` flag.
 
-* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Detects entities with `unavailable` or `unknown` state in 22 physical/UI-relevant domains (automations, scripts, etc. are excluded). Penalties scale with the percentage of zombies relative to the entities in the monitored domains. Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit). Entities without an entity-registry entry (YAML-defined templates, Utility Meter, Riemann Sum, ...) are **not** zombies: they are reported separately as *unregistered* (`unregistered_count`, `unregistered_entities`, `unregistered_count_per_domain`) and do **not** affect the score. `zombie_count` and `zombie_count_per_domain` always carry the full totals.
+* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Detects entities with `unavailable` or `unknown` state in 22 physical/UI-relevant domains (automations, scripts, etc. are excluded). Penalties scale with the percentage of zombies relative to the entities in the monitored domains. Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery` because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices after a coordinator restart. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - toggling *Disable entity* in HA is now an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (16 KB state-machine limit). Entities without an entity-registry entry (YAML-defined templates, Utility Meter, Riemann Sum, ...) are **not** zombies: they are reported separately as *unregistered* (`unregistered_count`, `unregistered_entities`, `unregistered_count_per_domain`) and do **not** affect the score. `zombie_count` and `zombie_count_per_domain` always carry the full totals. A zombie is an availability signal, not proof that an entity is orphaned, unused or safe to delete: a temporary outage, an idle device or an entity that only reports in some operating modes looks the same. Before deleting an entity, check its integration, device and config entry. When `zombie_count` is higher than the 100 listed entries, `zombie_count_per_domain` and `zombie_count_per_integration` show where the rest come from.
   
-* **Dead Devices (informational, no score impact):** Flags devices whose entities are all `unavailable`/`unknown` beyond the grace period (one device, all entities dead: a re-paired Zigbee plug, a removed bridge). Reported via `dead_device_count`, `dead_devices` and the `rec_dead_devices` flag. Entity-level zombie points stay authoritative, so no second penalty is added. Respects the same ignore labels and patterns.
+* **Dead Devices (informational, no score impact):** Flags devices only when all monitored entities in `ZOMBIE_DOMAINS` are `unavailable` beyond their respective grace periods. `unknown` does not count as an outage, and entities outside the monitored domains are excluded. Devices without monitored entities are not flagged. Reported via `dead_device_count`, `dead_devices` and the `rec_dead_devices` flag. Entity-level zombie points stay authoritative, so no second penalty is added. Respects the same ignore labels and patterns.
+
+* **Empty Devices (informational, no score impact):** Flags devices that have no entity at all in the entity registry (disabled entities included), using Home Assistant facts only: the device is not disabled, not a service entry, no other device is connected through it (hubs and bridges are skipped), and its config entry is loaded. Typical leftovers after removing or re-pairing a device. Respects ignore labels on the device and its area; nothing is checked before the zombie grace period has passed after a restart. Reported via `empty_device_count`, `empty_devices` and the `rec_empty_devices` flag (#93).
 
 * **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](#external-database-mariadb) below). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit.
   
 * **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). To avoid punishing normal user behaviour (most updates land within a few days), pending updates only contribute to the penalty after a **7-day grace period** - the list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (≥3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
   
-* **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy integration**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
+* **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API, the same states shown as "error" on the Integrations page. Penalty: **5 pts per unhealthy config entry**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
   
 * **Repairs:** Open repair issues from HA's issue registry cost **5 pts each**, capped at **10 pts**. Counted are only issues that are currently active, not dismissed and owned by another integration; repairs raised by HAGHS itself describe the integration's own prerequisites and are excluded. While any repair is open, the application score is **hard-capped at 99** - the Config-Audit bonus can never mask a broken integration. Count and list are exposed as `repair_count` and `repairs`, the flag is `rec_repairs`. To take a repair out of the score, use HA's native **"Ignore"** action on it (Settings > Repairs); no HAGHS option is needed. Note that a broken backend often raises a repair issue *and* leaves its config entry unhealthy, so one root cause can cost up to **25 pts** together (15 integration health + 10 repairs).
   
@@ -182,12 +184,24 @@ After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Conf
 * Storage type
 * **Ignore labels** (multi-select)
 * **Ignore entity-id patterns** (glob list)
+* **Conditional ignore labels** and **Active while (helper)** (both empty by default) - extra ignore labels that apply only while the selected `input_boolean`, `switch` or `binary_sensor` is `on`, e.g. a vacation mode. Set both or neither. See [Dynamic exclusions via automation](#dynamic-exclusions-via-automation).
+* **Exclude integration entries from Integration Health** (multi-select, empty by default). Select individual entries by title, domain and entry ID. Other entries from the same integration remain included.
+* **Stale threshold** (1–8760 hours, default: 24) - how long a sensor may stay silent before it is reported as stale (see Stale reporting).
+* **Stale watch labels** (multi-select, empty by default) - labels whose entities cost points when they are overdue (see Stale reporting).
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
 * **Zombie grace period** (1–240 minutes, default: 5) - how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
 * **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
+
+### Excluding individual integration entries
+
+If an integration entry is expected to fail while a device is powered off, select that specific entry in **Exclude integration entries from Integration Health**. For example, excluding one ADB entry does not exclude another ADB entry. Entries remain selectable even if setup failed before any devices or entities were created. The entry ID distinguishes entries with the same name.
+
+Excluded entries no longer contribute to Integration Health's unhealthy count, penalty, recommendation or rec_integration_health flag. Other entries still cost 5 points each, capped at 15. Clear the entire selection to include all entries again; the empty selection persists after restart. Removed entries do not cause errors.
+
+This exclusion only affects Integration Health. Zombie and device detection, update checks and Repairs are separate. Area, device and entity ignore labels are not automatically applied to integration entries. HAGHS does not detect intentional power-off or test network reachability.
 
 <details>
 <summary><b>External Database (MariaDB / PostgreSQL)</b> - full SQL-sensor walkthrough</summary>
@@ -252,35 +266,62 @@ To use ignore labels:
 1.  Go to **Settings > Areas, labels & zones > Labels**.
 2.  The `haghs_ignore` label is created automatically during setup. Create additional labels if needed (e.g. `vacation`, `guest_mode`).
 3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
-4.  Assign any of those labels to any **Device**, **Entity**, or **Update Entity**.
+4.  Assign any of those labels to any **Area**, **Device**, **Entity**, or **Update Entity**.
     * **Pro Tip:** Assigning a label to a **Device** automatically whitelists **all underlying entities** belonging to that specific device.
+    * **Area Tip:** An ignore label on an area excludes entities whose effective Home Assistant area is that area. An entity's own area takes precedence over its device's area; entities without their own area inherit the effective device area. Existing entity and device ignore labels remain independent exclusion rules. Area and label changes take effect on the next regular evaluation.
     * **Update Tip:** Labelled update entities are excluded from the update count and penalty.
     * **Note on `hidden_by`:** Hiding an entity from auto-generated dashboards does **not** exclude it from HAGHS. To exclude a hidden entity, disable it or apply an ignore label.
 
 ### Dynamic exclusions via automation
 
-Toggling whether HAGHS ignores a group of entities is done with Home Assistant's
-native label services - HAGHS does not need its own service. List a label like
-`vacation` in the HAGHS *Ignore labels* field, then assign/remove it from
-automations:
+Area, device and entity ignore labels do not exclude whole integration entries from Integration Health. Use the separate integration-entry selection in the HAGHS options for that purpose.
+
+**Without Spook: conditional ignore labels.** In the HAGHS options, put a label like
+`vacation` into **Conditional ignore labels** and pick a helper (for example
+`input_boolean.vacation_mode`) in **Active while (helper)**. While the helper is `on`,
+entities, devices and areas with that label are excluded exactly like with a normal
+ignore label; when it is `off`, `unavailable`, `unknown` or deleted, they count again.
+An automation only switches the helper with a normal Home Assistant action, and HAGHS
+updates right after the change. The sensor attribute `conditional_ignore_active` shows
+whether the labels currently apply.
 
 ```yaml
-# Toggle the `vacation` label on a group of entities
-# (use homeassistant.remove_label_from_entity with the same target when vacation ends)
+# Vacation mode on: the conditional ignore labels apply
 - alias: HAGHS vacation start
   trigger:
     - platform: time
       at: "08:00:00"
   action:
-    - service: homeassistant.add_label_to_entity
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.vacation_mode
+```
+
+**With Spook: switch the label on the entities.** Home Assistant itself has no service
+actions for assigning labels. The label actions used below are provided by the
+[Spook](https://spook.boo) custom integration. Without Spook, assign or remove the
+labels in the UI. List a label like `vacation` in the HAGHS *Ignore labels* field, then
+assign/remove it from automations:
+
+```yaml
+# Toggle the `vacation` label on a group of entities (requires Spook)
+# (use homeassistant.remove_label_from_entity with the same data when vacation ends)
+- alias: HAGHS vacation start
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - action: homeassistant.add_label_to_entity
       data:
         label_id: vacation
-        target:
-          entity_id:
-            - light.terrace
-            - switch.coffee_machine
-            - vacuum.robot
+        entity_id:
+          - light.terrace
+          - switch.coffee_machine
+          - vacuum.robot
 ```
+
+For device labels, Spook provides `homeassistant.add_label_to_device` and
+`homeassistant.remove_label_from_device` with `label_id` and `device_id`.
 
 HAGHS picks up the change automatically on its next refresh; no reload needed.
 
@@ -299,6 +340,18 @@ Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are
 
 ---
 
+### Stale reporting
+
+HAGHS checks when Home Assistant last received a state report, not when the value last changed. Passive checks cover only sensor and binary_sensor entities. The default stale threshold is 24 hours; you can set it from 1 to 8760 whole hours in the integration options. A state is a candidate only after this threshold has been exceeded.
+
+The passive list does not affect your score. To opt in to scoring, select Stale watch labels in the integration options and apply one of those labels directly to each entity that must keep reporting. Watched entities can belong to any domain. Device and area labels do not opt entities in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus. While a watched entity is overdue, the application score cannot exceed 99. These are explicit project rules, not validated failure probabilities.
+
+The sensor exposes stale_candidate_count and stale_candidates for passive findings in sensor and binary_sensor, stale_watch_count and stale_watch_entities for opted-in findings in any domain, stale_penalty for the raw application deduction, stale_threshold_hours for the active threshold, and rec_stale for the watched-entity recommendation. Both lists are sorted and limited to 100 entity IDs; their counts remain complete. Watched entities outside sensor and binary_sensor appear only in the watched list and count, not in the passive list and count. The two entity-ID lists remain visible as current attributes but are excluded from recorder history; the counts remain recorded.
+
+Unknown, unavailable, disabled, ignored and HAGHS-owned entities are excluded from this check. Entities without registry entries may appear in the passive list only if they belong to sensor or binary_sensor, but cannot opt in through entity labels. Old reports are a reason to investigate, not proof of a broken device: quiet integrations and devices can legitimately stop reporting. Restarts can reset the report timestamp, so HAGHS does not reconstruct downtime across restarts.
+
+Data source: Home Assistant state.last_reported. No recorder queries, external requests or device polling are added.
+
 ## Sensor Attributes
 
 HAGHS exposes the following attributes for use in dashboard cards, automations, and templates:
@@ -307,24 +360,39 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 |---|---|---|
 | `hardware_score` | int | Hardware pillar score (0–100), averaged from CPU, RAM, I/O (if PSI), and Disk |
 | `application_score` | int | Application pillar score (0–100) |
+| `stale_candidate_count` | int | Complete passive count of overdue sensor and binary_sensor entities |
+| `stale_candidates` | list | Alphabetically sorted passive entity IDs, capped at 100; current only, excluded from recorder history |
+| `stale_watch_count` | int | Complete count of overdue directly labelled watched entities in any domain |
+| `stale_watch_entities` | list | Alphabetically sorted overdue watched entity IDs, capped at 100; current only, excluded from recorder history |
+| `stale_penalty` | int | Raw application deduction before the configuration bonus, 5 per overdue watched entity, capped at 10 |
+| `stale_threshold_hours` | int | Effective reporting threshold in whole hours, default 24 |
+| `rec_stale` | bool | An overdue watched entity triggers the reporting recommendation; passive candidates alone do not |
 | `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
-| `zombie_entities`| list | Entity IDs of zombies (capped at 100) |
+| `zombie_entities`| list | Entity IDs of zombies (capped at 100; `zombie_count` carries the full total); current only, excluded from recorder history (`zombie_count` stays in the history) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
+| `zombie_count_per_integration` | dict | Zombies per integration, keyed by the entity's integration (e.g. {"matter": 12, "mqtt": 40}); always reflects the full count regardless of the list cap; informational, no score impact |
+| `zombie_since` | dict | Since when each listed zombie is unavailable/unknown (ISO timestamps, same 100 entries and order as `zombie_entities`); counted from the last HA restart at the earliest, because an earlier time is not reliably known; current only, excluded from recorder history; informational, no score impact |
+| `zombie_count_per_reason` | dict | Zombies per reason, keys in ranking order, only reasons that occur (e.g. {"integration_not_loaded": 3, "unavailable": 40}); always reflects the full count regardless of the list cap, the sum equals `zombie_count`; informational, no score impact |
+| `zombie_reasons` | dict | Reason per listed zombie (same 100 entries and order as `zombie_entities`), from Home Assistant facts only, first match in this order: `config_entry_missing` (the config entry the entity belonged to no longer exists; **the only strong hint of an orphaned entity**), `integration_not_loaded` (the entry exists but is not loaded; fix the integration, not a reason to delete), `not_provided` (HA only restored the stored state because no running integration provides the entity; not a reason to delete without checking), `unavailable` (the integration runs and reports the entity as unavailable/unknown, often temporary; not a reason to delete); current only, excluded from recorder history |
 | `unregistered_count` | int | Number of detected entities without an entity-registry entry (informational only, does not affect the score) |
-| `unregistered_entities` | list | Entity IDs of unregistered entities (capped at 100) |
+| `unregistered_entities` | list | Entity IDs of unregistered entities (capped at 100); current only, excluded from recorder history (`unregistered_count` stays in the history) |
 | `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
-| `dead_device_count` | int | Number of devices whose entities are all unavailable/unknown past the grace period (informational, does not affect the score) |
-| `dead_devices` | list | Device names (capped at 100) |
+| `dead_device_count` | int | Number of devices whose monitored entities in `ZOMBIE_DOMAINS` are all unavailable past their respective grace periods; unknown does not count as an outage (informational, does not affect the score) |
+| `dead_devices` | list | Device names (capped at 100); current only, excluded from recorder history (`dead_device_count` stays in the history) |
+| `empty_device_count` | int | Number of devices without any entity (disabled entities included), not disabled, not a service, no other device linked through them (hubs), every config entry loaded; informational, no score impact |
+| `empty_devices` | list | Names of those devices, sorted, capped at 100; current only, excluded from recorder history (`empty_device_count` stays in the history) |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
 | `recorder_filter_active` | bool | Whether entity filters are active |
+| `conditional_ignore_active` | bool | `True` while the conditional ignore labels apply (their helper is `on`); `False` when none are configured or the helper is `off`, unavailable, unknown or missing |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
+| `integration_unhealthy_entries` | list | The counted config entries as `domain: title` (bare `domain` when the entry has no title), sorted, capped at 50; entries excluded in the options are not listed; current only, excluded from recorder history (`integration_unhealthy_count` stays in the history) |
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
 | `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
-| `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50) |
-| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period |
-| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, updates, zombies, dead devices, backup, core lag, integration health, config audit, repairs) |
+| `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50); current only, excluded from recorder history (`repair_count` stays in the history) |
+| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period; current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
+| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, power, updates, zombies, dead and empty devices, stale reporting, backup, core lag, integration health, config audit, repairs, calculation warnings) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
 | `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
@@ -334,11 +402,19 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
 | `rec_updates_pending` | bool | At least one non-ignored update entity has been pending past the 7-day grace period |
 | `rec_zombie` | bool | At least one zombie entity is reported |
-| `rec_core_lag` | bool | HA Core is ≥ 3 minor versions behind latest |
-| `rec_integration_health` | bool | At least one integration is in an unhealthy state (source of the Integration Health penalty) |
+| `rec_core_lag` | bool | HA Core is ≥ 3 months behind the latest release |
+| `rec_integration_health` | bool | At least one integration config entry is in an unhealthy state (source of the Integration Health penalty) |
 | `rec_config_audit` | bool | Config-Audit bonus points are missing (means "bonus not earned", not "config is bad") |
 | `rec_repairs` | bool | At least one open repair issue from another integration is counted |
-| `rec_dead_devices` | bool | At least one dead device (all entities unavailable/unknown past the grace period) is reported (informational, no score impact) |
+| `rec_dead_devices` | bool | At least one dead device (all monitored entities in `ZOMBIE_DOMAINS` unavailable past their respective grace periods) is reported; unknown does not count as an outage (informational, no score impact) |
+| `rec_empty_devices` | bool | At least one empty device (no entity at all, see `empty_device_count`) is reported; informational, no score impact |
+| `pillar_fallback_count` | int | Number of pillar calculations that failed or timed out during the current refresh attempt |
+| `pillar_fallbacks` | list | Affected pillars in stable order: `hardware`, then `application`; an empty list means no observed pillar failure in this attempt |
+| `update_cycle_failed` | bool | The current update attempt failed outside a guarded pillar calculation; existing numeric results are retained, or neutral values are used on the first update |
+| `rec_pillar_fallback` | bool | At least one pillar calculation failed or timed out during the current refresh attempt |
+| `rec_update_failed` | bool | The current update attempt failed outside a guarded pillar calculation |
+
+**Calculation failures:** Neutral fallback values are not successful measurements. If a pillar fails or times out, `pillar_fallbacks` names the affected pillar and `recommendations` includes a warning instead of an all-clear message. Both dashboard examples display that recommendation. If the outer update cycle fails, `update_cycle_failed` is set and the existing numeric result is retained, or neutral values are returned on the first update. A successful refresh clears the failure indicators. Score formulas and numeric fallback values are unchanged.
 
 ---
 
@@ -354,11 +430,13 @@ HAGHS provides all data as sensor attributes. Dashboard visualization happens en
 
 Below are two ready-to-use card configurations:
 
-### HAGHS Lite v1.2 (Quick Check)
+Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it in two places: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
+
+### HAGHS Lite v1.3 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-<img width="519" height="392" alt="haghs lite v1 2" src="https://github.com/user-attachments/assets/262f91cb-ba47-4d90-ab27-931d224a0332" />
+<img width="519" height="438" alt="HAGHS Lite v1.3 dashboard card" src="docs/images/dashboard-lite.png" />
 
 ```yaml
 type: vertical-stack
@@ -374,46 +452,62 @@ cards:
       red: 0
   - type: markdown
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set hw =
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set _upd =
+      '/config/updates' %} {% set _ent = '/config/entities' %} {% set _rep =
+      '/config/repairs' %} {% set _int = '/config/integrations' %} {% set _dev
+      = '/config/devices/dashboard' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set hw =
       state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set rec = state_attr(e,
       'recommendations') | default('', true) %} {% set updates = state_attr(e,
       'pending_updates') | default([], true) | list %} {% set zombies =
-      state_attr(e, 'zombie_count') | int(0) %} {% set psi = state_attr(e,
-      'psi_available') | default(false, true) %} {% set _upd =
-      '/config/updates' %} {% set _ent = '/config/entities' %}
+      state_attr(e, 'zombie_count') | int(0) %} {% set dead = state_attr(e,
+      'dead_device_count') | int(0) %} {% set empty = state_attr(e,
+      'empty_device_count') | int(0) %} {% set repairs = state_attr(e,
+      'repair_count') | int(0) %} {% set integrations = state_attr(e,
+      'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
+      'psi_available') | default(false, true) %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
-      {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending
-      — [Open Updates]({{ _upd }}) {% endif %}
+      {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending, [Open Updates]({{ _upd }}) {% endif %}
 
-      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s) — [Check
-      Entities]({{ _ent }}) {% endif %}
+      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s), [Check Entities]({{ _ent }}) {% endif %}
 
-      {% if rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
-      {{ rec }}
-      {% else %} --- ✅ System healthy. No recommendations. {% endif %}
+      {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
 
-      {% set keep = state_attr(e, 'recorder_keep_days') %}
-      {% set filter = state_attr(e, 'recorder_filter_active') | default(false, true) %}
-      {% if keep in [none, 'unknown'] or not filter %}
-      💡 Tips to improve your score:
-      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
+      {% if empty > 0 %} 🗂️ {{ empty }} empty device(s) without any entity (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
+
+      {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
+
+      {% if integrations > 0 %} 🧩 {{ integrations }} integration entry(ies) in error, [Open Integrations]({{ _int }}) {% endif %}
+
+      {# Hide recommendation lines already shown as a status line with a link above. #}
+      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+
+      {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
+      {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
+      {% endif %}
+
+      {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
+      state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
+      keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score: <br>
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
-      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
-      hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM +
-      Disk) — hardware score uses 3 components{% endif %}
-
+      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk), hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}
+      {% endif %}
 ```
 
-### HAGHS Pro v1.2 (Command Center)
+### HAGHS Pro v1.3 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
-<img width="518" height="1177" alt="haghspro1 2" src="https://github.com/user-attachments/assets/38e90a7a-dfbf-40af-b26d-0de38ccc6852" />
+<img width="328" height="832" alt="HAGHS Pro v1.3 dashboard card" src="docs/images/dashboard-pro.png" />
 
 ```yaml
 type: vertical-stack
@@ -430,135 +524,148 @@ cards:
   - type: markdown
     title: Score Breakdown
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set hw =
-      state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
+      {% set e = 'sensor.system_ha_global_health_score' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set hw = state_attr(e,
+      'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
+      {% endif %}
   - type: markdown
     title: 🛡️ Advisor
     content: >
-      {% set e = 'sensor.system_ha_global_health_score' %} {% set rec =
-      state_attr(e, 'recommendations') | default('', true) %}
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set rec = state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %}
-        ⚠️ Health Advisor sensor is offline.
-      {% elif rec not in [none, 'unknown', 'unavailable'] and '✅' not in rec %}
-        {{ rec }}
-      {% else %}
-        ✅ System healthy. No recommendations.
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+
+      {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
+      {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
+      {% else %} ✅ Nothing beyond the cards below.
+      {% endif %} {% endif %}
+  - type: markdown
+    title: 🔧 Repairs & Integrations
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set r_count = state_attr(e, 'repair_count') | int(0) %} {% set r_list = state_attr(e, 'repairs') | default([], true) %} {% set i_count = state_attr(e, 'integration_unhealthy_count') | int(0) %} {% set i_list = state_attr(e, 'integration_unhealthy_entries') | default([], true) %} {% set _rep = '/config/repairs' %} {% set _int = '/config/integrations' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %}
+
+      {% if r_count == 0 %} ✅ No open repairs {% else %} 🛠️ {{ r_count }} open repair(s), {% if r_count > 0 %}[→ Open Repairs]({{ _rep }}){% endif %}{% for r in r_list %}<br>&nbsp;&nbsp; • `{{ r }}`{% endfor %} {% endif %}
+
+      <hr>
+
+
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration entry(ies) failed to set up, [→ Open Integrations]({{ _int }}){% for i in i_list %}<br>&nbsp;&nbsp; • <a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a>{% endfor %}{% if i_count > i_list | length and i_list | length > 0 %}<br>*(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)*{% endif %} {% endif %} {% endif %}
+  - type: markdown
+    title: 📦 Updates & Maintenance
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set updates = state_attr(e,
+      'pending_updates') | default([], true) | list %} {% set db_mb =
+      state_attr(e, 'db_size_mb') | float(0) %} {% set keep = state_attr(e,
+      'recorder_keep_days') %} {% set filter = state_attr(e,
+      'recorder_filter_active') | default(false, true) %} {% set bonus =
+      state_attr(e, 'config_audit_bonus') | int(0) %} {% set psi =
+      state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
+      '/config/updates' %}
+
+      {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
+      {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
+      [→ Open Updates]({{ _upd }})
+      {% else %} ✅ All updates installed {% endif %}
+
+      <hr>
+
+
+      Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB detected)*{% endif %} <br>
+      Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }} days){% else %}no purge configured, DB may grow indefinitely{% endif %} <br>
+      {{ 'Entity filter active' if filter else 'No entity filter' }} <br>
+      Config-Audit bonus: {{ bonus }}/10
+
+      {% if keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score: <br>
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
-  - type: conditional
-    conditions:
-      - condition: numeric_state
-        entity: sensor.system_ha_global_health_score
-        attribute: zombie_count
-        above: -1
-    card:
-      type: markdown
-      title: 📦 Updates & Maintenance
-      content: >
-        {% set e = 'sensor.system_ha_global_health_score' %} {% set updates =
-        state_attr(e, 'pending_updates') | default([], true) | list %} {% set
-        db_mb = state_attr(e, 'db_size_mb') | float(0) %} {% set keep =
-        state_attr(e, 'recorder_keep_days') %} {% set filter = state_attr(e,
-        'recorder_filter_active') | default(false, true) %} {% set psi =
-        state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
-        '/config/updates' %}
-
-        {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
-        {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
-        [→ Open Updates]({{ _upd }})
-        {% else %} ✅ All updates installed {% endif %}
-
-        <hr>
-
-        Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB
-        detected)*{% endif %}
 
 
-        Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }}
-        days){% else %}no purge configured — DB may grow indefinitely{% endif %}
+      ---
 
-
-        {{ 'Entity filter active' if filter else 'No entity filter' }}
-
-
-        {% if keep in [none, 'unknown'] or not filter %}
-        💡 Tips to improve your score:
-        {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts){% endif %}
-        {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
-        {% endif %}
-
-
-        ---
-
-        **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk) —
-        hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM
-        + Disk) — hardware score uses 3 components{% endif %}
+      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
+      {% endif %}
   - type: markdown
     title: 🧟 Zombie Entities
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set z_raw =
       state_attr(e, 'zombie_entities') | default([], true) %} {% set z_count =
-      state_attr(e, 'zombie_count') | int(0) %}
+      state_attr(e, 'zombie_count') | int(0) %} {% set u_raw = state_attr(e,
+      'unregistered_entities') | default([], true) %} {% set u_count =
+      state_attr(e, 'unregistered_count') | int(0) %} {% set d_raw = state_attr(e,
+      'dead_devices') | default([], true) %} {% set d_count = state_attr(e,
+      'dead_device_count') | int(0) %} {% set e_raw = state_attr(e,
+      'empty_devices') | default([], true) %} {% set e_count = state_attr(e,
+      'empty_device_count') | int(0) %} {% set _dev = '/config/devices/dashboard' %}
 
-      {% if z_count == 0 %}
-        ✅ No zombie entities detected.
-      {% else %}
-        {% if z_raw is string %}
-          {% set z_list = z_raw.split(',') | map('trim') | list %}
-        {% else %}
-          {% set z_list = z_raw | list %}
-        {% endif %}
-        {% set grouped = expand(z_list) | groupby('domain') %}
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% if z_raw is string %} {% set
+      z_list = z_raw.split(',') | map('trim') | list %} {% else %} {% set z_list
+      = z_raw | list %} {% endif %} {% set grouped = expand(z_list) |
+      groupby('domain') %}
 
-        {# Domain count: prefer the HAGHS v2.3+ attribute when present.
-           Fall back to extracting the distinct domains from z_list so the
-           card keeps working on older HAGHS versions that do not expose
-           zombie_count_per_domain. #}
-        {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}
-        {% if per_domain %}
-          {% set domain_count = per_domain | length %}
-        {% else %}
-          {% set ns = namespace(seen=[]) %}
-          {% for entry in z_list %}
-            {% set dom = entry.split('.')[0] %}
-            {% if dom not in ns.seen %}
-              {% set ns.seen = ns.seen + [dom] %}
-            {% endif %}
-          {% endfor %}
-          {% set domain_count = ns.seen | length %}
-        {% endif %}
+      {# Domain count: prefer the HAGHS v2.3+ attribute when present, otherwise derive it from z_list. #}
+      {% set per_domain = state_attr(e, 'zombie_count_per_domain') %}{% if per_domain %}{% set domain_count = per_domain | length %}{% else %}{% set ns = namespace(seen=[]) %}{% for entry in z_list %}{% set dom = entry.split('.')[0] %}{% if dom not in ns.seen %}{% set ns.seen = ns.seen + [dom] %}{% endif %}{% endfor %}{% set domain_count = ns.seen | length %}{% endif %}
 
-        {{ z_count }} zombie(s) across {{ domain_count }} domain(s)
-        {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
-        {% if z_count > z_list | length %}*(showing first {{ z_list | length }} — {{ z_count - z_list | length }} more hidden)*{% endif %}
+      {% if z_count == 0 %} ✅ No zombie entities detected. {% else %} {{ z_count }} zombie(s) across {{ domain_count }} domain(s) {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %} {% if z_count > z_list | length %}*(showing first {{ z_list | length }}, {{ z_count - z_list | length }} more hidden)*{% endif %}
 
-        {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
+      {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
-        {% for domain in grouped %}
-        <details>
-        <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
-        {% for item in domain[1] %}
-        &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} — {{ item.name }} (`{{ item.entity_id }}`): {{ item.state }}
-        {% endfor %}
-        </details>
-        {% endfor %}
+      {% for domain in grouped %}
+      <details>
+      <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
+      {% for item in domain[1] %}
+      {% set _info = _ent ~ '?more-info-entity-id=' ~ item.entity_id %}
+      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · <a href="{{ _info }}">{{ item.name }}</a> (<code>{{ item.entity_id }}</code>): {{ item.state }}
+      {% endfor %}
+      </details>
+      {% endfor %} {% endif %}
 
-        {% set u_raw = state_attr(e, 'unregistered_entities') | default([], true) %} {% set u_count = state_attr(e, 'unregistered_count') | int(0) %}
-        {% if u_count > 0 %}
-        <details>
-        <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
-        {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
-        &nbsp;&nbsp; • `{{ entry }}`
-        {% endfor %}
-        </details>
-        {% endif %}
+      {% if u_count > 0 %}
+      <details>
+      <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
+      {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
+      &nbsp;&nbsp; • <code>{{ entry }}</code>
+      {% endfor %}
+      </details>
       {% endif %}
 
+      {% if d_count > 0 %}
+      <details>
+      <summary>💀 Dead devices (informational, no score impact): {{ d_count }}</summary>
+      {% for d in d_raw %}
+      &nbsp;&nbsp; • {{ d }}
+      {% endfor %}
+      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
+      </details>
+      {% endif %}
+
+      {% if e_count > 0 %}
+      <details>
+      <summary>🗂️ Empty devices without any entity (informational, no score impact): {{ e_count }}</summary>
+      {% for d in e_raw %}
+      &nbsp;&nbsp; • {{ d }}
+      {% endfor %}
+      {% if e_count > e_raw | length %}&nbsp;&nbsp; *(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)*{% endif %}
+      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
+      </details>
+      {% endif %}
+
+      {% endif %}
 ```
 
 ### Lite vs. Pro Comparison
@@ -570,14 +677,30 @@ cards:
 | Advisor recommendations (CPU, RAM, I/O, ...) | Inline | Dedicated card |
 | Pending updates (by name) | Count + link | Full list + deep-link |
 | Zombie details (by domain) | Count + link | Grouped + expandable |
-| Database size + warning | — | Yes |
-| Recorder health (purge + filter) | — | Yes |
+| Repairs & unhealthy integrations | Count + link | Count + list + deep-link |
+| Dead devices (informational) | Count + link | Expandable list |
+| Empty devices (informational) | Count + link | Expandable list |
+| Config-Audit bonus (earned) | No | Yes |
+| Database size + warning | No | Yes |
+| Recorder health (purge + filter) | No | Yes |
 | Metric source (PSI vs. Classic + component count) | Yes (detailed) | Yes (detailed) |
 | Deep-links to HA settings | Yes | Yes |
 
 ---
 
 ## FAQ
+
+**Why do I still see zombies or Repairs after excluding an integration entry?**
+
+The integration-entry exclusion only changes Integration Health. It does not suppress entity or device detection, update checks or Repairs. Review those findings separately and use their existing exclusion or ignore mechanisms where appropriate.
+
+**How do I hide entities during a vacation without Spook?**
+
+Use the **Conditional ignore labels** with a helper such as `input_boolean.vacation_mode`. While the helper is `on`, the labels act as ignore labels; switch it from your vacation automation. Details in [Dynamic exclusions via automation](#dynamic-exclusions-via-automation).
+
+**Can I delete all zombie entities?**
+
+No, not without checking them. A zombie only means that the entity has been `unavailable` or `unknown` for longer than the grace period. That also happens during a temporary outage, for an idle device or for an entity that only reports in some operating modes. Check the entity's integration, device and config entry before deleting it; for entities you want to keep, use an ignore label or disable them. With more than 100 zombies, `zombie_count_per_integration` shows which integration they come from. `zombie_reasons` tells you why each one is listed: only `config_entry_missing` is a strong hint of an orphaned entity; `integration_not_loaded`, `not_provided` and `unavailable` are no reason to delete.
 
 **Why is my score so low?**
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
@@ -598,7 +721,7 @@ See the [External Database](#external-database-mariadb) section above for full s
 No. HAGHS reads disk usage directly via `psutil`. No manual sensor selection required.
 
 **How are update penalties calculated?**
-Each pending update costs **5 pts**. A Core version lag (≥3 months behind) adds **20 pts**. The combined penalty is capped at **35 pts**.
+Each update that has been pending for at least 7 days costs **5 pts**. A Core version lag (≥3 months behind) adds **20 pts**. The combined penalty is capped at **35 pts**.
 
 **How does the zombie grace period work?**
 Entities that just became `unavailable` or `unknown` are ignored for **5 minutes by default**, configurable in the Options Flow from 1 to 240 minutes. This prevents your score from dropping during brief network hiccups or device reboots. Battery-class entities (`device_class: battery`) get a separate, longer window (default 60 minutes) because Zigbee / Homematic coordinators routinely take longer than 15 minutes to re-poll low-priority devices.
@@ -613,7 +736,7 @@ The hard-cap at 99 while at least one zombie is reported is intentional — the 
 v2.3 expanded zombie detection from 9 to 22 domains, added a 7-day grace period before pending updates count, and now hard-caps the application score at 99 while a zombie exists. Most users will see a small **increase** (fewer noisy update penalties, disabled entities no longer counted), but instances with previously unnoticed zombies in the new domains may see a small drop. The Changelog and the in-card *Tips* block explain exactly which factors are active.
 
 **Why did my score change after upgrading to v2.4?**
-Open repair issues now count toward the score (**5 pts each**, capped at **10 pts**) and hard-cap the application score at 99 while any repair is open, so instances with open repairs score lower than before, by design; use HA's native *Ignore* action on a repair to take it out of the score. Entities without an entity-registry entry no longer count as zombies, they are reported as informational *unregistered* entries, which can raise the score on instances that previously had such entries deducted. Everything else behaves as before. Previously, missing CPU/RAM values were treated as 0 % load, so they never lowered the score; now setup stops with a **repair** until both sensors are configured. The same applies when only one of the two sensors is configured. Zombies are now detected after 5 minutes instead of 15: the default changed in v2.4 and also applies to existing installations that never set a custom value, so scores can drop earlier. Set the zombie grace period back to 15 minutes in the integration options for the old behaviour.
+Open repair issues now count toward the score (**5 pts each**, capped at **10 pts**) and hard-cap the application score at 99 while any repair is open, so instances with open repairs score lower than before, by design; use HA's native *Ignore* action on a repair to take it out of the score. Entities without an entity-registry entry no longer count as zombies, they are reported as informational *unregistered* entries, which can raise the score on instances that previously had such entries deducted. Everything else behaves as before. Previously, missing CPU/RAM values were treated as 0 % load, so they never lowered the score; now setup stops with a **repair** until both sensors are configured. The same applies when only one of the two sensors is configured.
 
 **A pending update from yesterday is in the list but doesn't change my score yet — why?**
 Because of the 7-day update grace period. The list is informational and shows everything HA reports as pending; the **score** only deducts after a pending update has been available for at least 7 days. This avoids punishing normal user behaviour — most updates land within a few days.
@@ -632,28 +755,43 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 **Highlights**
 
+* **Exclude individual integration entries from Integration Health.** The new options multi-select excludes only the selected entry IDs from the unhealthy count, penalty, recommendation and flag. The selection is empty by default, can be cleared permanently and does not affect zombie detection or Repairs.
+* **Unhealthy integration entries are listed (#134).** New attribute `integration_unhealthy_entries` names the counted config entries as `domain: title`; the Pro card lists them with a link to each integration page.
+* **Why and since when each zombie is reported (#154).** New attributes `zombie_count_per_integration`, `zombie_since`, `zombie_count_per_reason` and `zombie_reasons`. Only `config_entry_missing` is a strong hint of an orphaned entity; a zombie is an availability signal, not a deletion list.
+* **Opt-in stale entity monitoring (discussion #79).** Passive `stale_candidates` for sensors that stopped reporting, and watch labels that make overdue entities cost points (5 each, cap 10).
+* **Ignore labels on areas (discussion #96).** Ignore labels set on an area exclude the entities in that area.
 * **Repairs now count in the score (#97).** Open repair issues cost 5 points each (cap 10) and hard-cap the application score at 99 while any repair is open. HA's native *Ignore* action takes a repair out of the count. New attributes `repair_count` / `repairs`, new flag `rec_repairs`.
-* **Dead devices are flagged (#120).** A device whose entities are all `unavailable` / `unknown` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`. Informational only, the entity-level zombie points stay authoritative.
-* **Recommendation texts are translatable (#114).** All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
+* **Dead devices are flagged (#120).** A device whose monitored entities are all `unavailable` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`; `unknown` does not count (#143). Informational only, the entity-level zombie points stay authoritative.
+* **Empty devices are reported (#93).** Devices without any entity are reported via `empty_device_count`, `empty_devices` and `rec_empty_devices`, using registry facts only (hubs, services and disabled devices are skipped). Informational only.
+* **Conditional ignore labels.** Extra ignore labels that apply only while a helper (`input_boolean`, `switch` or `binary_sensor`) is on, e.g. for a vacation mode, without Spook; `conditional_ignore_active` shows the state.
+* **Recommendation texts are translatable (#114)**, with Brazilian Portuguese (#138) and German (#163) translations. All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
 * **Unregistered entities are informational only (#98).** Entities without an entity-registry entry no longer count as zombies and no longer cap the score; they are reported through the `unregistered_*` attributes.
 * **Every missing score point is explained (#92).** New attributes `config_audit_bonus` and `integration_unhealthy_count`, new flags `rec_integration_health` and `rec_config_audit`.
+* **Calculation failures are visible (#135).** A failed or timed-out pillar sets `pillar_fallback_count`, `pillar_fallbacks` and `rec_pillar_fallback` with a warning instead of an all-clear.
 
 **Behavior changes**
 
-* **Zombie grace default shortened to 5 minutes.** Zombies are detected after 5 minutes instead of 15; this also applies to existing installations that never set a custom value. Set the zombie grace period to 15 minutes in the options for the old behaviour.
-* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **Entity lists no longer in recorder history.** `zombie_entities`, `unregistered_entities`, `dead_devices`, `repairs`, `pending_updates` (and the new lists) keep their current values but are no longer recorded, so large instances stay below Home Assistant's 16 KB attribute limit; counts, breakdowns, pillars and flags stay in the history.
+* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with one or both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **Zombie grace default unchanged at 5 minutes.** The b1 notes claimed a change from 15 minutes; the default was already 5 minutes in v2.3.0, and existing custom values are kept.
 
 **Bug fixes**
 
 * Coordinator total safety net so a failing sub-component can no longer stall the sensor (#103).
-* Label service names in the README, translations and docstring corrected to `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` (#99).
+* Label actions: `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` come from the Spook custom integration; README example and texts corrected (#99).
+* Dead-device false positives removed: `unknown` and unmonitored domains no longer count (#143).
+* User-facing punctuation aligned (#136).
+* Integration Health names config entries, not integrations, in its recommendation and on the cards.
+* Informational checks (dead devices, empty devices, zombie reasons) can no longer take the score down when they fail.
+* The device registry is read without the access patterns Home Assistant deprecated.
 
 **Infrastructure**
 
-* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 257 tests.
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 533 tests.
 
 **Documentation**
 
+* Dashboard cards v1.3 (Lite and Pro) with deep links and more-info links per zombie (#133, #137, #145).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
 
@@ -661,7 +799,7 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 **Highlights**
 
-* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via HA-native `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` services (no custom HAGHS service). Migration from the legacy single-label config is automatic.
+* **Multi-label ignore + dynamic toggling.** `ignore_labels` now accepts a list; toggle inclusion/exclusion at runtime via the `homeassistant.add_label_to_entity` / `homeassistant.remove_label_from_entity` services of the Spook custom integration (no custom HAGHS service). Migration from the legacy single-label config is automatic.
 * **Disabled-entity auto-ignore.** Entities marked *Disable entity* in the entity registry are now excluded from zombie detection and update penalties — no `haghs_ignore` label required.
 * **Pattern-based ignore (#64).** New `ignore_patterns` field accepts glob patterns for entities without a unique ID (e.g. `sensor.docker_*`, `sensor.torque_*`).
 * **Configurable zombie + battery grace periods.** Two new Options Flow fields (1–240 min each, defaults 5 / 60). Battery-class entities get the longer window because Zigbee / Homematic radios routinely take longer than 15 minutes to re-poll low-priority devices.

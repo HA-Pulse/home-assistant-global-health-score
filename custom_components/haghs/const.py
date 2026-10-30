@@ -13,11 +13,23 @@ CONF_DB_SENSOR = "db_sensor"
 # step that converts the legacy single label into CONF_IGNORE_LABELS.
 CONF_IGNORE_LABEL = "ignore_label"
 CONF_IGNORE_LABELS = "ignore_labels"
+# Extra ignore labels that apply only while a helper entity is "on" (vacation mode).
+CONF_CONDITIONAL_IGNORE_LABELS = "conditional_ignore_labels"
+CONF_CONDITIONAL_IGNORE_ENTITY = "conditional_ignore_entity"
+CONDITIONAL_IGNORE_DOMAINS: tuple[str, ...] = ("input_boolean", "switch", "binary_sensor")
 CONF_IGNORE_PATTERNS = "ignore_patterns"
+CONF_IGNORED_INTEGRATION_ENTRIES = "ignored_integration_entries"
 CONF_STORAGE_TYPE = "storage_type"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ZOMBIE_GRACE_MINUTES = "zombie_grace_minutes"
 CONF_BATTERY_GRACE_MINUTES = "battery_grace_minutes"
+CONF_STALE_THRESHOLD_HOURS = "stale_threshold_hours"
+CONF_STALE_WATCH_LABELS = "stale_watch_labels"
+DEFAULT_STALE_THRESHOLD_HOURS = 24
+STALE_THRESHOLD_MAX_HOURS = 8760
+STALE_LIST_CAP = 100
+STALE_PENALTY_PER_ENTITY = 5
+STALE_PENALTY_CAP = 10
 
 # Defaults
 DEFAULT_NAME = "System: HA - Global Health Score"
@@ -48,6 +60,16 @@ DEFAULT_BATTERY_GRACE_MINUTES = 60
 # listing is capped.
 ZOMBIE_LIST_CAP = 100
 
+# Why a zombie is reported (#154), from Home Assistant facts only, in fixed
+# ranking order: the first that applies wins. Only "config_entry_missing" is a
+# strong hint of an orphaned entity; the others are no reason to delete.
+ZOMBIE_REASONS = (
+    "config_entry_missing",  # the entity's config entry no longer exists
+    "integration_not_loaded",  # the entry exists but is not loaded
+    "not_provided",  # HA only restored the state; no running integration provides it
+    "unavailable",  # the integration runs and reports unavailable/unknown
+)
+
 # Maximum number of entity ids carried in the `unregistered_entities`
 # state attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count
 # and the per-domain breakdown always reflect the full number.
@@ -57,6 +79,11 @@ UNREGISTERED_LIST_CAP = 100
 # attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
 # reflects the full number.
 DEAD_DEVICE_LIST_CAP = 100
+
+# Maximum number of device names carried in the `empty_devices` state
+# attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
+# reflects the full number.
+EMPTY_DEVICE_LIST_CAP = 100
 
 # Internal hass.data key holding the per-entity first-seen timestamps for
 # pending updates (#26). Only updates that have been available longer than
@@ -90,23 +117,34 @@ REC_DB_OVER_LIMIT = (
 )
 REC_BACKUP_STALE = "\U0001f6a8 Security: Stale backup detected!"
 REC_UPDATES_PENDING = "\U0001f4e6 Maintenance: {count} update(s) pending."
-REC_ZOMBIES = "\U0001f9df Hygiene: {count} zombie(s) detected."
+REC_ZOMBIES = (
+    "\U0001f9df Hygiene: {count} zombie(s) detected. "
+    "Check before deleting: unavailable is not the same as unused."
+)
 REC_CORE_LAG = "\U0001f474 Legacy: Core version is ≥3 months old."
-REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected — unstable power supply!"
+REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected: unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
-REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration(s) failed to set up."
+REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration entry(ies) failed to set up."
 REC_CONFIG_AUDIT = (
     "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
     "(recorder purge days / entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
-REC_DEAD_DEVICES = "\U0001f50c Devices: {count} device(s) with all entities unavailable."
+REC_DEAD_DEVICES = (
+    "\U0001f50c Devices: {count} device(s) with all monitored entities "
+    "unavailable past the grace period."
+)
+REC_EMPTY_DEVICES = "\U0001f5c2\ufe0f Devices: {count} device(s) without any entity."
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
 # default. The coordinator uses this as the final fallback when no translation
 # is available for the configured language.
 REC_TEMPLATES: dict[str, str] = {
+    "pillar_hardware": "Hardware",
+    "pillar_application": "Application",
+    "rec_pillar_fallback": "⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.",
+    "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": REC_ALL_CLEAR,
     "rec_backup_stale": REC_BACKUP_STALE,
     "rec_config_audit": REC_CONFIG_AUDIT,
@@ -115,6 +153,11 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
     "rec_dead_devices": REC_DEAD_DEVICES,
+    "rec_empty_devices": REC_EMPTY_DEVICES,
+    "rec_stale": (
+        "Stale reporting: {count} watched entity/entities have not reported for more than "
+        "{hours} hour(s); application penalty {penalty} point(s) before the configuration bonus."
+    ),
     "rec_disk_sd_low": REC_DISK_SD_LOW,
     "rec_disk_ssd_low": REC_DISK_SSD_LOW,
     "rec_integration_health": REC_INTEGRATION_HEALTH,
@@ -140,6 +183,10 @@ REPAIR_PENALTY_CAP = 10
 # attribute (same 16 KB rationale as ZOMBIE_LIST_CAP). The count always
 # reflects the full number.
 REPAIR_LIST_CAP = 50
+# Maximum number of "domain: title" entries carried in the
+# `integration_unhealthy_entries` state attribute (same 16 KB rationale as
+# ZOMBIE_LIST_CAP). `integration_unhealthy_count` always reflects the full number.
+INTEGRATION_UNHEALTHY_LIST_CAP = 50
 
 # Boolean recommendation flags exposed as state attributes alongside the
 # existing 'recommendations' string. Dashboards and external integrations
@@ -161,6 +208,10 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_config_audit",
     "rec_repairs",
     "rec_dead_devices",
+    "rec_empty_devices",
+    "rec_stale",
+    "rec_pillar_fallback",
+    "rec_update_failed",
 )
 
 

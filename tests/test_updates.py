@@ -5,6 +5,10 @@ from __future__ import annotations
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -14,6 +18,7 @@ from custom_components.haghs.const import (
     UPDATE_GRACE_DAYS,
 )
 from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
+from tests.factories import make_coordinator
 
 
 def _coordinator(hass: HomeAssistant) -> HaghsDataUpdateCoordinator:
@@ -222,3 +227,46 @@ async def test_disabled_update_entity_is_excluded(hass: HomeAssistant) -> None:
     assert update_count == 1
     assert pending == ["Core"]
     assert disabled.entity_id not in coordinator._update_first_seen
+
+
+async def test_area_ignore_update_results_and_tracking(hass: HomeAssistant) -> None:
+    """Exclude inherited-area updates but keep own-area controls and grace."""
+    label = lr.async_get(hass).async_create("Update area exclusion")
+    assert label.label_id != label.name
+    areas = ar.async_get(hass)
+    ignored = areas.async_create("Update ignored room", labels={label.label_id})
+    control = areas.async_create("Update control room")
+    coord = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    owner = hass.config_entries.async_entries(DOMAIN)[0]
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test", "area_updates")}
+    )
+    dr.async_get(hass).async_update_device(device.id, area_id=ignored.id)
+    registry = er.async_get(hass)
+    for object_id, name in (
+        ("area_update_ignored", "Ignored firmware"),
+        ("area_update_control", "Control firmware"),
+    ):
+        entry = registry.async_get_or_create(
+            "update",
+            "test_platform",
+            object_id,
+            suggested_object_id=object_id,
+            device_id=device.id,
+            original_name=name,
+        )
+        hass.states.async_set(entry.entity_id, "on", {"friendly_name": name})
+        _set_first_seen(hass, entry.entity_id, days_ago=UPDATE_GRACE_DAYS + 1)
+    registry.async_update_entity("update.area_update_control", area_id=control.id)
+    actual = coord._calc_updates()
+    assert actual == (0, 1, 5, 0, ["Control firmware"])
+    assert set(coord._update_first_seen) == {"update.area_update_control"}
+    areas.async_update(ignored.id, labels=set())
+    # Reappearing updates start a new grace window after their tracker was pruned.
+    actual = coord._calc_updates()
+    expected = (0, 1, 5, 0, ["Ignored firmware", "Control firmware"])
+    assert actual == expected, f"actual={actual}, expected={expected}"
+    _set_first_seen(hass, "update.area_update_ignored", days_ago=UPDATE_GRACE_DAYS + 1)
+    assert coord._calc_updates() == (0, 2, 10, 0, ["Ignored firmware", "Control firmware"])
+    areas.async_update(ignored.id, labels={label.label_id})
+    assert coord._calc_updates() == (0, 1, 5, 0, ["Control firmware"])
