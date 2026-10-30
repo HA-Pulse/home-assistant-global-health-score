@@ -33,6 +33,8 @@ ADDED_LATER = {
     "empty_devices",
     "rec_empty_devices",
     "conditional_ignore_active",
+    "dead_device_ids",
+    "empty_device_ids",
 }
 FROZEN = "2026-10-24T08:00:00+00:00"  # clock of the dev capture
 # Complete results of the same scenarios on dev 1a6de2c before this change, captured on a
@@ -166,6 +168,9 @@ async def test_score_and_existing_attributes_are_unchanged(
     assert (result["empty_device_count"], result["empty_devices"]) == (0, [])
     assert result["rec_empty_devices"] is False
     assert result["conditional_ignore_active"] is False
+    by_name = {device.name: device.id for device in dr.async_get(hass).devices}
+    assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
+    assert result["empty_device_ids"] == []
     assert list(result["zombie_since"]) == result["zombie_entities"]
 
 
