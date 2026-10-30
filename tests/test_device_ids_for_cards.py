@@ -19,7 +19,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.haghs.const import DOMAIN
-from custom_components.haghs.coordinator import _DeviceList, _device_ids
+from custom_components.haghs.coordinator import _device_ids, _DeviceList
 from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator
 
@@ -46,7 +46,11 @@ def _device(hass: HomeAssistant, key: str, name: str):
 
 def _dead_entity(hass: HomeAssistant, device_id: str, object_id: str) -> None:
     entry = er.async_get(hass).async_get_or_create(
-        "sensor", "test_platform", f"uid_{object_id}", suggested_object_id=object_id, device_id=device_id
+        "sensor",
+        "test_platform",
+        f"uid_{object_id}",
+        suggested_object_id=object_id,
+        device_id=device_id,
     )
     hass.states.async_set(entry.entity_id, STATE_UNAVAILABLE)
     hass.states.get(entry.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
@@ -93,7 +97,8 @@ async def test_ids_are_capped_with_the_names(hass: HomeAssistant, kind: str) -> 
     coord = _coordinator(hass)
     result = coord._calc_dead_devices() if kind == "dead" else coord._calc_empty_devices()
     names, count = result
-    assert count == CAP + 5 and len(names) == len(result.ids) == CAP
+    assert count == CAP + 5
+    assert len(names) == len(result.ids) == CAP
     assert result.ids == [devices[name].id for name in names]
 
 
@@ -104,7 +109,10 @@ async def test_update_result_and_sensor_carry_the_ids(hass: HomeAssistant) -> No
     coord = _coordinator(hass)
     coord.data = await coord._async_update_data()
     assert (coord.data["dead_devices"], coord.data["dead_device_ids"]) == (["dead plug"], [dead.id])
-    assert (coord.data["empty_devices"], coord.data["empty_device_ids"]) == (["empty bridge"], [empty.id])
+    assert (coord.data["empty_devices"], coord.data["empty_device_ids"]) == (
+        ["empty bridge"],
+        [empty.id],
+    )
     sensor = HaghsSensor(coord, hass.config_entries.async_entries(DOMAIN)[0])
     attrs = sensor.extra_state_attributes
     assert (attrs["dead_device_ids"], attrs["empty_device_ids"]) == ([dead.id], [empty.id])
@@ -112,7 +120,9 @@ async def test_update_result_and_sensor_carry_the_ids(hass: HomeAssistant) -> No
 
 def test_ids_stay_out_of_the_recorder() -> None:
     assert {"dead_device_ids", "empty_device_ids"} <= HaghsSensor._unrecorded_attributes
-    assert {"dead_device_count", "empty_device_count"}.isdisjoint(HaghsSensor._unrecorded_attributes)
+    assert {"dead_device_count", "empty_device_count"}.isdisjoint(
+        HaghsSensor._unrecorded_attributes
+    )
 
 
 async def test_neutral_result_and_fallback_have_no_ids(hass: HomeAssistant) -> None:
