@@ -34,6 +34,11 @@ All work below is committed on `dev` and described in detail in
   Brazilian Portuguese and German.
 - **Unregistered entities informational (#98)** and **calculation failures
   visible (#135)**.
+- **Dashboard cards v1.4**: zombie reasons and since on the Pro card, stale
+  reporting, calculation status lines and a link to every entity, device and
+  settings page; dead and empty devices link to their device page through
+  `dead_device_ids` and `empty_device_ids` (#172). Every card link is checked
+  in a browser before a release.
 
 ### Bug fixes
 
@@ -53,7 +58,7 @@ All work below is committed on `dev` and described in detail in
 
 - **Pillar test coverage and CI (#107, #117, #128)**: `coordinator.py` at 100 %
   statement and branch coverage; CI runs on Python 3.14 and gates the package at
-  90 % and `coordinator.py` at 80 %. The suite holds 533 tests.
+  90 % and `coordinator.py` at 80 %. The suite holds 550 tests.
 
 ## Completed in v2.3
 
@@ -209,4 +214,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-10-29*
+*Last updated: 2026-10-31*
