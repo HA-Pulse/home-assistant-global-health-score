@@ -379,8 +379,10 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
 | `dead_device_count` | int | Number of devices whose monitored entities in `ZOMBIE_DOMAINS` are all unavailable past their respective grace periods; unknown does not count as an outage (informational, does not affect the score) |
 | `dead_devices` | list | Device names (capped at 100); current only, excluded from recorder history (`dead_device_count` stays in the history) |
+| `dead_device_ids` | list | Device ids of the listed dead devices, same 100 entries and order as `dead_devices` (for links to each device page); current only, excluded from recorder history |
 | `empty_device_count` | int | Number of devices without any entity (disabled entities included), not disabled, not a service, no other device linked through them (hubs), every config entry loaded; informational, no score impact |
 | `empty_devices` | list | Names of those devices, sorted, capped at 100; current only, excluded from recorder history (`empty_device_count` stays in the history) |
+| `empty_device_ids` | list | Device ids of the listed empty devices, same 100 entries and order as `empty_devices` (for links to each device page); current only, excluded from recorder history |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `recorder_keep_days` | int/null | Configured purge days (null = not set) |
@@ -432,11 +434,11 @@ Below are two ready-to-use card configurations:
 
 Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it in two places: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
 
-### HAGHS Lite v1.3 (Quick Check)
+### HAGHS Lite v1.4 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-<img width="519" height="438" alt="HAGHS Lite v1.3 dashboard card" src="docs/images/dashboard-lite.png" />
+<img width="492" height="403" alt="HAGHS Lite v1.4 dashboard card" src="docs/images/dashboard-lite.png" />
 
 ```yaml
 type: vertical-stack
@@ -455,7 +457,7 @@ cards:
       {% set e = 'sensor.system_ha_global_health_score' %} {% set _upd =
       '/config/updates' %} {% set _ent = '/config/entities' %} {% set _rep =
       '/config/repairs' %} {% set _int = '/config/integrations' %} {% set _dev
-      = '/config/devices/dashboard' %}
+      = '/config/devices/dashboard' %} {% set _bak = '/config/backup' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %} {% set hw =
@@ -463,18 +465,29 @@ cards:
       'application_score') | int(0) %} {% set rec = state_attr(e,
       'recommendations') | default('', true) %} {% set updates = state_attr(e,
       'pending_updates') | default([], true) | list %} {% set zombies =
-      state_attr(e, 'zombie_count') | int(0) %} {% set dead = state_attr(e,
-      'dead_device_count') | int(0) %} {% set empty = state_attr(e,
+      state_attr(e, 'zombie_count') | int(0) %} {% set per_reason =
+      state_attr(e, 'zombie_count_per_reason') | default({}, true) %} {% set dead =
+      state_attr(e, 'dead_device_count') | int(0) %} {% set empty = state_attr(e,
       'empty_device_count') | int(0) %} {% set repairs = state_attr(e,
       'repair_count') | int(0) %} {% set integrations = state_attr(e,
       'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
-      'psi_available') | default(false, true) %}
+      'psi_available') | default(false, true) %} {% set fallbacks = state_attr(e,
+      'pillar_fallbacks') | default([], true) %} {% set cycle_failed =
+      state_attr(e, 'update_cycle_failed') | default(false, true) %} {% set
+      backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
+      {% set reason_labels = {'config_entry_missing': 'config entry missing',
+      'integration_not_loaded': 'integration not loaded', 'not_provided': 'not
+      provided', 'unavailable': 'unavailable'} %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
+      {% if fallbacks %} ⚠️ Calculation incomplete: {{ fallbacks | map('title') | join(', ') }}; neutral fallback values, not measurements. {% endif %}
+
+      {% if cycle_failed %} ⚠️ The last update cycle failed; previous results are shown. {% endif %}
+
       {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending, [Open Updates]({{ _upd }}) {% endif %}
 
-      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s), [Check Entities]({{ _ent }}) {% endif %}
+      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s){% if per_reason %} ({% for reason, count in per_reason.items() %}{{ reason_labels.get(reason, reason) }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}, [Check Entities]({{ _ent }}) {% endif %}
 
       {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
 
@@ -484,8 +497,10 @@ cards:
 
       {% if integrations > 0 %} 🧩 {{ integrations }} integration entry(ies) in error, [Open Integrations]({{ _int }}) {% endif %}
 
+      {% if backup_stale %} 🚨 Backup is stale, [Open Backups]({{ _bak }}) {% endif %}
+
       {# Hide recommendation lines already shown as a status line with a link above. #}
-      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
 
       {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
       {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
@@ -494,7 +509,7 @@ cards:
       {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
       state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
       keep in [none, 'unknown'] or not filter %}
-      💡 Tips to improve your score: <br>
+      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
       {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
@@ -503,11 +518,11 @@ cards:
       {% endif %}
 ```
 
-### HAGHS Pro v1.3 (Command Center)
+### HAGHS Pro v1.4 (Command Center)
 
 A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
-<img width="328" height="832" alt="HAGHS Pro v1.3 dashboard card" src="docs/images/dashboard-pro.png" />
+<img width="328" height="1058" alt="HAGHS Pro v1.4 dashboard card" src="docs/images/dashboard-pro.png" />
 
 ```yaml
 type: vertical-stack
@@ -530,17 +545,26 @@ cards:
       is offline ({{ states(e) }}). {% else %} {% set hw = state_attr(e,
       'hardware_score') | int(0) %} {% set app = state_attr(e,
       'application_score') | int(0) %} {% set score = states(e) | int(0) %}
+      {% set fallbacks = state_attr(e, 'pillar_fallbacks') | default([], true) %}
+      {% set cycle_failed = state_attr(e, 'update_cycle_failed') | default(false, true) %}
+      {% set conditional = state_attr(e, 'conditional_ignore_active') | default(false, true) %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
+
+      {% if fallbacks %} ⚠️ Calculation incomplete: {{ fallbacks | map('title') | join(', ') }}; the formula uses neutral fallback values, not measurements. {% endif %}
+
+      {% if cycle_failed %} ⚠️ The last update cycle failed; previous results are shown. {% endif %}
+
+      {% if conditional %} 🏖️ Conditional ignore labels are active; some entities are hidden from the score. {% endif %}
       {% endif %}
   - type: markdown
     title: 🛡️ Advisor
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set rec = state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
 
       {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
       {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
@@ -572,13 +596,16 @@ cards:
       'recorder_keep_days') %} {% set filter = state_attr(e,
       'recorder_filter_active') | default(false, true) %} {% set bonus =
       state_attr(e, 'config_audit_bonus') | int(0) %} {% set psi =
-      state_attr(e, 'psi_available') | default(false, true) %} {% set _upd =
-      '/config/updates' %}
+      state_attr(e, 'psi_available') | default(false, true) %} {% set
+      backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
+      {% set _upd = '/config/updates' %} {% set _bak = '/config/backup' %}
 
       {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
       {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
       [→ Open Updates]({{ _upd }})
       {% else %} ✅ All updates installed {% endif %}
+
+      {% if backup_stale %}<br>🚨 Backup is stale, [→ Open Backups]({{ _bak }}){% endif %}
 
       <hr>
 
@@ -589,7 +616,7 @@ cards:
       Config-Audit bonus: {{ bonus }}/10
 
       {% if keep in [none, 'unknown'] or not filter %}
-      💡 Tips to improve your score: <br>
+      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
       {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
@@ -600,6 +627,32 @@ cards:
       **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
       {% endif %}
   - type: markdown
+    title: ⏱️ Stale Reporting
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set w_list =
+      state_attr(e, 'stale_watch_entities') | default([], true) %} {% set w_count
+      = state_attr(e, 'stale_watch_count') | int(0) %} {% set c_list =
+      state_attr(e, 'stale_candidates') | default([], true) %} {% set c_count =
+      state_attr(e, 'stale_candidate_count') | int(0) %} {% set hours =
+      state_attr(e, 'stale_threshold_hours') | int(24) %} {% set _ent = '/config/entities' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% elif state_attr(e, 'stale_watch_count') is none %} ℹ️ Stale
+      reporting needs HAGHS v2.4.0 or newer. {% else %}
+
+      {% if w_count == 0 %} ✅ No watched entity is overdue (threshold {{ hours }} h). {% else %} ⏱️ {{ w_count }} watched entity(ies) not reporting for more than {{ hours }} h (score impact):{% for x in w_list %}<br>&nbsp;&nbsp; • <a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> (<code>{{ x }}</code>){% endfor %}{% if w_count > w_list | length %}<br>*(showing first {{ w_list | length }}, {{ w_count - w_list | length }} more hidden)*{% endif %} {% endif %}
+
+      {% if c_count > 0 %}
+      <details>
+      <summary>ℹ️ Not reporting, not watched (informational, no score impact): {{ c_count }}</summary>
+      {% for x in c_list %}
+      &nbsp;&nbsp; • <a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> (<code>{{ x }}</code>)
+      {% endfor %}
+      {% if c_count > c_list | length %}&nbsp;&nbsp; *(showing first {{ c_list | length }}, {{ c_count - c_list | length }} more hidden)*{% endif %}
+      </details>
+      {% endif %}
+      {% endif %}
+  - type: markdown
     title: 🧟 Zombie Entities
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set z_raw =
@@ -607,10 +660,20 @@ cards:
       state_attr(e, 'zombie_count') | int(0) %} {% set u_raw = state_attr(e,
       'unregistered_entities') | default([], true) %} {% set u_count =
       state_attr(e, 'unregistered_count') | int(0) %} {% set d_raw = state_attr(e,
-      'dead_devices') | default([], true) %} {% set d_count = state_attr(e,
+      'dead_devices') | default([], true) %} {% set d_ids = state_attr(e,
+      'dead_device_ids') | default([], true) %} {% set d_count = state_attr(e,
       'dead_device_count') | int(0) %} {% set e_raw = state_attr(e,
-      'empty_devices') | default([], true) %} {% set e_count = state_attr(e,
-      'empty_device_count') | int(0) %} {% set _dev = '/config/devices/dashboard' %}
+      'empty_devices') | default([], true) %} {% set e_ids = state_attr(e,
+      'empty_device_ids') | default([], true) %} {% set e_count = state_attr(e,
+      'empty_device_count') | int(0) %} {% set reasons = state_attr(e,
+      'zombie_reasons') | default({}, true) %} {% set since = state_attr(e,
+      'zombie_since') | default({}, true) %} {% set per_reason = state_attr(e,
+      'zombie_count_per_reason') | default({}, true) %} {% set per_integration =
+      state_attr(e, 'zombie_count_per_integration') | default({}, true) %} {% set
+      _dev = '/config/devices/dashboard' %} {% set _device = '/config/devices/device/' %}
+      {% set reason_labels = {'config_entry_missing': 'config entry missing (strong hint)',
+      'integration_not_loaded': 'integration not loaded', 'not_provided': 'not provided by
+      a running integration', 'unavailable': 'reported unavailable'} %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %} {% if z_raw is string %} {% set
@@ -623,6 +686,10 @@ cards:
 
       {% if z_count == 0 %} ✅ No zombie entities detected. {% else %} {{ z_count }} zombie(s) across {{ domain_count }} domain(s) {% if per_domain %} ({% for dom, cnt in per_domain.items() %}{{ dom }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %} {% if z_count > z_list | length %}*(showing first {{ z_list | length }}, {{ z_count - z_list | length }} more hidden)*{% endif %}
 
+      {% if per_reason %}By reason: {% for reason, cnt in per_reason.items() %}{{ reason_labels.get(reason, reason) }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}<br>{% endif %}{% if per_integration %}By integration: {% for name, cnt in per_integration.items() %}{{ name }}: {{ cnt }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+
+      ℹ️ A zombie is an availability signal, not a deletion list. Only *config entry missing* is a strong hint of an orphaned entity.
+
       {% set _ent = '/config/entities' %}[→ Check Entities]({{ _ent }})
 
       {% for domain in grouped %}
@@ -630,7 +697,8 @@ cards:
       <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
       {% for item in domain[1] %}
       {% set _info = _ent ~ '?more-info-entity-id=' ~ item.entity_id %}
-      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · <a href="{{ _info }}">{{ item.name }}</a> (<code>{{ item.entity_id }}</code>): {{ item.state }}
+      {% set reason = reasons.get(item.entity_id) %}{% set seen = since.get(item.entity_id) %}
+      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · <a href="{{ _info }}">{{ item.name }}</a> (<code>{{ item.entity_id }}</code>): {{ item.state }}{% if reason %} · {{ reason_labels.get(reason, reason) }}{% endif %}{% if seen and as_datetime(seen) %} · for {{ relative_time(as_datetime(seen)) }}{% endif %}
       {% endfor %}
       </details>
       {% endfor %} {% endif %}
@@ -639,7 +707,7 @@ cards:
       <details>
       <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
       {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
-      &nbsp;&nbsp; • <code>{{ entry }}</code>
+      &nbsp;&nbsp; • <a href="/config/entities?more-info-entity-id={{ entry }}"><code>{{ entry }}</code></a>
       {% endfor %}
       </details>
       {% endif %}
@@ -648,7 +716,8 @@ cards:
       <details>
       <summary>💀 Dead devices (informational, no score impact): {{ d_count }}</summary>
       {% for d in d_raw %}
-      &nbsp;&nbsp; • {{ d }}
+      {% set device_id = d_ids[loop.index0] if loop.index0 < d_ids | length else none %}
+      &nbsp;&nbsp; • {% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}
       {% endfor %}
       &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
       </details>
@@ -658,7 +727,8 @@ cards:
       <details>
       <summary>🗂️ Empty devices without any entity (informational, no score impact): {{ e_count }}</summary>
       {% for d in e_raw %}
-      &nbsp;&nbsp; • {{ d }}
+      {% set device_id = e_ids[loop.index0] if loop.index0 < e_ids | length else none %}
+      &nbsp;&nbsp; • {% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}
       {% endfor %}
       {% if e_count > e_raw | length %}&nbsp;&nbsp; *(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)*{% endif %}
       &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
@@ -674,15 +744,20 @@ cards:
 |---|:---:|:---:|
 | Gauge with score | Yes | Yes |
 | Hardware / Application score | Table | Table + live formula |
+| Calculation failure (failed pillar, failed update cycle) | Status line | Status line |
+| Conditional ignore labels active | No | Status line |
 | Advisor recommendations (CPU, RAM, I/O, ...) | Inline | Dedicated card |
 | Pending updates (by name) | Count + link | Full list + deep-link |
-| Zombie details (by domain) | Count + link | Grouped + expandable |
-| Repairs & unhealthy integrations | Count + link | Count + list + deep-link |
-| Dead devices (informational) | Count + link | Expandable list |
-| Empty devices (informational) | Count + link | Expandable list |
+| Stale backup | Status line + link | Status line + link |
+| Zombie details | Count by reason + link | Grouped by domain, reason and "for" per entity, breakdown by reason and integration |
+| Stale reporting (watched and passive) | Advisor line | Expandable lists with a link per entity |
+| Repairs & unhealthy integrations | Count + link | Count + list + deep-link per integration |
+| Dead devices (informational) | Count + link | Expandable list, link per device |
+| Empty devices (informational) | Count + link | Expandable list, link per device |
+| Unregistered entities (informational) | No | Expandable list, link per entity |
 | Config-Audit bonus (earned) | No | Yes |
 | Database size + warning | No | Yes |
-| Recorder health (purge + filter) | No | Yes |
+| Recorder health (purge + filter) | Tips + docs link | Yes + docs link |
 | Metric source (PSI vs. Classic + component count) | Yes (detailed) | Yes (detailed) |
 | Deep-links to HA settings | Yes | Yes |
 
@@ -763,6 +838,7 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 * **Repairs now count in the score (#97).** Open repair issues cost 5 points each (cap 10) and hard-cap the application score at 99 while any repair is open. HA's native *Ignore* action takes a repair out of the count. New attributes `repair_count` / `repairs`, new flag `rec_repairs`.
 * **Dead devices are flagged (#120).** A device whose monitored entities are all `unavailable` past the grace window is reported via `dead_device_count`, `dead_devices` and `rec_dead_devices`; `unknown` does not count (#143). Informational only, the entity-level zombie points stay authoritative.
 * **Empty devices are reported (#93).** Devices without any entity are reported via `empty_device_count`, `empty_devices` and `rec_empty_devices`, using registry facts only (hubs, services and disabled devices are skipped). Informational only.
+* **Device ids for the card links (#172).** `dead_device_ids` and `empty_device_ids` carry the device id next to each listed name, so the dashboard cards link every dead or empty device to its device page.
 * **Conditional ignore labels.** Extra ignore labels that apply only while a helper (`input_boolean`, `switch` or `binary_sensor`) is on, e.g. for a vacation mode, without Spook; `conditional_ignore_active` shows the state.
 * **Recommendation texts are translatable (#114)**, with Brazilian Portuguese (#138) and German (#163) translations. All recommendation templates resolve through Home Assistant's translation system (category `common`) in your configured language; English is the fallback.
 * **Unregistered entities are informational only (#98).** Entities without an entity-registry entry no longer count as zombies and no longer cap the score; they are reported through the `unregistered_*` attributes.
@@ -787,11 +863,11 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 **Infrastructure**
 
-* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 533 tests.
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 550 tests.
 
 **Documentation**
 
-* Dashboard cards v1.3 (Lite and Pro) with deep links and more-info links per zombie (#133, #137, #145).
+* Dashboard cards v1.4 (Lite and Pro): zombie reasons and since, stale lists, calculation status lines and a link to every entity, device and settings page (#133, #137, #145, #154).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
 

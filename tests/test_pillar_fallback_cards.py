@@ -27,7 +27,7 @@ async def test_existing_dashboard_failure_visibility(
     hass, monkeypatch, card_name, scenario, readme_text
 ):
     """Both original advisors show the current warning, never a general all-clear."""
-    section = readme_text.split(f"### HAGHS {card_name} v1.3", 1)[1]
+    section = readme_text.split(f"### HAGHS {card_name} v1.4", 1)[1]
     snippet = re.search(r"```yaml\n(.*?)```", section, re.DOTALL).group(1)
     card = yaml.safe_load(snippet)
     coord = make_coordinator(hass)
@@ -84,3 +84,11 @@ async def test_existing_dashboard_failure_visibility(
             assert "Application" in coord.data["recommendations"]
         if scenario == "outer":
             assert "update cycle failed" in rendered
+            # v1.4: the language-independent status line from update_cycle_failed.
+            assert "The last update cycle failed; previous results are shown." in rendered
+        else:
+            # v1.4: the language-independent status line from pillar_fallbacks.
+            assert "Calculation incomplete:" in rendered
+    if scenario in ("healthy", "old"):
+        assert "Calculation incomplete:" not in rendered
+        assert "The last update cycle failed" not in rendered

@@ -24,8 +24,8 @@ from custom_components.haghs.const import DOMAIN
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 INFORMATIONAL = {
-    "empty": {"empty_device_count", "empty_devices", "rec_empty_devices"},
-    "dead": {"dead_device_count", "dead_devices", "rec_dead_devices"},
+    "empty": {"empty_device_count", "empty_devices", "empty_device_ids", "rec_empty_devices"},
+    "dead": {"dead_device_count", "dead_devices", "dead_device_ids", "rec_dead_devices"},
     "reasons": {"zombie_count_per_reason", "zombie_reasons"},
 }
 PREFIX = {"empty": "🗂️", "dead": "🔌"}
@@ -123,6 +123,7 @@ async def test_async_get_entry_failure_keeps_the_score(hass, monkeypatch, caplog
     assert failed["pillar_fallback_count"] == 0
     assert _without(failed, ("empty", "reasons")) == _without(clean, ("empty", "reasons"))
     assert (failed["empty_device_count"], failed["empty_devices"]) == (0, [])
+    assert failed["empty_device_ids"] == []
     assert failed["rec_empty_devices"] is False
     assert (failed["zombie_reasons"], failed["zombie_count_per_reason"]) == ({}, {})
     assert _warnings(caplog) == [
@@ -148,6 +149,7 @@ async def test_dead_device_failure_warns_once_per_streak(hass, monkeypatch, capl
         [],
         False,
     )
+    assert failed["dead_device_ids"] == []
     assert len(_warnings(caplog)) == 1
 
     caplog.clear()

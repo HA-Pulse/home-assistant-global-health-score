@@ -101,7 +101,7 @@ jobs:
 
             CONTRIBUTORS=$(printf '%s\n%s\n' "$AUTHORS" "$COAUTHORS" \
               | sed '/^$/d' \
-              | grep -viE "^(${OWNER_LOGIN}|.*\[bot\])$" \
+              | grep -viE "^(${OWNER_LOGIN}|D-N91|claude.*|copilot.*|.*\[bot\])$" \
               | sort -fu || true)
           fi
 
