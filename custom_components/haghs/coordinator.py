@@ -214,8 +214,30 @@ class _ApplicationResult:
     p_repairs: int = 0
     dead_device_count: int = 0
     dead_device_list: list[str] = field(default_factory=list)
+    dead_device_ids: list[str] = field(default_factory=list)
     empty_device_count: int = 0
     empty_device_list: list[str] = field(default_factory=list)
+    empty_device_ids: list[str] = field(default_factory=list)
+
+
+class _DeviceList(tuple):
+    """``(names, count)`` of a device check, plus ``ids`` in the same order as ``names``.
+
+    Unpacks and compares like the plain pair, so callers that only need names and
+    count keep working; the dashboard cards link each name through its id.
+    """
+
+    ids: list[str]
+
+    def __new__(cls, pairs: list[tuple[str, str]], count: int) -> _DeviceList:
+        result = super().__new__(cls, ([name for name, _ in pairs], count))
+        result.ids = [device_id for _, device_id in pairs]
+        return result
+
+
+def _device_ids(result: tuple) -> list[str]:
+    """Ids of a device check result; the informational fallback ``([], 0)`` has none."""
+    return list(getattr(result, "ids", []))
 
 
 def _device_entries(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -571,8 +593,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count_per_domain": app.unregistered_per_domain,
             "dead_device_count": app.dead_device_count,
             "dead_devices": app.dead_device_list,
+            "dead_device_ids": app.dead_device_ids,
             "empty_device_count": app.empty_device_count,
             "empty_devices": app.empty_device_list,
+            "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -655,8 +679,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "unregistered_count_per_domain": app.unregistered_per_domain,
             "dead_device_count": app.dead_device_count,
             "dead_devices": app.dead_device_list,
+            "dead_device_ids": app.dead_device_ids,
             "empty_device_count": app.empty_device_count,
             "empty_devices": app.empty_device_list,
+            "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "recorder_keep_days": self.recorder_info.keep_days,
@@ -1015,14 +1041,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         p_repairs, repair_count, repair_list = self._calc_repairs()
 
         # G. DEAD DEVICES (#120) — informational, no score impact
-        dead_device_list, dead_device_count = self._informational(
-            "dead devices", self._calc_dead_devices, ([], 0)
-        )
+        dead = self._informational("dead devices", self._calc_dead_devices, ([], 0))
+        dead_device_list, dead_device_count = dead
 
         # H. EMPTY DEVICES (#93) — informational, no score impact
-        empty_device_list, empty_device_count = self._informational(
-            "empty devices", self._calc_empty_devices, ([], 0)
-        )
+        empty = self._informational("empty devices", self._calc_empty_devices, ([], 0))
+        empty_device_list, empty_device_count = empty
 
         app_final = max(
             0,
@@ -1076,8 +1100,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_repairs=p_repairs,
             dead_device_count=dead_device_count,
             dead_device_list=dead_device_list,
+            dead_device_ids=_device_ids(dead),
             empty_device_count=empty_device_count,
             empty_device_list=empty_device_list,
+            empty_device_ids=_device_ids(empty),
         )
 
     # ------------------------------------------------------------------
@@ -1353,7 +1379,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         label, all entities ignored via labels or patterns).
 
         Returns (dead_list_capped, dead_count); the list carries device
-        display names and is capped for the state-attribute payload.
+        display names and is capped for the state-attribute payload, ``ids``
+        the device ids in the same order (sorted by name, then id).
         """
         # Same deferral as the zombie check: the registries may not be
         # loaded yet and ignore labels would be missing (#13).
@@ -1379,7 +1406,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Full pass per candidate: every relevant entity must be dead and
         # at least one of them must not be ignored.
-        dead_names: list[str] = []
+        dead_pairs: list[tuple[str, str]] = []
         for device_id in candidate_ids:
             entries = er.async_entries_for_device(
                 ent_reg, device_id, include_disabled_entities=False
@@ -1401,11 +1428,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             device_entry = dev_reg.async_get(device_id)
             if device_entry is None:
                 continue
-            dead_names.append(device_entry.name_by_user or device_entry.name or device_entry.id)
+            dead_pairs.append(
+                (device_entry.name_by_user or device_entry.name or device_entry.id, device_id)
+            )
 
-        dead_names.sort()
-        dead_count = len(dead_names)
-        return dead_names[:DEAD_DEVICE_LIST_CAP], dead_count
+        dead_pairs.sort()
+        return _DeviceList(dead_pairs[:DEAD_DEVICE_LIST_CAP], len(dead_pairs))
 
     def _calc_empty_devices(self) -> tuple[list[str], int]:
         """Detect devices without any entity (#93, "registry cruft").
@@ -1420,7 +1448,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         because there is no entity. Startup is deferred like the zombie check,
         plus one zombie grace period after the boot. Informational only.
 
-        Returns (empty_list_capped, empty_count) with device display names.
+        Returns (empty_list_capped, empty_count) with device display names, and
+        ``ids`` in the same order (sorted by name, then id).
         """
         if not self._registries_ready:
             return [], 0
@@ -1434,7 +1463,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         parents = {device.via_device_id for device in devices if device.via_device_id}
         ignore = set(self.ignore_labels)
 
-        names: list[str] = []
+        found: list[tuple[str, str]] = []
         for device in devices:
             if (
                 device.disabled_by is not None
@@ -1458,10 +1487,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 area = area_reg.async_get_area(device.area_id) if device.area_id else None
                 if area is not None and ignore & set(area.labels or ()):
                     continue
-            names.append(device.name_by_user or device.name or device.id)
+            found.append((device.name_by_user or device.name or device.id, device.id))
 
-        names.sort()
-        return names[:EMPTY_DEVICE_LIST_CAP], len(names)
+        found.sort()
+        return _DeviceList(found[:EMPTY_DEVICE_LIST_CAP], len(found))
 
     def _unhealthy_entries(self) -> Iterator[ConfigEntry]:
         """Yield the config entries in an unhealthy state that are not ignored."""

@@ -39,10 +39,12 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "zombie_entities",
             "unregistered_entities",
             "dead_devices",
+            "dead_device_ids",
             "repairs",
             "pending_updates",
             "integration_unhealthy_entries",
             "empty_devices",
+            "empty_device_ids",
         }
     )
 
@@ -92,8 +94,10 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "unregistered_count_per_domain": data["unregistered_count_per_domain"],
             "dead_device_count": data["dead_device_count"],
             "dead_devices": data["dead_devices"],
+            "dead_device_ids": data["dead_device_ids"],
             "empty_device_count": data["empty_device_count"],
             "empty_devices": data["empty_devices"],
+            "empty_device_ids": data["empty_device_ids"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
             "recorder_keep_days": data["recorder_keep_days"],
