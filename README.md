@@ -520,7 +520,7 @@ cards:
 
 ### HAGHS Pro v1.4 (Command Center)
 
-A comprehensive dashboard with full score breakdown, zombies with their reason, stale reporting, database monitoring, recorder health, and deep-links to every entity and device.
+A comprehensive dashboard with full score breakdown, grouped zombies, database monitoring, recorder health, and deep-links.
 
 <img width="328" height="1058" alt="HAGHS Pro v1.4 dashboard card" src="docs/images/dashboard-pro.png" />
 
