@@ -438,7 +438,7 @@ Both configurations are wired to the entity ID `sensor.system_ha_global_health_s
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
 
-<img width="519" height="438" alt="HAGHS Lite v1.4 dashboard card" src="docs/images/dashboard-lite.png" />
+<img width="492" height="403" alt="HAGHS Lite v1.4 dashboard card" src="docs/images/dashboard-lite.png" />
 
 ```yaml
 type: vertical-stack
@@ -522,7 +522,7 @@ cards:
 
 A comprehensive dashboard with full score breakdown, zombies with their reason, stale reporting, database monitoring, recorder health, and deep-links to every entity and device.
 
-<img width="328" height="832" alt="HAGHS Pro v1.4 dashboard card" src="docs/images/dashboard-pro.png" />
+<img width="328" height="1058" alt="HAGHS Pro v1.4 dashboard card" src="docs/images/dashboard-pro.png" />
 
 ```yaml
 type: vertical-stack
