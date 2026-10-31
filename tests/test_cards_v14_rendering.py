@@ -222,3 +222,15 @@ async def test_older_attribute_sets_render_without_the_new_parts(
     assert "By reason:" not in rendered
     assert "Calculation incomplete" not in rendered
     assert " · for " not in rendered
+    # No all-clear for checks the older version does not run.
+    assert "No watched entity is overdue" not in rendered
+    if name == "Pro":
+        assert "Stale reporting needs HAGHS v2.4.0 or newer." in rendered
+
+
+async def test_stale_all_clear_only_with_the_stale_attributes(hass: HomeAssistant, cards) -> None:
+    attrs, _ = await _attributes(hass)
+    rendered = _render(hass, cards["Pro"], attrs)
+    assert attrs["stale_watch_count"] == 0
+    assert "No watched entity is overdue (threshold 24 h)." in rendered
+    assert "Stale reporting needs" not in rendered

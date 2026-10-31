@@ -637,7 +637,8 @@ cards:
       state_attr(e, 'stale_threshold_hours') | int(24) %} {% set _ent = '/config/entities' %}
 
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
-      is offline ({{ states(e) }}). {% else %}
+      is offline ({{ states(e) }}). {% elif state_attr(e, 'stale_watch_count') is none %} ℹ️ Stale
+      reporting needs HAGHS v2.4.0 or newer. {% else %}
 
       {% if w_count == 0 %} ✅ No watched entity is overdue (threshold {{ hours }} h). {% else %} ⏱️ {{ w_count }} watched entity(ies) not reporting for more than {{ hours }} h (score impact):{% for x in w_list %}<br>&nbsp;&nbsp; • <a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> (<code>{{ x }}</code>){% endfor %}{% if w_count > w_list | length %}<br>*(showing first {{ w_list | length }}, {{ w_count - w_list | length }} more hidden)*{% endif %} {% endif %}
 
