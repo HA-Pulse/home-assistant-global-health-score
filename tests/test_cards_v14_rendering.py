@@ -101,7 +101,11 @@ async def _attributes(hass: HomeAssistant) -> tuple[dict, dict]:
     """One zombie on a dead device and one empty device, through the real coordinator."""
     dead = _device(hass, "kitchen plug")
     entry = er.async_get(hass).async_get_or_create(
-        "sensor", "test_platform", "uid_kitchen", suggested_object_id="kitchen_power", device_id=dead.id
+        "sensor",
+        "test_platform",
+        "uid_kitchen",
+        suggested_object_id="kitchen_power",
+        device_id=dead.id,
     )
     hass.states.async_set(entry.entity_id, STATE_UNAVAILABLE, {"friendly_name": "Kitchen power"})
     hass.states.get(entry.entity_id).last_changed = dt_util.utcnow() - timedelta(minutes=30)
@@ -110,7 +114,9 @@ async def _attributes(hass: HomeAssistant) -> tuple[dict, dict]:
     coord._registries_ready = True
     coord._boot_time = dt_util.utcnow() - timedelta(hours=1)
     coord.data = await coord._async_update_data()
-    attrs = dict(HaghsSensor(coord, hass.config_entries.async_entries(DOMAIN)[0]).extra_state_attributes)
+    attrs = dict(
+        HaghsSensor(coord, hass.config_entries.async_entries(DOMAIN)[0]).extra_state_attributes
+    )
     return attrs, {"dead": dead.id, "empty": empty.id, "zombie": entry.entity_id}
 
 
@@ -205,7 +211,9 @@ async def test_stale_lists_link_each_entity(hass: HomeAssistant, cards) -> None:
 
 
 @pytest.mark.parametrize("name", ["Lite", "Pro"])
-async def test_older_attribute_sets_render_without_the_new_parts(hass: HomeAssistant, cards, name) -> None:
+async def test_older_attribute_sets_render_without_the_new_parts(
+    hass: HomeAssistant, cards, name
+) -> None:
     attrs, ids = await _attributes(hass)
     old = {key: value for key, value in attrs.items() if key not in V24_KEYS}
     rendered = _render(hass, cards[name], old)

@@ -865,7 +865,7 @@ HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times
 
 **Documentation**
 
-* Dashboard cards v1.3 (Lite and Pro) with deep links and more-info links per zombie (#133, #137, #145).
+* Dashboard cards v1.4 (Lite and Pro): zombie reasons and since, stale lists, calculation status lines and a link to every entity, device and settings page (#133, #137, #145, #154).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
 
