@@ -171,7 +171,8 @@ async def test_current_attributes_are_unchanged(hass: HomeAssistant, freezer) ->
     """Only the recorder exclusion changes; the state keeps every key and value as on dev."""
     freezer.move_to(FROZEN)
     sensor, entry = await _worst_case(hass, length=80)
-    # Keys added since the dev capture (#134, #93, conditional ignore labels, card device ids); this
+    # Keys added since the dev capture (#134, #93, conditional ignore labels, card device ids, #123 CPU/RAM
+    # source; PSI in this scenario); this
     # scenario has no unhealthy entry, every device carries an entity and no conditional labels are
     # configured. The dead device ids follow the captured names, looked up in the registry.
     by_name = {device.name: device.id for device in dr.async_get(hass).devices}
@@ -184,5 +185,7 @@ async def test_current_attributes_are_unchanged(hass: HomeAssistant, freezer) ->
         "conditional_ignore_active": False,
         "dead_device_ids": [by_name[name] for name in DEV_ATTRIBUTES["dead_devices"]],
         "empty_device_ids": [],
+        "cpu_ram_source": "psi",
+        "rec_cpu_ram_unmeasured": False,
     }
     object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)

@@ -1,9 +1,9 @@
-"""The PSI fallback gate in async_setup_entry (issue #123).
+"""Setup without PSI and without CPU/RAM sensors (issue #123).
 
-With PSI unavailable the persisted CPU/RAM fallback fields must count as
-missing when their value is empty (None), not only when the keys are absent:
-the options flow stores cleared fields as explicit None, so the old
-key-presence check let such entries pass the gate without any data source.
+The persisted CPU/RAM fields count as missing when their value is empty (None), not only when the keys are
+absent: the options flow stores cleared fields as explicit None. Since the #123 follow-up (plan HAGHS-20261101-001)
+a missing field never blocks the setup: the entry loads, the value is left out of the hardware pillar and a
+non-blocking WARNING repair names it.
 """
 
 from __future__ import annotations
@@ -68,10 +68,14 @@ def _fallback_issue_present(hass: HomeAssistant) -> bool:
     return (DOMAIN, IssueIds.FALLBACK_MISSING) in ir.async_get(hass).issues
 
 
-async def test_setup_blocked_when_psi_missing_and_both_fields_empty(
+def _fallback_issue(hass: HomeAssistant) -> ir.IssueEntry:
+    return ir.async_get(hass).issues[(DOMAIN, IssueIds.FALLBACK_MISSING)]
+
+
+async def test_setup_proceeds_when_psi_missing_and_both_fields_empty(
     hass: HomeAssistant,
 ) -> None:
-    """Both cleared fields (explicit None) and no PSI: setup must fail."""
+    """Both cleared fields (explicit None) and no PSI: setup proceeds with a WARNING repair (was SETUP_ERROR)."""
     entry = await _setup_entry(
         hass,
         data={
@@ -83,14 +87,22 @@ async def test_setup_blocked_when_psi_missing_and_both_fields_empty(
         psi=_PSI_NONE,
     )
 
-    assert entry.state is ConfigEntryState.SETUP_ERROR
-    assert _fallback_issue_present(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    issue = _fallback_issue(hass)
+    assert (issue.severity, issue.is_fixable, issue.is_persistent) == (
+        ir.IssueSeverity.WARNING,
+        True,
+        False,
+    )
+    assert issue.data == {"entry_id": entry.entry_id}
+    attributes = hass.states.get("sensor.system_ha_global_health_score").attributes
+    assert (attributes["cpu_ram_source"], attributes["rec_cpu_ram_unmeasured"]) == ("none", True)
 
 
-async def test_setup_blocked_when_psi_missing_and_one_field_empty(
+async def test_setup_proceeds_when_psi_missing_and_one_field_empty(
     hass: HomeAssistant,
 ) -> None:
-    """Only the CPU sensor stays configured, RAM cleared, no PSI: must fail."""
+    """Only the CPU sensor stays configured, RAM cleared, no PSI: setup proceeds with a WARNING repair."""
     hass.states.async_set("sensor.old_cpu", "30")
     entry = await _setup_entry(
         hass,
@@ -103,8 +115,10 @@ async def test_setup_blocked_when_psi_missing_and_one_field_empty(
         psi=_PSI_NONE,
     )
 
-    assert entry.state is ConfigEntryState.SETUP_ERROR
-    assert _fallback_issue_present(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    assert _fallback_issue(hass).severity is ir.IssueSeverity.WARNING
+    attributes = hass.states.get("sensor.system_ha_global_health_score").attributes
+    assert (attributes["cpu_ram_source"], attributes["rec_cpu_ram_unmeasured"]) == ("partial", True)
 
 
 async def test_setup_proceeds_when_psi_missing_and_sensors_configured(

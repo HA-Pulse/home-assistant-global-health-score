@@ -3,12 +3,12 @@ from homeassistant import data_entry_flow
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 
-from .config_flow import FALLBACK_SENSORS_SCHEMA
+from .config_flow import FALLBACK_SENSORS_SCHEMA, system_monitor_suggestion
 from .const import IssueIds
 
 
 class MissingFallbackSensorRepairFlow(RepairsFlow):
-    """Repair flow for invalid config due to missing CPU/RAM fallbacks."""
+    """Repair flow for CPU/RAM that are not measured (no PSI, no sensor selected; non-blocking since #123)."""
 
     def __init__(self, entry_id: str) -> None:
         """Initialize repair flow."""
@@ -43,7 +43,9 @@ class MissingFallbackSensorRepairFlow(RepairsFlow):
                 for sensor, selector in FALLBACK_SENSORS_SCHEMA.items()
             }
         )
-        current = {**entry.data, **entry.options}
+        # Unique System Monitor sensors are offered; nothing is written until the user submits (#123).
+        current = {**system_monitor_suggestion(self.hass)}
+        current.update({k: v for k, v in {**entry.data, **entry.options}.items() if v})
 
         return self.async_show_form(
             step_id="confirm",

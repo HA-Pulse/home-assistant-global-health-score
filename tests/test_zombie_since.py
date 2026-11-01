@@ -36,6 +36,8 @@ ADDED_LATER = {
     "conditional_ignore_active",
     "dead_device_ids",
     "empty_device_ids",
+    "cpu_ram_source",
+    "rec_cpu_ram_unmeasured",
 }
 DEV_RESULTS = {
     0: {
@@ -312,6 +314,7 @@ async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, 
     by_name = {device.name: device.id for device in dr.async_get(hass).devices}
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
+    assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)
     added = {"zombie_since"} | ADDED_LATER
     assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
 
