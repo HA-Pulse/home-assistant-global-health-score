@@ -436,6 +436,8 @@ Below are two ready-to-use card configurations:
 
 Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it in two places: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
 
+On older Home Assistant versions (tested: 2024.10) a link to a single entity opens the Entities page, but not that entity's more-info dialog; on current versions (tested: 2026.9 to 2026.11) it opens the dialog directly. All other card links work the same on both.
+
 ### HAGHS Lite v1.4 (Quick Check)
 
 A compact card for a fast overview, score, sub-scores, and actionable links.
