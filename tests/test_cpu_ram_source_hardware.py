@@ -110,3 +110,9 @@ async def test_repair_is_touched_only_when_the_state_changes(hass: HomeAssistant
         coord._sync_cpu_ram_issue(_HardwareResult(cpu_ram_source="sensors"))  # fallback: no change
     assert (create.call_count, delete.call_count) == (2, 1)
     assert create.call_args.kwargs["severity"] is ir.IssueSeverity.WARNING
+
+
+async def test_psi_for_cpu_only_and_no_ram_sensor_is_partial(hass: HomeAssistant) -> None:
+    hw, result = await _result(hass, cpu=None, ram=None, psi=dict(cpu=1.0))
+    assert hw.hardware_score == pytest.approx((100.0 + 80.0) / 2)
+    assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("partial", True)
