@@ -53,6 +53,10 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
     CONFIG_AUDIT_MAX_BONUS,
+    CPU_RAM_SOURCE_NONE,
+    CPU_RAM_SOURCE_PARTIAL,
+    CPU_RAM_SOURCE_PSI,
+    CPU_RAM_SOURCE_SENSORS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
     DEAD_DEVICE_LIST_CAP,
@@ -76,6 +80,7 @@ from .const import (
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
     ZOMBIE_REASONS,
+    IssueIds,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -170,6 +175,9 @@ class _HardwareResult:
     psi_available: bool = False
     cpu_used_psi: bool = False
     ram_used_psi: bool = False
+    # #123: where CPU and RAM come from; "none"/"partial" means a value was not measured and left out.
+    # None while the pillar has no measurement (neutral first result, hardware fallback).
+    cpu_ram_source: str | None = None
 
 
 @dataclass
@@ -320,6 +328,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.cpu_id: str | None = opts.get(CONF_CPU_SENSOR)
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
+        self._entry_id: str = entry.entry_id
+        # Last state of the non-blocking "CPU/RAM not measured" repair (None: not set in this run yet).
+        self._cpu_ram_issue: bool | None = None
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
         self.stale_threshold_hours: int = opts.get(
             CONF_STALE_THRESHOLD_HOURS, DEFAULT_STALE_THRESHOLD_HOURS
@@ -554,6 +565,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._async_calc_hardware(),
             _HardwareResult(),
         )
+        self._sync_cpu_ram_issue(hw)
 
         app = await self._safe_calc(
             "application",
@@ -599,6 +611,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
+            "cpu_ram_source": hw.cpu_ram_source,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "conditional_ignore_active": self._conditional_active,
@@ -685,6 +698,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
+            "cpu_ram_source": hw.cpu_ram_source,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "conditional_ignore_active": False,
@@ -784,11 +798,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         psi = await self._async_read_psi()
         use_psi = psi.available
 
+        # A value without PSI and without a selected sensor is not measured: it is left out of the pillar,
+        # never counted as 0 % load (#123).
+        cpu_measured = psi.cpu is not None or bool(self.cpu_id)
+        ram_measured = psi.memory is not None or bool(self.ram_id)
+
         # -- CPU --
+        cpu, p_cpu = 0.0, 0
         if psi.cpu is not None:
             cpu = psi.cpu
             p_cpu = self._psi_cpu_penalty(cpu)
-        else:
+        elif cpu_measured:
             cpu = self._get_float(self.cpu_id)
             if cpu > 100:
                 _LOGGER.warning(
@@ -802,10 +822,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         score_cpu = 100 - p_cpu
 
         # -- RAM --
+        ram, p_ram = 0.0, 0
         if psi.memory is not None:
             ram = psi.memory
             p_ram = self._psi_memory_penalty(ram)
-        else:
+        elif ram_measured:
             ram = self._get_float(self.ram_id)
             if ram > 100:
                 _LOGGER.warning(
@@ -860,19 +881,22 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_power = 20
 
         # -- Final hardware score --
-        # When PSI I/O is available: 4 components (CPU, RAM, I/O, Disk)
-        # When I/O is not available: 3 components (CPU, RAM, Disk)
+        # The average of the measured components: CPU and RAM when measured, I/O when PSI provides it, Disk
+        # always. With everything measured that is (CPU + RAM + I/O + Disk) / 4, without I/O / 3.
         # Power penalty is applied as a flat deduction (not averaged)
-        if psi.io is not None:
-            hardware_final = max(
-                0.0,
-                min(100.0, (score_cpu + score_ram + score_io + score_disk) / 4 - p_power),
-            )
+        components = [score_cpu] if cpu_measured else []
+        components += [score_ram] if ram_measured else []
+        components += [score_io] if psi.io is not None else []
+        components.append(score_disk)
+        hardware_final = max(0.0, min(100.0, sum(components) / len(components) - p_power))
+        if psi.cpu is not None and psi.memory is not None:
+            cpu_ram_source = CPU_RAM_SOURCE_PSI
+        elif cpu_measured and ram_measured:
+            cpu_ram_source = CPU_RAM_SOURCE_SENSORS
+        elif cpu_measured or ram_measured:
+            cpu_ram_source = CPU_RAM_SOURCE_PARTIAL
         else:
-            hardware_final = max(
-                0.0,
-                min(100.0, (score_cpu + score_ram + score_disk) / 3 - p_power),
-            )
+            cpu_ram_source = CPU_RAM_SOURCE_NONE
 
         if use_psi:
             _LOGGER.debug(
@@ -899,6 +923,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             psi_available=use_psi,
             cpu_used_psi=psi.cpu is not None,
             ram_used_psi=psi.memory is not None,
+            cpu_ram_source=cpu_ram_source,
         )
 
     # -- CPU penalty tiers -------------------------------------------------
@@ -1805,6 +1830,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if hw.p_ram > 0:
             ram_key = "rec_ram_pressure_psi" if hw.ram_used_psi else "rec_ram_pressure_classic"
             advice.append(self._rec(ram_key).format(ram_pct=hw.ram))
+        if self._cpu_ram_unmeasured(hw):
+            advice.append(self._rec("rec_cpu_ram_unmeasured"))
         if hw.p_io > 0:
             advice.append(self._rec("rec_io_pressure").format(io_pct=hw.io))
         if self._is_disk_low_sd(hw):
@@ -1893,7 +1920,37 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_stale": app.stale.watch_count > 0,
             "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
             "rec_update_failed": False,
+            "rec_cpu_ram_unmeasured": self._cpu_ram_unmeasured(hw),
         }
+
+    def _sync_cpu_ram_issue(self, hw: _HardwareResult) -> None:
+        """Keep the non-blocking repair in step with the measured state; touch it only on a change (#123)."""
+        if "hardware" in self._pillar_fallbacks:
+            return
+        missing = self._cpu_ram_unmeasured(hw)
+        if missing == self._cpu_ram_issue:
+            return
+        self._cpu_ram_issue = missing
+        if missing:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                IssueIds.FALLBACK_MISSING,
+                data={"entry_id": self._entry_id},
+                is_fixable=True,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=IssueIds.FALLBACK_MISSING,
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, IssueIds.FALLBACK_MISSING)
+
+    def _cpu_ram_unmeasured(self, hw: _HardwareResult) -> bool:
+        """CPU or RAM left out of a measured hardware pillar (not for the neutral fallback)."""
+        return hw.cpu_ram_source in (
+            CPU_RAM_SOURCE_PARTIAL,
+            CPU_RAM_SOURCE_NONE,
+        ) and "hardware" not in getattr(self, "_pillar_fallbacks", set())
 
     # ------------------------------------------------------------------
     # Helpers

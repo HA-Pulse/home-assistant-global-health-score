@@ -135,6 +135,18 @@ REC_DEAD_DEVICES = (
     "unavailable past the grace period."
 )
 REC_EMPTY_DEVICES = "\U0001f5c2\ufe0f Devices: {count} device(s) without any entity."
+REC_CPU_RAM_UNMEASURED = (
+    "\U0001f4ca Hardware: CPU and/or RAM are not measured (no PSI, no sensor selected); "
+    "the hardware score uses the other components."
+)
+
+# Where the hardware pillar's CPU and RAM values come from (attribute cpu_ram_source, #123).
+CPU_RAM_SOURCE_PSI = "psi"
+CPU_RAM_SOURCE_SENSORS = "sensors"
+CPU_RAM_SOURCE_PARTIAL = "partial"
+CPU_RAM_SOURCE_NONE = "none"
+# System Monitor's unique ids for processor and memory use (slugify(f"{key}_{argument}"), no argument).
+SYSTEM_MONITOR_UNIQUE_IDS = {"cpu_sensor": "processor_use", "ram_sensor": "memory_use_percent"}
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
@@ -151,6 +163,7 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_core_lag": REC_CORE_LAG,
     "rec_cpu_load_classic": REC_CPU_LOAD_CLASSIC,
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
+    "rec_cpu_ram_unmeasured": REC_CPU_RAM_UNMEASURED,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
     "rec_dead_devices": REC_DEAD_DEVICES,
     "rec_empty_devices": REC_EMPTY_DEVICES,
@@ -212,6 +225,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_stale",
     "rec_pillar_fallback",
     "rec_update_failed",
+    "rec_cpu_ram_unmeasured",
 )
 
 

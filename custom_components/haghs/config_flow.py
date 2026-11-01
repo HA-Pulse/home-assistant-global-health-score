@@ -7,6 +7,8 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import UnitOfTime
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers import selector
 
@@ -36,20 +38,37 @@ from .const import (
     DOMAIN,
     STALE_THRESHOLD_MAX_HOURS,
     STORAGE_TYPES,
+    SYSTEM_MONITOR_UNIQUE_IDS,
 )
 from .coordinator import HaghsDataUpdateCoordinator
 
 
 def _schema_with_psi(psi_available: bool) -> vol.Schema:
-    """Build flow schema based on PSI availability.
+    """Build the flow schema.
 
-    CPU/RAM are optional when PSI is available and required otherwise.
+    CPU/RAM are optional with and without PSI (#123): without PSI an empty field is not measured and is left out
+    of the hardware pillar; the setup never blocks on it. ``psi_available`` decides only the suggestion.
     """
     schema = {
-        vol.Optional(sensor) if psi_available else vol.Required(sensor): selector
-        for sensor, selector in FALLBACK_SENSORS_SCHEMA.items()
+        vol.Optional(sensor): selector for sensor, selector in FALLBACK_SENSORS_SCHEMA.items()
     }
     return vol.Schema(schema).extend(_BASE_SCHEMA)
+
+
+def system_monitor_suggestion(hass: HomeAssistant) -> dict[str, str]:
+    """System Monitor's processor and memory use sensors, as suggested CPU/RAM fields.
+
+    Only a suggestion for a form the user submits; HAGHS never writes it into the options by itself (#123,
+    DEVELOPMENT_GUIDELINES "Setup & Configuration"). The registry key (domain, platform, unique id) is unique.
+    """
+    registry = er.async_get(hass)
+    found = {}
+    for option, unique_id in SYSTEM_MONITOR_UNIQUE_IDS.items():
+        entity_id = registry.async_get_entity_id("sensor", "systemmonitor", unique_id)
+        entry = registry.async_get(entity_id) if entity_id else None
+        if entry is not None and entry.disabled_by is None:
+            found[option] = entity_id
+    return found
 
 
 FALLBACK_SENSORS_SCHEMA = {
@@ -211,7 +230,7 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = _schema_with_psi(psi.available)
 
         ignore_label_id = _ensure_default_label(self.hass)
-        suggested = {}
+        suggested: dict[str, Any] = {} if psi.available else system_monitor_suggestion(self.hass)
         if ignore_label_id:
             suggested[CONF_IGNORE_LABELS] = [ignore_label_id]
 
@@ -301,6 +320,10 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
             )
         )
 
+        if not psi.available:
+            for option, entity_id in system_monitor_suggestion(self.hass).items():
+                if not current.get(option):
+                    current[option] = entity_id
         return self.async_show_form(
             step_id="init",
             errors=errors,

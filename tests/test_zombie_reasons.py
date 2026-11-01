@@ -26,7 +26,8 @@ from custom_components.haghs.sensor import HaghsSensor
 from tests.factories import make_coordinator, patch_disk, patch_psi
 
 NEW_KEYS = {"zombie_count_per_reason", "zombie_reasons"}
-# Added after #154-d by later plans (#134, #93, conditional ignore labels); compared exactly below.
+# Added after #154-d by later plans (#134, #93, conditional ignore labels, #123 CPU/RAM source);
+# compared exactly below.
 ADDED_LATER = {
     "integration_unhealthy_entries",
     "empty_device_count",
@@ -35,6 +36,8 @@ ADDED_LATER = {
     "conditional_ignore_active",
     "dead_device_ids",
     "empty_device_ids",
+    "cpu_ram_source",
+    "rec_cpu_ram_unmeasured",
 }
 FROZEN = "2026-10-24T08:00:00+00:00"  # clock of the dev capture
 # Complete results of the same scenarios on dev 1a6de2c before this change, captured on a
@@ -168,6 +171,7 @@ async def test_score_and_existing_attributes_are_unchanged(
     assert (result["empty_device_count"], result["empty_devices"]) == (0, [])
     assert result["rec_empty_devices"] is False
     assert result["conditional_ignore_active"] is False
+    assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)
     by_name = {device.name: device.id for device in dr.async_get(hass).devices}
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
