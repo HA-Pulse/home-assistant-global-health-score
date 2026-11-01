@@ -475,7 +475,8 @@ cards:
       'empty_device_count') | int(0) %} {% set repairs = state_attr(e,
       'repair_count') | int(0) %} {% set integrations = state_attr(e,
       'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
-      'psi_available') | default(false, true) %} {% set fallbacks = state_attr(e,
+      'psi_available') | default(false, true) %} {% set cpu_ram = state_attr(e,
+      'cpu_ram_source') %} {% set fallbacks = state_attr(e,
       'pillar_fallbacks') | default([], true) %} {% set cycle_failed =
       state_attr(e, 'update_cycle_failed') | default(false, true) %} {% set
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
@@ -484,6 +485,8 @@ cards:
       provided', 'unavailable': 'unavailable'} %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
+
+      {% if cpu_ram == 'none' %} 📊 CPU/RAM not measured (no PSI, no sensor selected); the hardware score uses the other components. {% elif cpu_ram == 'partial' %} 📊 CPU/RAM partly measured (no PSI, one sensor missing); the hardware score uses the measured components. {% endif %}
 
       {% if fallbacks %} ⚠️ Calculation incomplete: {{ fallbacks | map('title') | join(', ') }}; neutral fallback values, not measurements. {% endif %}
 
@@ -518,7 +521,7 @@ cards:
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
-      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk), hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}
+      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + I/O + Disk), hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}
       {% endif %}
 ```
 
@@ -552,8 +555,11 @@ cards:
       {% set fallbacks = state_attr(e, 'pillar_fallbacks') | default([], true) %}
       {% set cycle_failed = state_attr(e, 'update_cycle_failed') | default(false, true) %}
       {% set conditional = state_attr(e, 'conditional_ignore_active') | default(false, true) %}
+      {% set cpu_ram = state_attr(e, 'cpu_ram_source') %}
 
       Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
+
+      {% if cpu_ram == 'none' %} 📊 CPU/RAM not measured (no PSI, no sensor selected); the hardware score uses the other components. {% elif cpu_ram == 'partial' %} 📊 CPU/RAM partly measured (no PSI, one sensor missing); the hardware score uses the measured components. {% endif %}
 
       Formula: ({{ hw }} × 0.4) + ({{ app }} × 0.6) = {{ score }}
 
@@ -600,7 +606,8 @@ cards:
       'recorder_keep_days') %} {% set filter = state_attr(e,
       'recorder_filter_active') | default(false, true) %} {% set bonus =
       state_attr(e, 'config_audit_bonus') | int(0) %} {% set psi =
-      state_attr(e, 'psi_available') | default(false, true) %} {% set
+      state_attr(e, 'psi_available') | default(false, true) %} {% set cpu_ram =
+      state_attr(e, 'cpu_ram_source') %} {% set
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
       {% set _upd = '/config/updates' %} {% set _bak = '/config/backup' %}
 
@@ -628,7 +635,7 @@ cards:
 
       ---
 
-      **Metric source**: {% if psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
+      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
       {% endif %}
   - type: markdown
     title: ⏱️ Stale Reporting
@@ -762,7 +769,7 @@ cards:
 | Config-Audit bonus (earned) | No | Yes |
 | Database size + warning | No | Yes |
 | Recorder health (purge + filter) | Tips + docs link | Yes + docs link |
-| Metric source (PSI vs. Classic + component count) | Yes (detailed) | Yes (detailed) |
+| Metric source (PSI vs. Classic + component count, CPU/RAM not measured) | Yes (detailed) | Yes (detailed) |
 | Deep-links to HA settings | Yes | Yes |
 
 ---
