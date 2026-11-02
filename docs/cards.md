@@ -28,7 +28,6 @@ A comprehensive dashboard with full score breakdown, grouped zombies, database m
 
 <img width="328" height="1058" alt="HAGHS Pro v1.4 dashboard card" src="https://raw.githubusercontent.com/HA-Pulse/home-assistant-global-health-score/main/docs/images/dashboard-pro.png" />
 
-
 Configuration: [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/pro.yaml)
 
 ### Lite vs. Pro Comparison
