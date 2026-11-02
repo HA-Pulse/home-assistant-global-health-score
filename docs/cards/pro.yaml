@@ -104,7 +104,7 @@ cards:
 
       ---
 
-      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + I/O + Disk): hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
+      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + Disk, I/O when the kernel provides it){% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
       {% endif %}
   - type: markdown
     title: ⏱️ Stale Reporting
