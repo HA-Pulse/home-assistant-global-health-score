@@ -1637,10 +1637,18 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         start their window now. Without a store (first start after updating
         HAGHS) every pending update starts now.
         """
+        # One shared load per run: every coordinator (several config entries)
+        # awaits the same task before its first update calculation.
         hass_data = self.hass.data[DOMAIN]
-        if hass_data.get(DATA_UPDATE_FIRST_SEEN_LOADED):
-            return
-        hass_data[DATA_UPDATE_FIRST_SEEN_LOADED] = True
+        task = hass_data.get(DATA_UPDATE_FIRST_SEEN_LOADED)
+        if task is None:
+            task = hass_data[DATA_UPDATE_FIRST_SEEN_LOADED] = self.hass.async_create_task(
+                self._async_merge_update_first_seen(), "haghs update first-seen load"
+            )
+        await asyncio.shield(task)
+
+    async def _async_merge_update_first_seen(self) -> None:
+        """Read the store once and merge it into the shared first-seen dicts."""
         try:
             stored = await self._first_seen_store.async_load()
         except Exception:
@@ -1738,9 +1746,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             state = self.hass.states.get(stale_id)
             entity_entry = ent_reg.async_get(stale_id)
-            if state is None and entity_entry is not None and entity_entry.disabled_by is None:
-                continue  # registered, enabled, no state yet: not ready (a disabled entity is ignored)
-            if state is not None and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            ignored = self._is_ignored(stale_id, entity_entry)  # disabled counts as ignored
+            if not ignored and state is None and entity_entry is not None:
+                continue  # registered, no state yet: not ready
+            if (
+                not ignored
+                and state is not None
+                and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            ):
                 continue
             del self._update_first_seen[stale_id]
             self._update_seen_version.pop(stale_id, None)

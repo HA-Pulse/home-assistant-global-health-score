@@ -304,3 +304,39 @@ async def test_a_disabled_update_entity_leaves_the_store(hass, hass_storage) -> 
     coordinator = make_coordinator(hass)
     await coordinator.async_refresh()
     assert entry.entity_id not in coordinator._update_first_seen
+
+
+async def test_an_ignored_update_without_a_state_leaves_the_store(hass, hass_storage) -> None:
+    from homeassistant.helpers import entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.haghs.const import CONF_IGNORE_PATTERNS
+    from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
+
+    entry = er.async_get(hass).async_get_or_create(
+        "update", "esphome", "uid_iot", suggested_object_id="iot_bulb"
+    )
+    hass_storage[KEY] = _stored(
+        {entry.entity_id: (dt_util.utcnow() - timedelta(days=3)).isoformat()}
+    )
+    config = MockConfigEntry(domain=DOMAIN, data={CONF_IGNORE_PATTERNS: ["update.iot_*"]})
+    config.add_to_hass(hass)
+    coordinator = HaghsDataUpdateCoordinator(hass, config)
+    await coordinator.async_refresh()
+    assert entry.entity_id not in coordinator._update_first_seen
+
+
+async def test_two_config_entries_share_one_load(hass, hass_storage) -> None:
+    """The second coordinator must not compute before the stored times are merged (several config entries)."""
+    import asyncio
+
+    eight_days = (dt_util.utcnow() - timedelta(days=8)).isoformat()
+    hass_storage[KEY] = _stored({"update.esphome": eight_days})
+    hass.states.async_set("update.esphome", "on")
+    first, second = make_coordinator(hass), make_coordinator(hass)
+    await asyncio.gather(first.async_refresh(), second.async_refresh())
+    assert first.data["rec_updates_pending"] is True
+    assert second.data["rec_updates_pending"] is True
+    assert hass.data[DOMAIN]["_update_first_seen"]["update.esphome"] == dt_util.parse_datetime(
+        eight_days
+    )
