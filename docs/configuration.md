@@ -16,7 +16,7 @@ After adding it, navigate to its entity list and **manually enable** the process
 * `sensor.system_monitor_processor_use` (Percentage %)
 * `sensor.system_monitor_memory_usage` (Percentage %)
 
-> **Note:** Where the Linux kernel provides PSI (usually HAOS and Supervised), HAGHS uses it automatically and these sensors are only a safety net. They are optional in the setup flow; without PSI the System Monitor sensors are suggested when HAGHS finds them, but HAGHS never selects them by itself.
+> **Note:** Where the Linux kernel provides PSI, HAGHS uses it automatically and these sensors are only a safety net. They are optional in the setup flow; without PSI the System Monitor sensors are suggested when HAGHS finds them, but HAGHS never selects them by itself.
 > > **Without PSI and without these sensors:** HAGHS still sets up and keeps running. CPU and/or RAM are left out of the hardware score, a recommendation line says so, and a non-blocking **Repair** in *Settings > System > Repairs* lets you pick the missing sensor (System Monitor's processor and memory sensors are pre-filled when found; both fields are optional, an empty field keeps its setting). Submitting it includes them without restarting Home Assistant.
 
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.

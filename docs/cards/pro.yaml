@@ -91,7 +91,7 @@ cards:
 
 
       Database: {{ db_mb | round(1) }} MB {% if db_mb == 0.0 %}*(external DB detected)*{% endif %} <br>
-      Recorder: {% if keep not in [none, 'unknown'] %}purge active ({{ keep }} days){% else %}no purge configured, DB may grow indefinitely{% endif %} <br>
+      {% if keep not in [none, 'unknown'] %}Recorder keeps {{ keep }} days of history{% else %}Recorder not found{% endif %} <br>
       {{ 'Entity filter active' if filter else 'No entity filter' }} <br>
       Config-Audit bonus: {{ bonus }}/10
 
