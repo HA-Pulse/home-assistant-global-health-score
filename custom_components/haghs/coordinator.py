@@ -1728,13 +1728,23 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if now - first_seen >= grace:
                 update_count += 1
 
-        # Prune entries for updates that are no longer pending so installed
-        # updates don't keep a stale timestamp around.
+        # Prune entries for updates that are done (installed or skipped: state
+        # "off"), ignored, or gone (no state and no registry entry). An update
+        # entity that is not ready yet (no state but registered, unavailable,
+        # unknown) keeps its stored window: right after a restart many update
+        # entities appear only after HAGHS's first refresh.
         for stale_id in list(self._update_first_seen):
-            if stale_id not in currently_pending:
-                del self._update_first_seen[stale_id]
-                self._update_seen_version.pop(stale_id, None)
-                changed = True
+            if stale_id in currently_pending:
+                continue
+            state = self.hass.states.get(stale_id)
+            entity_entry = ent_reg.async_get(stale_id)
+            if state is None and entity_entry is not None:
+                continue
+            if state is not None and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            del self._update_first_seen[stale_id]
+            self._update_seen_version.pop(stale_id, None)
+            changed = True
         if changed:
             self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 

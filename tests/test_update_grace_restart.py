@@ -68,7 +68,7 @@ async def test_window_is_kept_across_a_restart(
 
 
 async def test_without_the_store_a_restart_starts_a_new_window(hass, hass_storage) -> None:
-    """Control: the same eight days without the stored time count from the restart (behaviour before the fix)."""
+    """Control: without a stored time a pending update counts from now (first start after updating HAGHS)."""
     hass.states.async_set("update.esphome", "on")
     hass_storage.pop(KEY, None)
     _restart(hass)
@@ -217,3 +217,37 @@ async def test_vanished_update_entities_leave_the_store(hass, hass_storage, free
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert set(hass_storage[KEY]["data"]) == {"update.esphome"}
+
+
+async def test_an_update_entity_that_appears_after_the_first_refresh_keeps_its_window(
+    hass, hass_storage, freezer
+) -> None:
+    """Right after a restart the update entity is registered but has no state yet; its stored time must survive."""
+    from homeassistant.helpers import entity_registry as er
+
+    eight_days = (dt_util.utcnow() - timedelta(days=8)).isoformat()
+    hass_storage[KEY] = _stored({"update.esphome": eight_days, "update.router": eight_days})
+    er.async_get(hass).async_get_or_create(
+        "update", "esphome", "uid_esphome", suggested_object_id="esphome"
+    )
+    hass.states.async_set("update.router", "unavailable")  # integration still starting
+    assert await _update_count(hass) == 0  # nothing pending yet
+    freezer.tick(timedelta(seconds=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert set(hass_storage.get(KEY, _stored({}))["data"]) <= {"update.esphome", "update.router"}
+    hass.states.async_set("update.esphome", "on")
+    hass.states.async_set("update.router", "on")
+    coordinator = make_coordinator(hass)
+    assert coordinator._calc_updates()[1] == 2  # both keep their eight days
+
+
+async def test_an_installed_update_is_pruned_but_a_vanished_unregistered_one_too(
+    hass, hass_storage
+) -> None:
+    seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    hass_storage[KEY] = _stored({"update.done": seen, "update.gone": seen})
+    hass.states.async_set("update.done", "off")
+    coordinator = make_coordinator(hass)
+    await coordinator.async_refresh()
+    assert set(coordinator._update_first_seen) == set()
