@@ -251,3 +251,56 @@ async def test_an_installed_update_is_pruned_but_a_vanished_unregistered_one_too
     coordinator = make_coordinator(hass)
     await coordinator.async_refresh()
     assert set(coordinator._update_first_seen) == set()
+
+
+async def test_first_start_after_updating_haghs_sets_now_for_every_pending_update(
+    hass, hass_storage
+) -> None:
+    """r2 point 3: no store yet, several updates HA has offered for a long time: all start now, no penalty."""
+    hass_storage.pop(KEY, None)
+    for name in ("esphome", "router", "core"):
+        hass.states.async_set(f"update.{name}", "on", {"latest_version": "1.0"})
+    coordinator = make_coordinator(hass)
+    await coordinator.async_refresh()
+    assert coordinator.data["rec_updates_pending"] is False
+    seen = hass.data[DOMAIN]["_update_first_seen"]
+    assert set(seen) == {"update.esphome", "update.router", "update.core"}
+    assert all(dt_util.utcnow() - value < timedelta(minutes=1) for value in seen.values())
+
+
+async def test_an_entity_removed_from_the_registry_leaves_the_store(hass, hass_storage) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "update", "esphome", "uid_removed", suggested_object_id="removed"
+    )
+    hass_storage[KEY] = _stored(
+        {entry.entity_id: (dt_util.utcnow() - timedelta(days=3)).isoformat()}
+    )
+    coordinator = make_coordinator(hass)
+    await coordinator.async_refresh()
+    assert (
+        entry.entity_id in coordinator._update_first_seen
+    )  # registered, no state: kept (not ready)
+    registry.async_remove(entry.entity_id)
+    coordinator._calc_updates()
+    assert entry.entity_id not in coordinator._update_first_seen
+
+
+async def test_a_disabled_update_entity_leaves_the_store(hass, hass_storage) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    entry = er.async_get(hass).async_get_or_create(
+        "update",
+        "esphome",
+        "uid_disabled",
+        suggested_object_id="disabled",
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    hass_storage[KEY] = _stored(
+        {entry.entity_id: (dt_util.utcnow() - timedelta(days=3)).isoformat()}
+    )
+    coordinator = make_coordinator(hass)
+    await coordinator.async_refresh()
+    assert entry.entity_id not in coordinator._update_first_seen

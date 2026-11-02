@@ -1738,8 +1738,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             state = self.hass.states.get(stale_id)
             entity_entry = ent_reg.async_get(stale_id)
-            if state is None and entity_entry is not None:
-                continue
+            if state is None and entity_entry is not None and entity_entry.disabled_by is None:
+                continue  # registered, enabled, no state yet: not ready (a disabled entity is ignored)
             if state is not None and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
             del self._update_first_seen[stale_id]
