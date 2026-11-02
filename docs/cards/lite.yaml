@@ -1,0 +1,81 @@
+# HAGHS Lite v1.4 (Quick Check)
+# Back to the README: https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/README.md
+# Installation, entity ID and Lite vs. Pro: https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards.md
+type: vertical-stack
+cards:
+  - type: gauge
+    entity: sensor.system_ha_global_health_score
+    name: HAGHS
+    unit: " "
+    needle: true
+    severity:
+      green: 90
+      yellow: 75
+      red: 0
+  - type: markdown
+    content: >
+      {% set e = 'sensor.system_ha_global_health_score' %} {% set _upd =
+      '/config/updates' %} {% set _ent = '/config/entities' %} {% set _rep =
+      '/config/repairs' %} {% set _int = '/config/integrations' %} {% set _dev
+      = '/config/devices/dashboard' %} {% set _bak = '/config/backup' %}
+
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
+      is offline ({{ states(e) }}). {% else %} {% set hw =
+      state_attr(e, 'hardware_score') | int(0) %} {% set app = state_attr(e,
+      'application_score') | int(0) %} {% set rec = state_attr(e,
+      'recommendations') | default('', true) %} {% set updates = state_attr(e,
+      'pending_updates') | default([], true) | list %} {% set zombies =
+      state_attr(e, 'zombie_count') | int(0) %} {% set per_reason =
+      state_attr(e, 'zombie_count_per_reason') | default({}, true) %} {% set dead =
+      state_attr(e, 'dead_device_count') | int(0) %} {% set empty = state_attr(e,
+      'empty_device_count') | int(0) %} {% set repairs = state_attr(e,
+      'repair_count') | int(0) %} {% set integrations = state_attr(e,
+      'integration_unhealthy_count') | int(0) %} {% set psi = state_attr(e,
+      'psi_available') | default(false, true) %} {% set cpu_ram = state_attr(e,
+      'cpu_ram_source') %} {% set fallbacks = state_attr(e,
+      'pillar_fallbacks') | default([], true) %} {% set cycle_failed =
+      state_attr(e, 'update_cycle_failed') | default(false, true) %} {% set
+      backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
+      {% set reason_labels = {'config_entry_missing': 'config entry missing',
+      'integration_not_loaded': 'integration not loaded', 'not_provided': 'not
+      provided', 'unavailable': 'unavailable'} %}
+
+      Hardware **{{ hw }}**/100 | Application **{{ app }}**/100
+
+      {% if cpu_ram == 'none' %} 📊 CPU/RAM not measured (no PSI, no sensor selected); the hardware score uses the other components. {% elif cpu_ram == 'partial' %} 📊 CPU/RAM partly measured (no PSI, one sensor missing); the hardware score uses the measured components. {% endif %}
+
+      {% if fallbacks %} ⚠️ Calculation incomplete: {{ fallbacks | map('title') | join(', ') }}; neutral fallback values, not measurements. {% endif %}
+
+      {% if cycle_failed %} ⚠️ The last update cycle failed; previous results are shown. {% endif %}
+
+      {% if updates | length > 0 %} 📦 {{ updates | length }} update(s) pending, [Open Updates]({{ _upd }}) {% endif %}
+
+      {% if zombies > 0 %} 🧟 {{ zombies }} zombie(s){% if per_reason %} ({% for reason, count in per_reason.items() %}{{ reason_labels.get(reason, reason) }}: {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}, [Check Entities]({{ _ent }}) {% endif %}
+
+      {% if dead > 0 %} 💀 {{ dead }} dead device(s) (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
+
+      {% if empty > 0 %} 🗂️ {{ empty }} empty device(s) without any entity (informational, no score impact), [Open Devices]({{ _dev }}) {% endif %}
+
+      {% if repairs > 0 %} 🛠️ {{ repairs }} repair(s) open, [Open Repairs]({{ _rep }}) {% endif %}
+
+      {% if integrations > 0 %} 🧩 {{ integrations }} integration entry(ies) in error, [Open Integrations]({{ _int }}) {% endif %}
+
+      {% if backup_stale %} 🚨 Backup is stale, [Open Backups]({{ _bak }}) {% endif %}
+
+      {# Hide recommendation lines already shown as a status line with a link above. #}
+      {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+
+      {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
+      {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
+      {% endif %}
+
+      {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
+      state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
+      keep in [none, 'unknown'] or not filter %}
+      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
+      {% if keep in [none, 'unknown'] %} &nbsp;&nbsp; • Set `purge_keep_days` in your recorder configuration (+5 pts)<br>{% endif %}
+      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      {% endif %}
+
+      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + I/O + Disk), hardware score uses 4 components{% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}
+      {% endif %}

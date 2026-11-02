@@ -1,0 +1,18 @@
+{
+  "_comment": "The README '## ' sections in order. A section with 'full' is a short version: it starts with the '> **Short version.**' notice linking to that docs page and ends with the same link ('All ... →'). Every page under docs/ must be the full page of at least one section. See CONTRIBUTING.md, Documentation.",
+  "sections": [
+    {"heading": "Abstract"},
+    {"heading": "Mission"},
+    {"heading": "Table of Contents"},
+    {"heading": "The HAGHS Standard"},
+    {"heading": "Pillar 1: Hardware Performance (40%)"},
+    {"heading": "Pillar 2: Application Hygiene (60%)"},
+    {"heading": "Configuration", "full": "docs/configuration.md"},
+    {"heading": "Label Configuration (Smart Whitelisting)", "full": "docs/configuration.md#label-configuration-smart-whitelisting"},
+    {"heading": "Sensor Attributes", "full": "docs/attributes.md"},
+    {"heading": "Roadmap"},
+    {"heading": "UI Integration", "full": "docs/cards.md"},
+    {"heading": "FAQ"},
+    {"heading": "Changelog", "full": "docs/changelog.md"}
+  ]
+}

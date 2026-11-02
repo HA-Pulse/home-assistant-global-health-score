@@ -1,4 +1,4 @@
-"""#123 follow-up: both README cards (v1.4) show "CPU/RAM not measured", and only when it is true.
+"""#123 follow-up: both dashboard cards (v1.4) show "CPU/RAM not measured", and only when it is true.
 
 `none`/`partial` come with the 📊 recommendation line, which neither card filters. `null` means the whole hardware
 pillar has no measurement (first failed update, hardware fallback); the cards then show their calculation status
