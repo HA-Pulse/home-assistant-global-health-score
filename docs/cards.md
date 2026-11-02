@@ -2,7 +2,7 @@
 
 # Dashboard cards
 
-Installation, entity ID and the Lite vs. Pro comparison. The card configurations are [docs/cards/lite.yaml](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/lite.yaml) and [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/pro.yaml): open the file, copy its content into a manual card (Edit dashboard → Add card → Manual).
+Installation, entity ID and the Lite vs. Pro comparison. The card configurations are [docs/cards/lite.yaml](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/lite.yaml) and [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/pro.yaml): open the file, copy its content into a manual card (Edit dashboard → Add card → Manual; see the [dashboard docs](https://www.home-assistant.io/dashboards/cards/)).
 
 ## UI Integration
 
@@ -12,7 +12,7 @@ Below are two ready-to-use card configurations:
 
 Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it in two places: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
 
-On older Home Assistant versions (tested: 2024.10) a link to a single entity opens the Entities page, but not that entity's more-info dialog; on current versions (tested: 2026.9 to 2026.11) it opens the dialog directly. All other card links work the same on both.
+On older Home Assistant versions (tested: 2024.10) a link to a single entity opens the Entities page, but not that entity's more-info dialog; on the newer versions checked in a browser before each release (2026.9 to 2026.11) it opens the dialog directly. All other card links behaved the same on all checked versions.
 
 ### HAGHS Lite v1.4 (Quick Check)
 
@@ -42,7 +42,7 @@ Configuration: [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-
 | Pending updates (by name) | Count + link | Full list + deep-link |
 | Stale backup | Status line + link | Status line + link |
 | Zombie details | Count by reason + link | Grouped by domain, reason and "for" per entity, breakdown by reason and integration |
-| Stale reporting (watched and passive) | Advisor line | Expandable lists with a link per entity |
+| Stale reporting (watched and passive) | Advisor line (watched only) | Watched list with a link per entity, passive list expandable |
 | Repairs & unhealthy integrations | Count + link | Count + list + deep-link per integration |
 | Dead devices (informational) | Count + link | Expandable list, link per device |
 | Empty devices (informational) | Count + link | Expandable list, link per device |

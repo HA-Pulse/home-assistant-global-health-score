@@ -10,13 +10,13 @@ HAGHS is installed via **HACS** and configured via the **UI**
 
 ### 1. Prerequisites
 
-Install the built-in **System Monitor** integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not available in HACS.
+Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not available in HACS.
 
-After adding it, navigate to its entity list and **manually enable** the following two entities (they are disabled by default):
+After adding it, navigate to its entity list and **manually enable** the processor and memory usage entities (they are disabled by default), for example:
 * `sensor.system_monitor_processor_use` (Percentage %)
 * `sensor.system_monitor_memory_usage` (Percentage %)
 
-> **Note:** On most Linux-based HA installations (HAOS, Supervised), HAGHS uses PSI data automatically and these sensors are only a safety net. They are optional in the setup flow; without PSI the System Monitor sensors are suggested when HAGHS finds them, but HAGHS never selects them by itself.
+> **Note:** Where the Linux kernel provides PSI (usually HAOS and Supervised), HAGHS uses it automatically and these sensors are only a safety net. They are optional in the setup flow; without PSI the System Monitor sensors are suggested when HAGHS finds them, but HAGHS never selects them by itself.
 > > **Without PSI and without these sensors:** HAGHS still sets up and keeps running. CPU and/or RAM are left out of the hardware score, a recommendation line says so, and a non-blocking **Repair** in *Settings > System > Repairs* lets you pick the sensors (System Monitor's processor and memory sensors are pre-filled when found). Submitting it includes them without restarting Home Assistant.
 
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
@@ -45,7 +45,7 @@ After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Conf
 * **Database size sensor** (for external databases)
 * **Update interval** (10–3600 seconds, default: 60s)
 * **Zombie grace period** (1–240 minutes, default: 5) - how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
-* **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Zigbee / Homematic radios routinely take longer than the regular window to re-poll battery devices, so a longer default avoids false positives. Independent from the regular grace; can be set lower if you do not care about that distinction.
+* **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Independent from the regular grace; can be set lower if you do not care about that distinction.
 
 Changes apply immediately, no restart required.
 
@@ -66,7 +66,7 @@ If you use an **external database** (MariaDB) instead of the built-in SQLite, HA
 
 **1. Create a SQL sensor (no YAML needed):**
 
-Go to **Settings > Devices & Services > Add Integration > search "SQL"** and fill in:
+Go to **Settings > Devices & Services > Add Integration > search "SQL"** and fill in (see the [SQL integration docs](https://www.home-assistant.io/integrations/sql/) for every field):
 
 - **Database URL:** `mysql://USER:PASSWORD@IP_ADDRESS/homeassistant?charset=utf8mb4`
   *(Leave empty if MariaDB is already configured as your Recorder database)*
@@ -103,14 +103,14 @@ Credit: [@cryptomilk](https://github.com/cryptomilk) in [#82](https://github.com
 
 Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and select your new sensor in the **"Database size sensor (optional)"** field.
 
-> **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. If you use an external database and do not provide a sensor, the database score will simply be neutral (no penalty, no monitoring). The sensor must report the value in **MB**, not bytes, not GB.
+> **Note:** If left empty, HAGHS uses the built-in SQLite auto-detection. Without a sensor HAGHS measures `home-assistant_v2.db` in the config folder; only when that file does not exist is the database part neutral. A leftover SQLite file from before the switch to an external database is still measured. The sensor must report the value in **MB**, not bytes, not GB.
 
 </details>
 
 ## Label Configuration (Smart Whitelisting)
 To prevent false positives from sleeping tablets or seasonal devices, you have three ways to exclude entities from HAGHS scoring - pick whichever feels most natural:
 
-1. **Disable the entity** (*Settings > Devices & Services > Entity > Disable entity*). HAGHS now respects `entity_registry.disabled_by` automatically, so disabled entities never count as zombies or contribute to update penalties. No HAGHS configuration needed.
+1. **Disable the entity** (*Settings > Devices & Services > Entity > Disable entity*). HAGHS respects `entity_registry.disabled_by` automatically, so disabled entities never count as zombies or contribute to update penalties. No HAGHS configuration needed.
 2. **Apply an ignore label** (described below) for entities you want to keep enabled but exclude from scoring (e.g. vacation devices, tablets that sleep).
 3. **Use a glob pattern** (see *Pattern-Based Ignore* further down) for entities without a unique ID, which cannot carry a label.
 
@@ -149,8 +149,7 @@ whether the labels currently apply.
         entity_id: input_boolean.vacation_mode
 ```
 
-**With Spook: switch the label on the entities.** Home Assistant itself has no service
-actions for assigning labels. The label actions used below are provided by the
+**With Spook: switch the label on the entities.** The label actions used below are provided by the
 [Spook](https://spook.boo) custom integration. Without Spook, assign or remove the
 labels in the UI. List a label like `vacation` in the HAGHS *Ignore labels* field, then
 assign/remove it from automations:
@@ -173,13 +172,13 @@ assign/remove it from automations:
 ```
 
 For device labels, Spook provides `homeassistant.add_label_to_device` and
-`homeassistant.remove_label_from_device` with `label_id` and `device_id`.
+`homeassistant.remove_label_from_device` with `label_id` and `device_id` (see the [Spook documentation](https://spook.boo)).
 
 HAGHS picks up the change automatically on its next refresh; no reload needed.
 
 ### Pattern-Based Ignore (for entities without a unique ID)
 
-Some integrations (e.g. `monitor_docker`, the legacy `torque` sensor) create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. They are reported as *unregistered* (informational only, no score impact, see [Sensor Attributes](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/attributes.md)) and never counted as zombies.
+Some integrations create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. When such an entity is `unavailable` or `unknown` past the grace period in a monitored domain, it is reported as *unregistered* (informational only, no score impact, see [Sensor Attributes](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/attributes.md)) and never counted as zombies.
 
 Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from zombie detection, the unregistered listing and update penalties.
 
@@ -188,7 +187,7 @@ Examples:
 - `sensor.torque_*` - every Torque OBD sensor
 - `binary_sensor.test_?` - `binary_sensor.test_1` through `binary_sensor.test_9`
 
-Wildcards `*` and `?` are supported (standard glob syntax). Invalid patterns are logged as a `WARNING` and skipped, so a single typo never disables the rest of the list.
+Wildcards `*` and `?` are supported (standard glob syntax). A malformed pattern does not raise an error; it simply matches literally (e.g. an unclosed `[`), so a single typo never disables the rest of the list.
 
 
 ### Stale reporting
@@ -199,6 +198,6 @@ The passive list does not affect your score. To opt in to scoring, select Stale 
 
 The sensor exposes stale_candidate_count and stale_candidates for passive findings in sensor and binary_sensor, stale_watch_count and stale_watch_entities for opted-in findings in any domain, stale_penalty for the raw application deduction, stale_threshold_hours for the active threshold, and rec_stale for the watched-entity recommendation. Both lists are sorted and limited to 100 entity IDs; their counts remain complete. Watched entities outside sensor and binary_sensor appear only in the watched list and count, not in the passive list and count. The two entity-ID lists remain visible as current attributes but are excluded from recorder history; the counts remain recorded.
 
-Unknown, unavailable, disabled, ignored and HAGHS-owned entities are excluded from this check. Entities without registry entries may appear in the passive list only if they belong to sensor or binary_sensor, but cannot opt in through entity labels. Old reports are a reason to investigate, not proof of a broken device: quiet integrations and devices can legitimately stop reporting. Restarts can reset the report timestamp, so HAGHS does not reconstruct downtime across restarts.
+Unknown, unavailable, disabled, ignored and HAGHS-owned entities are excluded from this check. Entities without registry entries may appear in the passive list only if they belong to sensor or binary_sensor, but cannot opt in through entity labels. Old reports are a reason to investigate, not proof of a broken device: quiet integrations and devices can legitimately stop reporting.
 
 Data source: Home Assistant state.last_reported. No recorder queries, external requests or device polling are added.
