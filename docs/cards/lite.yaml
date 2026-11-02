@@ -72,9 +72,11 @@ cards:
       {% set keep = state_attr(e, 'recorder_keep_days') %} {% set filter =
       state_attr(e, 'recorder_filter_active') | default(false, true) %} {% if
       keep in [none, 'unknown'] or keep | int(0) > 10 or not filter %}
-      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
-      {% if keep in [none, 'unknown'] or keep | int(0) > 10 %} &nbsp;&nbsp; • Keep `purge_keep_days` at 10 days or less in your recorder configuration (+5 pts)<br>{% endif %}
-      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)):
+
+      {% if keep in [none, 'unknown'] or keep | int(0) > 10 %}- Keep `purge_keep_days` at 10 days or less in your recorder configuration (+5 pts){% endif %}
+
+      {% if not filter %}- Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
       **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + Disk, I/O when the kernel provides it){% else %}⚙️ Classic sensors (CPU + RAM + Disk), hardware score uses 3 components{% endif %}

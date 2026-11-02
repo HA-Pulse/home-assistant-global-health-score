@@ -57,12 +57,12 @@ cards:
       {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor
       is offline ({{ states(e) }}). {% else %}
 
-      {% if r_count == 0 %} ✅ No open repairs {% else %} 🛠️ {{ r_count }} open repair(s), {% if r_count > 0 %}[→ Open Repairs]({{ _rep }}){% endif %}{% for r in r_list %}<br>&nbsp;&nbsp; • `{{ r }}`{% endfor %} {% endif %}
+      {% if r_count == 0 %} ✅ No open repairs {% else %} 🛠️ {{ r_count }} open repair(s), {% if r_count > 0 %}[→ Open Repairs]({{ _rep }}){% endif %}{% if r_list %}<ul>{% for r in r_list %}<li><code>{{ r }}</code></li>{% endfor %}</ul>{% endif %} {% endif %}
 
       <hr>
 
 
-      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration entry(ies) failed to set up, [→ Open Integrations]({{ _int }}){% for i in i_list %}<br>&nbsp;&nbsp; • <a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a>{% endfor %}{% if i_count > i_list | length and i_list | length > 0 %}<br>*(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)*{% endif %} {% endif %} {% endif %}
+      {% if i_count == 0 %} ✅ All integrations loaded normally {% else %} 🧩 {{ i_count }} integration entry(ies) failed to set up, [→ Open Integrations]({{ _int }}){% if i_list %}<ul>{% for i in i_list %}<li><a href="{{ _int }}/integration/{{ i.split(': ')[0] }}">{{ i }}</a></li>{% endfor %}</ul>{% endif %}{% if i_count > i_list | length and i_list | length > 0 %}<i>(showing first {{ i_list | length }}, {{ i_count - i_list | length }} more hidden)</i>{% endif %} {% endif %} {% endif %}
   - type: markdown
     title: 📦 Updates & Maintenance
     content: >
@@ -80,9 +80,9 @@ cards:
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
       {% set _upd = '/config/updates' %} {% set _bak = '/config/backup' %}
 
-      {% if updates | length > 0 %}{{ updates | length }} update(s) pending:<br>
-      {% for u in updates %}&nbsp;&nbsp; • {{ u }}<br>{% endfor %}
-      [→ Open Updates]({{ _upd }})
+      {% if updates | length > 0 %}{{ updates | length }} update(s) pending:
+      <ul>{% for u in updates %}<li>{{ u }}</li>{% endfor %}</ul>
+      <a href="{{ _upd }}">→ Open Updates</a>
       {% else %} ✅ All updates installed {% endif %}
 
       {% if backup_stale %}<br>🚨 Backup is stale, [→ Open Backups]({{ _bak }}){% endif %}
@@ -96,9 +96,11 @@ cards:
       Config-Audit bonus: {{ bonus }}/10
 
       {% if keep in [none, 'unknown'] or keep | int(0) > 10 or not filter %}
-      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
-      {% if keep in [none, 'unknown'] or keep | int(0) > 10 %} &nbsp;&nbsp; • Keep `purge_keep_days` at 10 days or less in your recorder configuration (+5 pts)<br>{% endif %}
-      {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
+      💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)):
+
+      {% if keep in [none, 'unknown'] or keep | int(0) > 10 %}- Keep `purge_keep_days` at 10 days or less in your recorder configuration (+5 pts){% endif %}
+
+      {% if not filter %}- Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
       {% endif %}
 
 
@@ -120,15 +122,13 @@ cards:
       is offline ({{ states(e) }}). {% elif state_attr(e, 'stale_watch_count') is none %} ℹ️ Stale
       reporting needs HAGHS v2.4.0 or newer. {% else %}
 
-      {% if w_count == 0 %} ✅ No watched entity is overdue (threshold {{ hours }} h). {% else %} ⏱️ {{ w_count }} watched entity(ies) not reporting for more than {{ hours }} h (score impact):{% for x in w_list %}<br>&nbsp;&nbsp; • <a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> (<code>{{ x }}</code>){% endfor %}{% if w_count > w_list | length %}<br>*(showing first {{ w_list | length }}, {{ w_count - w_list | length }} more hidden)*{% endif %} {% endif %}
+      {% if w_count == 0 %} ✅ No watched entity is overdue (threshold {{ hours }} h). {% else %} ⏱️ {{ w_count }} watched entity(ies) not reporting for more than {{ hours }} h (score impact):<ul>{% for x in w_list %}<li><a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> <code>{{ x }}</code></li>{% endfor %}</ul>{% if w_count > w_list | length %}<i>(showing first {{ w_list | length }}, {{ w_count - w_list | length }} more hidden)</i>{% endif %} {% endif %}
 
       {% if c_count > 0 %}
       <details>
       <summary>ℹ️ Not reporting, not watched (informational, no score impact): {{ c_count }}</summary>
-      {% for x in c_list %}
-      &nbsp;&nbsp; • <a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> (<code>{{ x }}</code>)
-      {% endfor %}
-      {% if c_count > c_list | length %}&nbsp;&nbsp; *(showing first {{ c_list | length }}, {{ c_count - c_list | length }} more hidden)*{% endif %}
+      <ul>{% for x in c_list %}<li><a href="{{ _ent }}?more-info-entity-id={{ x }}">{{ state_attr(x, 'friendly_name') or x }}</a> <code>{{ x }}</code></li>{% endfor %}</ul>
+      {% if c_count > c_list | length %}<i>(showing first {{ c_list | length }}, {{ c_count - c_list | length }} more hidden)</i>{% endif %}
       </details>
       {% endif %}
       {% endif %}
@@ -175,43 +175,31 @@ cards:
       {% for domain in grouped %}
       <details>
       <summary>{{ domain[0] | title }}: {{ domain[1] | count }}</summary>
-      {% for item in domain[1] %}
-      {% set _info = _ent ~ '?more-info-entity-id=' ~ item.entity_id %}
-      {% set reason = reasons.get(item.entity_id) %}{% set seen = since.get(item.entity_id) %}
-      &nbsp;&nbsp; • {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }} · <a href="{{ _info }}">{{ item.name }}</a> (<code>{{ item.entity_id }}</code>): {{ item.state }}{% if reason %} · {{ reason_labels.get(reason, reason) }}{% endif %}{% if seen and as_datetime(seen) %} · for {{ relative_time(as_datetime(seen)) }}{% endif %}
-      {% endfor %}
+      <ul>{% for item in domain[1] %}{% set _info = _ent ~ '?more-info-entity-id=' ~ item.entity_id %}{% set reason = reasons.get(item.entity_id) %}{% set seen = since.get(item.entity_id) %}<li><a href="{{ _info }}">{{ item.name }}</a> · {{ device_attr(item.entity_id, 'name') | default('unknown device', true) }}<br><code>{{ item.entity_id }}</code> · {{ item.state }}{% if reason %} · {{ reason_labels.get(reason, reason) }}{% endif %}{% if seen and as_datetime(seen) %} · for {{ relative_time(as_datetime(seen)) }}{% endif %}</li>{% endfor %}</ul>
       </details>
       {% endfor %} {% endif %}
 
       {% if u_count > 0 %}
       <details>
       <summary>ℹ️ Unregistered (informational only, no score impact): {{ u_count }}</summary>
-      {% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}
-      &nbsp;&nbsp; • <a href="/config/entities?more-info-entity-id={{ entry }}"><code>{{ entry }}</code></a>
-      {% endfor %}
+      <ul>{% for entry in (u_raw if u_raw is not string else u_raw.split(',') | map('trim') | list) %}<li><a href="/config/entities?more-info-entity-id={{ entry }}"><code>{{ entry }}</code></a></li>{% endfor %}</ul>
       </details>
       {% endif %}
 
       {% if d_count > 0 %}
       <details>
       <summary>💀 Dead devices (informational, no score impact): {{ d_count }}</summary>
-      {% for d in d_raw %}
-      {% set device_id = d_ids[loop.index0] if loop.index0 < d_ids | length else none %}
-      &nbsp;&nbsp; • {% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}
-      {% endfor %}
-      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
+      <ul>{% for d in d_raw %}{% set device_id = d_ids[loop.index0] if loop.index0 < d_ids | length else none %}<li>{% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}</li>{% endfor %}</ul>
+      <a href="{{ _dev }}">→ Open Devices</a>
       </details>
       {% endif %}
 
       {% if e_count > 0 %}
       <details>
       <summary>🗂️ Empty devices without any entity (informational, no score impact): {{ e_count }}</summary>
-      {% for d in e_raw %}
-      {% set device_id = e_ids[loop.index0] if loop.index0 < e_ids | length else none %}
-      &nbsp;&nbsp; • {% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}
-      {% endfor %}
-      {% if e_count > e_raw | length %}&nbsp;&nbsp; *(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)*{% endif %}
-      &nbsp;&nbsp; • <a href="{{ _dev }}">→ Open Devices</a>
+      <ul>{% for d in e_raw %}{% set device_id = e_ids[loop.index0] if loop.index0 < e_ids | length else none %}<li>{% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}</li>{% endfor %}</ul>
+      {% if e_count > e_raw | length %}<i>(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)</i>{% endif %}
+      <a href="{{ _dev }}">→ Open Devices</a>
       </details>
       {% endif %}
 
