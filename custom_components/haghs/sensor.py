@@ -100,6 +100,7 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
             "empty_device_ids": data["empty_device_ids"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
+            "cpu_ram_source": data["cpu_ram_source"],
             "recorder_keep_days": data["recorder_keep_days"],
             "recorder_filter_active": data["recorder_filter_active"],
             "conditional_ignore_active": data["conditional_ignore_active"],

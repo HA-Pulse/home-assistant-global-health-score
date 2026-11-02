@@ -35,6 +35,33 @@ closed.
 - User-facing text belongs in `strings.json` + `translations/*.json`, never
   hardcoded in Python.
 
+## Documentation
+
+HACS shows the README in Home Assistant, so it stays short. These rules apply
+to every pull request (feature, fix or docs) and are checked by
+`tests/test_docs_layout.py`:
+
+- **Length budget:** `README.md` has at most 400 lines.
+- **Where things go:** a new feature gets at most one to three sentences plus a
+  link in the README. Details, tables, YAML examples and options go into the
+  matching page under `docs/`; extend an existing page, add a new one only when
+  none fits.
+- **Attributes:** every attribute is documented in `docs/attributes.md`. The
+  README table lists only the most used ones; adding one there means another
+  one leaves.
+- **Short sections:** a README section that summarizes a docs page starts with
+  a `> **Short version.** …` notice that links the page and ends with the same
+  link (`[All … →](…)`). The section and its page are registered in
+  `tests/data/readme_sections.json`.
+- **Every docs page** starts with a link back to the README and is listed in
+  the README's "Detailed documentation" block.
+- **Links:** full GitHub URLs
+  (`https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/…`),
+  never relative links in the README. The test checks that every repository
+  link names a file (and heading) of the checkout.
+- The dashboard cards live in `docs/cards/lite.yaml` and `docs/cards/pro.yaml`;
+  their first line carries the card version.
+
 ## Changelog
 
 - Every change that lands on `dev` must include a matching entry in

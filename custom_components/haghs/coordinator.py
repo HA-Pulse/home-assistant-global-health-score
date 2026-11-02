@@ -33,6 +33,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -53,8 +54,15 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     CONF_ZOMBIE_GRACE_MINUTES,
     CONFIG_AUDIT_MAX_BONUS,
+    CPU_RAM_SOURCE_NONE,
+    CPU_RAM_SOURCE_PARTIAL,
+    CPU_RAM_SOURCE_PSI,
+    CPU_RAM_SOURCE_SENSORS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
+    DATA_UPDATE_FIRST_SEEN_LOADED,
+    DATA_UPDATE_FIRST_SEEN_STORE,
+    DATA_UPDATE_SEEN_VERSION,
     DEAD_DEVICE_LIST_CAP,
     DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STALE_THRESHOLD_HOURS,
@@ -66,6 +74,7 @@ from .const import (
     INTEGRATION_UNHEALTHY_LIST_CAP,
     REC_FLAG_KEYS,
     REC_TEMPLATES,
+    RECORDER_GOOD_KEEP_DAYS,
     REPAIR_LIST_CAP,
     REPAIR_PENALTY_CAP,
     REPAIR_PENALTY_PER_ISSUE,
@@ -73,9 +82,12 @@ from .const import (
     STALE_PENALTY_CAP,
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
+    UPDATE_FIRST_SEEN_STORE_KEY,
+    UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
     ZOMBIE_REASONS,
+    IssueIds,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,6 +99,7 @@ _GB = 1024**3
 
 # Timeout for each scoring sub-calculation (seconds).
 PILLAR_TIMEOUT: float = 10.0
+FIRST_SEEN_SAVE_DELAY = 10  # seconds; one write for a burst of changes
 
 # Default HA SQLite database filename
 HA_DB_NAME = "home-assistant_v2.db"
@@ -170,6 +183,9 @@ class _HardwareResult:
     psi_available: bool = False
     cpu_used_psi: bool = False
     ram_used_psi: bool = False
+    # #123: where CPU and RAM come from; "none"/"partial" means a value was not measured and left out.
+    # None while the pillar has no measurement (neutral first result, hardware fallback).
+    cpu_ram_source: str | None = None
 
 
 @dataclass
@@ -320,6 +336,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.cpu_id: str | None = opts.get(CONF_CPU_SENSOR)
         self.ram_id: str | None = opts.get(CONF_RAM_SENSOR)
+        self._entry_id: str = entry.entry_id
+        # Last state of the non-blocking "CPU/RAM not measured" repair (None: not set in this run yet).
+        self._cpu_ram_issue: bool | None = None
         self.db_sensor_id: str | None = opts.get(CONF_DB_SENSOR) or None
         self.stale_threshold_hours: int = opts.get(
             CONF_STALE_THRESHOLD_HOURS, DEFAULT_STALE_THRESHOLD_HOURS
@@ -370,12 +389,19 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
 
-        # First-seen timestamps for pending update entities (#26). Stored in
-        # hass.data so they survive integration reloads. Reset on HA restart,
-        # which is desired: a fresh boot effectively gives all current updates
-        # a new grace window.
+        # First-seen timestamps for pending update entities (#26). Shared in
+        # hass.data across reloads and config entries, and kept in a Store so
+        # the grace window also survives Home Assistant restarts (loaded once
+        # per run before the first update, saved when an entry changes).
         self._update_first_seen: dict[str, datetime] = hass_data.setdefault(
             DATA_UPDATE_FIRST_SEEN, {}
+        )
+        self._update_seen_version: dict[str, str | None] = hass_data.setdefault(
+            DATA_UPDATE_SEEN_VERSION, {}
+        )
+        self._first_seen_store: Store[dict[str, dict[str, str | None]]] = hass_data.setdefault(
+            DATA_UPDATE_FIRST_SEEN_STORE,
+            Store(hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_STORE_KEY),
         )
 
         # Track unregistered entities (no entity-registry entry) so we warn
@@ -546,6 +572,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         (100 / no penalty) and a warning is logged.
         """
         self._pillar_fallbacks: set[str] = set()
+        await self._async_load_update_first_seen()
         # Recorder info — read before app pillar so config audit can use it
         self.recorder_info = self._read_recorder_info()
 
@@ -554,6 +581,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._async_calc_hardware(),
             _HardwareResult(),
         )
+        self._sync_cpu_ram_issue(hw)
 
         app = await self._safe_calc(
             "application",
@@ -599,6 +627,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
+            "cpu_ram_source": hw.cpu_ram_source,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "conditional_ignore_active": self._conditional_active,
@@ -685,6 +714,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_ids": app.empty_device_ids,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
+            "cpu_ram_source": hw.cpu_ram_source,
             "recorder_keep_days": self.recorder_info.keep_days,
             "recorder_filter_active": self.recorder_info.entity_filter_active,
             "conditional_ignore_active": False,
@@ -784,11 +814,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         psi = await self._async_read_psi()
         use_psi = psi.available
 
+        # A value without PSI and without a selected sensor is not measured: it is left out of the pillar,
+        # never counted as 0 % load (#123).
+        cpu_measured = psi.cpu is not None or bool(self.cpu_id)
+        ram_measured = psi.memory is not None or bool(self.ram_id)
+
         # -- CPU --
+        cpu, p_cpu = 0.0, 0
         if psi.cpu is not None:
             cpu = psi.cpu
             p_cpu = self._psi_cpu_penalty(cpu)
-        else:
+        elif cpu_measured:
             cpu = self._get_float(self.cpu_id)
             if cpu > 100:
                 _LOGGER.warning(
@@ -802,10 +838,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         score_cpu = 100 - p_cpu
 
         # -- RAM --
+        ram, p_ram = 0.0, 0
         if psi.memory is not None:
             ram = psi.memory
             p_ram = self._psi_memory_penalty(ram)
-        else:
+        elif ram_measured:
             ram = self._get_float(self.ram_id)
             if ram > 100:
                 _LOGGER.warning(
@@ -860,19 +897,22 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             p_power = 20
 
         # -- Final hardware score --
-        # When PSI I/O is available: 4 components (CPU, RAM, I/O, Disk)
-        # When I/O is not available: 3 components (CPU, RAM, Disk)
+        # The average of the measured components: CPU and RAM when measured, I/O when PSI provides it, Disk
+        # always. With everything measured that is (CPU + RAM + I/O + Disk) / 4, without I/O / 3.
         # Power penalty is applied as a flat deduction (not averaged)
-        if psi.io is not None:
-            hardware_final = max(
-                0.0,
-                min(100.0, (score_cpu + score_ram + score_io + score_disk) / 4 - p_power),
-            )
+        components = [score_cpu] if cpu_measured else []
+        components += [score_ram] if ram_measured else []
+        components += [score_io] if psi.io is not None else []
+        components.append(score_disk)
+        hardware_final = max(0.0, min(100.0, sum(components) / len(components) - p_power))
+        if psi.cpu is not None and psi.memory is not None:
+            cpu_ram_source = CPU_RAM_SOURCE_PSI
+        elif cpu_measured and ram_measured:
+            cpu_ram_source = CPU_RAM_SOURCE_SENSORS
+        elif cpu_measured or ram_measured:
+            cpu_ram_source = CPU_RAM_SOURCE_PARTIAL
         else:
-            hardware_final = max(
-                0.0,
-                min(100.0, (score_cpu + score_ram + score_disk) / 3 - p_power),
-            )
+            cpu_ram_source = CPU_RAM_SOURCE_NONE
 
         if use_psi:
             _LOGGER.debug(
@@ -899,6 +939,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             psi_available=use_psi,
             cpu_used_psi=psi.cpu is not None,
             ram_used_psi=psi.memory is not None,
+            cpu_ram_source=cpu_ram_source,
         )
 
     # -- CPU penalty tiers -------------------------------------------------
@@ -1586,6 +1627,71 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             return 0.0
 
+    async def _async_load_update_first_seen(self) -> None:
+        """Merge the stored first-seen times once per Home Assistant run.
+
+        Each entry is {"since": ISO UTC, "version": offered latest_version}.
+        Entries already known in this run win. Invalid data (not a mapping,
+        not an update entity id, unparsable or future times, a version that
+        is not a string or null) is skipped entry by entry; those updates
+        start their window now. Without a store (first start after updating
+        HAGHS) every pending update starts now.
+        """
+        # One shared load per run: every coordinator (several config entries)
+        # awaits the same task before its first update calculation.
+        hass_data = self.hass.data[DOMAIN]
+        task = hass_data.get(DATA_UPDATE_FIRST_SEEN_LOADED)
+        if task is None:
+            task = hass_data[DATA_UPDATE_FIRST_SEEN_LOADED] = self.hass.async_create_task(
+                self._async_merge_update_first_seen(), "haghs update first-seen load"
+            )
+        await asyncio.shield(task)
+
+    async def _async_merge_update_first_seen(self) -> None:
+        """Read the store once and merge it into the shared first-seen dicts."""
+        try:
+            stored = await self._first_seen_store.async_load()
+        except Exception:
+            _LOGGER.debug(
+                "HAGHS: Stored update first-seen times unreadable; starting now", exc_info=True
+            )
+            return
+        if stored is None:
+            return
+        now = dt_util.utcnow()
+        skipped = 0
+        for entity_id, value in stored.items() if isinstance(stored, dict) else ():
+            since = value.get("since") if isinstance(value, dict) else None
+            version = value.get("version") if isinstance(value, dict) else None
+            seen = dt_util.parse_datetime(since) if isinstance(since, str) else None
+            if (
+                not isinstance(entity_id, str)
+                or not entity_id.startswith("update.")
+                or seen is None
+                or seen.tzinfo is None
+                or seen > now
+                or not (version is None or isinstance(version, str))
+            ):
+                skipped += 1
+                continue
+            if entity_id not in self._update_first_seen:
+                self._update_first_seen[entity_id] = seen
+                self._update_seen_version[entity_id] = version
+        if skipped or not isinstance(stored, dict):
+            _LOGGER.debug(
+                "HAGHS: Skipped invalid stored update first-seen data (%s entries)", skipped
+            )
+
+    def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
+        """The first-seen times as stored (ISO 8601, UTC) with their offered version."""
+        return {
+            entity_id: {
+                "since": seen.isoformat(),
+                "version": self._update_seen_version.get(entity_id),
+            }
+            for entity_id, seen in self._update_first_seen.items()
+        }
+
     def _calc_updates(self) -> tuple[int, int, int, int, list[str]]:
         """Calculate backup, update and core-lag penalties.
 
@@ -1604,6 +1710,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_count = 0
         pending_updates: list[str] = []
         currently_pending: set[str] = set()
+        changed = False
 
         for state in self.hass.states.async_all():
             if state.domain != "update" or state.state != "on":
@@ -1613,17 +1720,46 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             currently_pending.add(state.entity_id)
-            first_seen = self._update_first_seen.setdefault(state.entity_id, now)
+            version = state.attributes.get("latest_version")
+            version = version if version is None or isinstance(version, str) else str(version)
+            if (
+                state.entity_id not in self._update_first_seen
+                or self._update_seen_version.get(state.entity_id) != version
+            ):
+                # New pending update, or a newer offered version: a new window.
+                self._update_first_seen[state.entity_id] = now
+                self._update_seen_version[state.entity_id] = version
+                changed = True
+            first_seen = self._update_first_seen[state.entity_id]
             name = state.attributes.get("friendly_name", state.entity_id)
             pending_updates.append(name)
             if now - first_seen >= grace:
                 update_count += 1
 
-        # Prune entries for updates that are no longer pending so installed
-        # updates don't keep a stale timestamp around.
+        # Prune entries for updates that are done (installed or skipped: state
+        # "off"), ignored, or gone (no state and no registry entry). An update
+        # entity that is not ready yet (no state but registered, unavailable,
+        # unknown) keeps its stored window: right after a restart many update
+        # entities appear only after HAGHS's first refresh.
         for stale_id in list(self._update_first_seen):
-            if stale_id not in currently_pending:
-                del self._update_first_seen[stale_id]
+            if stale_id in currently_pending:
+                continue
+            state = self.hass.states.get(stale_id)
+            entity_entry = ent_reg.async_get(stale_id)
+            ignored = self._is_ignored(stale_id, entity_entry)  # disabled counts as ignored
+            if not ignored and state is None and entity_entry is not None:
+                continue  # registered, no state yet: not ready
+            if (
+                not ignored
+                and state is not None
+                and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            ):
+                continue
+            del self._update_first_seen[stale_id]
+            self._update_seen_version.pop(stale_id, None)
+            changed = True
+        if changed:
+            self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 
         p_core_lag = 0
         core_entity_id = self._detect_core_update_entity()
@@ -1653,13 +1789,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Calculate config audit bonus based on recorder configuration.
 
         Awards bonus points (reduces net penalty) for good practices:
-          +5  if purge_keep_days is configured
-          +5  if include/exclude entity filter is active
+          +5  if the recorder keeps at most RECORDER_GOOD_KEEP_DAYS days (HA's
+              default; HA always sets purge_keep_days, so "configured" alone
+              would reward every installation)
+          +5  if a user include/exclude entity filter is active (HA leaves
+              the filter at None without one)
         Max bonus: 10.
         """
         bonus = 0
         if self.recorder_info.available:
-            if self.recorder_info.keep_days is not None:
+            keep_days = self.recorder_info.keep_days
+            if keep_days is not None and keep_days <= RECORDER_GOOD_KEEP_DAYS:
                 bonus += 5
             if self.recorder_info.entity_filter_active:
                 bonus += 5
@@ -1805,6 +1945,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if hw.p_ram > 0:
             ram_key = "rec_ram_pressure_psi" if hw.ram_used_psi else "rec_ram_pressure_classic"
             advice.append(self._rec(ram_key).format(ram_pct=hw.ram))
+        if self._cpu_ram_unmeasured(hw):
+            advice.append(self._rec("rec_cpu_ram_unmeasured"))
         if hw.p_io > 0:
             advice.append(self._rec("rec_io_pressure").format(io_pct=hw.io))
         if self._is_disk_low_sd(hw):
@@ -1893,7 +2035,37 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_stale": app.stale.watch_count > 0,
             "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
             "rec_update_failed": False,
+            "rec_cpu_ram_unmeasured": self._cpu_ram_unmeasured(hw),
         }
+
+    def _sync_cpu_ram_issue(self, hw: _HardwareResult) -> None:
+        """Keep the non-blocking repair in step with the measured state; touch it only on a change (#123)."""
+        if "hardware" in self._pillar_fallbacks:
+            return
+        missing = self._cpu_ram_unmeasured(hw)
+        if missing == self._cpu_ram_issue:
+            return
+        self._cpu_ram_issue = missing
+        if missing:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                IssueIds.FALLBACK_MISSING,
+                data={"entry_id": self._entry_id},
+                is_fixable=True,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=IssueIds.FALLBACK_MISSING,
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, IssueIds.FALLBACK_MISSING)
+
+    def _cpu_ram_unmeasured(self, hw: _HardwareResult) -> bool:
+        """CPU or RAM left out of a measured hardware pillar (not for the neutral fallback)."""
+        return hw.cpu_ram_source in (
+            CPU_RAM_SOURCE_PARTIAL,
+            CPU_RAM_SOURCE_NONE,
+        ) and "hardware" not in getattr(self, "_pillar_fallbacks", set())
 
     # ------------------------------------------------------------------
     # Helpers

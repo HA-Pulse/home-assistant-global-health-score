@@ -94,15 +94,16 @@ a live instance before a release and after changes to `coordinator.py`,
    `homeassistant.remove_label_from_entity` again.
    *Expected:* adding the label excludes the entity without editing the
    config entry; removing it brings the entity back. This is the path
-   documented in the README automation example. Without Spook, use the
-   conditional ignore labels with a helper instead (README, Dynamic exclusions
-   via automation).
+   documented in the automation example of `docs/configuration.md`. Without
+   Spook, use the conditional ignore labels with a helper instead
+   (`docs/configuration.md`, Dynamic exclusions via automation).
 7. **Repair flow (hosts without PSI only):** Leave the CPU/RAM fallback
    sensors empty in the options on a host where PSI is not available.
-   *Expected:* a repair `fallback_missing` appears under **Settings >
-   System > Repairs**; the fix flow lets you pick the CPU/RAM sensors and
-   resumes operation without a restart. On PSI hosts (HAOS, Supervised)
-   skip this step.
+   *Expected:* HAGHS keeps running, `cpu_ram_source` is `none` (or
+   `partial`), and a non-blocking repair `fallback_missing` appears under
+   **Settings > System > Repairs**; the fix flow suggests System Monitor's
+   sensors when found and includes them without a restart. On PSI hosts
+   (HAOS, Supervised) skip this step.
 8. **Reload and restart:** Reload the integration, then restart Home
    Assistant.
    *Expected:* the sensor comes back with a valid score, the log shows no

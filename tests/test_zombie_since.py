@@ -36,6 +36,8 @@ ADDED_LATER = {
     "conditional_ignore_active",
     "dead_device_ids",
     "empty_device_ids",
+    "cpu_ram_source",
+    "rec_cpu_ram_unmeasured",
 }
 DEV_RESULTS = {
     0: {
@@ -70,8 +72,8 @@ DEV_RESULTS = {
         "rec_zombie": True,
         "recommendations": "🧟 Hygiene: 3 zombie(s) detected. Check before deleting: unavailable is "
         "not the same as unused.\n"
-        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder purge days / "
-        "entity filter).",
+        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder keeps more than 10 days / "
+        "no entity filter).",
         "recorder_filter_active": False,
         "recorder_keep_days": None,
         "repair_count": 0,
@@ -123,8 +125,8 @@ DEV_RESULTS = {
         "rec_zombie": True,
         "recommendations": "🧟 Hygiene: 108 zombie(s) detected. Check before deleting: unavailable is "
         "not the same as unused.\n"
-        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder purge days / "
-        "entity filter).\n"
+        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder keeps more than 10 days / "
+        "no entity filter).\n"
         "🔌 Devices: 1 device(s) with all monitored entities unavailable past the "
         "grace period.",
         "recorder_filter_active": False,
@@ -312,6 +314,7 @@ async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, 
     by_name = {device.name: device.id for device in dr.async_get(hass).devices}
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
+    assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)
     added = {"zombie_since"} | ADDED_LATER
     assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
 

@@ -1,4 +1,4 @@
-"""Dashboard cards v1.4 rendered from the README with real coordinator results.
+"""Dashboard cards v1.4 rendered from docs/cards/ with real coordinator results.
 
 Zombie reason and "for" per entity, the zombie hint, device links through the device ids,
 stale lists, status lines, the backup link, and older attribute sets without the v2.4 keys.
@@ -79,13 +79,12 @@ def _reset_states(hass):
 
 @pytest.fixture
 def cards():
-    """Both card configurations of the README, read outside the event loop."""
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
-    found = {}
-    for name in ("Lite", "Pro"):
-        section = readme.split(f"### HAGHS {name} v1.4", 1)[1]
-        found[name] = yaml.safe_load(re.search(r"```yaml\n(.*?)```", section, re.DOTALL).group(1))
-    return found
+    """Both card configurations (docs/cards/), read outside the event loop."""
+    cards = Path(__file__).resolve().parents[1] / "docs" / "cards"
+    return {
+        name: yaml.safe_load((cards / f"{name.lower()}.yaml").read_text())
+        for name in ("Lite", "Pro")
+    }
 
 
 def _device(hass: HomeAssistant, key: str):

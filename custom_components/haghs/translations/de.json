@@ -7,7 +7,7 @@
     "rec_update_failed": "⚠️ Berechnung: Der Aktualisierungszyklus ist fehlgeschlagen; angezeigt werden die vorherigen Ergebnisse oder neutrale Startwerte.",
     "rec_all_clear": "✅ System optimiert",
     "rec_backup_stale": "🚨 Sicherheit: Veraltetes Backup erkannt!",
-    "rec_config_audit": "🔧 Config-Audit: {missing} Bonuspunkt(e) nicht erreicht (Recorder-Aufbewahrungstage / Entitätsfilter).",
+    "rec_config_audit": "🔧 Config-Audit: {missing} Bonuspunkt(e) nicht erreicht (Recorder bewahrt mehr als 10 Tage auf / kein Entitätsfilter).",
     "rec_core_lag": "👴 Veraltet: Die Core-Version ist ≥3 Monate alt.",
     "rec_cpu_load_classic": "⚡ Optimierung: Die CPU-Auslastung wirkt sich auf den Score aus ({cpu_pct:.1f}%).",
     "rec_cpu_load_psi": "⚡ Optimierung: Die PSI-CPU-Wartezeit wirkt sich auf den Score aus ({cpu_pct:.1f}%).",
@@ -23,7 +23,8 @@
     "rec_ram_pressure_psi": "⚡ Optimierung: Die PSI-Speicher-Wartezeit wirkt sich auf den Score aus ({ram_pct:.1f}%).",
     "rec_repairs": "🛠️ Reparaturen: {count} offene Reparaturmeldung(en) erkannt.",
     "rec_updates_pending": "📦 Wartung: {count} Update(s) ausstehend.",
-    "rec_zombies": "🧟 Hygiene: {count} Zombie(s) erkannt. Vor dem Löschen prüfen: nicht verfügbar heißt nicht unbenutzt."
+    "rec_zombies": "🧟 Hygiene: {count} Zombie(s) erkannt. Vor dem Löschen prüfen: nicht verfügbar heißt nicht unbenutzt.",
+    "rec_cpu_ram_unmeasured": "📊 Hardware: CPU und/oder RAM werden nicht gemessen (kein PSI, kein Sensor gewählt); der Hardware-Score nutzt die übrigen Komponenten."
   },
   "config": {
     "step": {
@@ -39,8 +40,8 @@
           "db_sensor": "Sensor für die Datenbankgröße (optional)"
         },
         "data_description": {
-          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
-          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
+          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ohne PSI wird ein leeres Feld nicht gemessen und im Hardware-Score weggelassen; die Einrichtung klappt trotzdem. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
+          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ohne PSI wird ein leeres Feld nicht gemessen und im Hardware-Score weggelassen; die Einrichtung klappt trotzdem. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
           "storage_type": "Wähle den Speichertyp, auf dem deine HA-Instanz läuft. SD-Karte ist die sichere Voreinstellung für Raspberry-Pi-Setups. SSD verwendet prozentuale Schwellen statt absolutem freiem Speicher.",
           "ignore_labels": "Wähle eines oder mehrere deiner Home-Assistant-Labels. Entitäten und Geräte mit einem dieser Labels werden bei der Zombie-Erkennung und bei Update-Abzügen nicht berücksichtigt. Ausnahmen lassen sich per Automation mit den Aktionen 'homeassistant.add_label_to_entity' und 'homeassistant.remove_label_from_entity' der Custom-Integration Spook umschalten (Home Assistant selbst hat keine Label-Aktion), z. B. ein Label 'Urlaub' einschalten, solange du verreist bist. Lege die Labels zuerst unter Einstellungen → Labels an, falls sie noch nicht existieren.",
           "ignore_patterns": "Optionale Liste von Glob-Mustern, die mit der entity_id verglichen werden (eines pro Zeile). Entitäten, deren ID auf ein Muster passt, werden bei der Zombie-Erkennung, der Liste unregistrierter Entitäten und bei Update-Abzügen nicht berücksichtigt. Gedacht für Entitäten ohne eindeutige ID, die kein Label tragen können (z. B. 'sensor.docker_*'). Die Platzhalter * und ? werden unterstützt.",
@@ -49,22 +50,17 @@
       }
     }
   },
-  "exceptions": {
-    "fallback_missing": {
-      "message": "PSI ist nicht verfügbar, und es sind keine CPU- und RAM-Ersatzsensoren konfiguriert."
-    }
-  },
   "issues": {
     "fallback_missing": {
-      "title": "PSI ist nicht verfügbar und Ersatzsensoren fehlen",
+      "title": "CPU und RAM werden nicht gemessen",
       "fix_flow": {
         "abort": {
           "config_entry_missing": "Der HAGHS-Konfigurationseintrag existiert nicht mehr."
         },
         "step": {
           "confirm": {
-            "title": "CPU- und RAM-Ersatzsensoren konfigurieren",
-            "description": "HAGHS kann nicht starten, weil keine Linux-PSI-Daten verfügbar sind und keine CPU-/RAM-Ersatzsensoren konfiguriert sind. Wähle unten beide Sensoren und bestätige, um ohne Neustart von Home Assistant fortzufahren.",
+            "title": "CPU- und RAM-Sensor wählen",
+            "description": "Es sind keine Linux-PSI-Daten verfügbar und kein CPU-/RAM-Sensor ist gewählt, daher lässt HAGHS CPU und/oder RAM im Hardware-Score weg. HAGHS läuft weiter. Wähle den Sensor für den fehlenden Wert (oder beide) und bestätige, um ihn einzubeziehen; ein leeres Feld behält seine Einstellung; die Prozessor- und Speichersensoren von System Monitor sind vorausgefüllt, wenn HAGHS sie findet.",
             "data": {
               "cpu_sensor": "Sensor für die CPU-Auslastung",
               "ram_sensor": "Sensor für die RAM-Auslastung"
@@ -104,8 +100,8 @@
           "battery_grace_minutes": "Wartezeit für Batterie-Entitäten (Minuten)"
         },
         "data_description": {
-          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
-          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ist PSI nicht verfügbar und sind keine CPU-/RAM-Ersatzsensoren konfiguriert, wird die Einrichtung abgelehnt. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
+          "cpu_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ohne PSI wird ein leeres Feld nicht gemessen und im Hardware-Score weggelassen; die Einrichtung klappt trotzdem. Wähle den Sensor, der die CPU-Auslastung in Prozent meldet (z. B. 'Processor Use').",
+          "ram_sensor": "Nur als intelligenter Ersatz. HAGHS berechnet den Score standardmäßig mit den hochpräzisen Linux-PSI-Werten (Pressure Stall Information) deines Hostsystems. Dieser manuelle Sensor wird nur verwendet, wenn dein System keine PSI-Daten liefert (z. B. Windows, ältere Docker-Setups oder Nicht-Linux-Hosts). Ohne PSI wird ein leeres Feld nicht gemessen und im Hardware-Score weggelassen; die Einrichtung klappt trotzdem. Wähle den Sensor, der die Speicherauslastung in Prozent meldet (z. B. 'Memory Use Percent').",
           "storage_type": "Wähle den Speichertyp, auf dem deine HA-Instanz läuft. SD-Karte ist die sichere Voreinstellung für Raspberry-Pi-Setups. SSD verwendet prozentuale Schwellen statt absolutem freiem Speicher.",
           "ignore_labels": "Wähle eines oder mehrere deiner Home-Assistant-Labels. Entitäten und Geräte mit einem dieser Labels werden bei der Zombie-Erkennung und bei Update-Abzügen nicht berücksichtigt. Ausnahmen lassen sich per Automation mit den Aktionen 'homeassistant.add_label_to_entity' und 'homeassistant.remove_label_from_entity' der Custom-Integration Spook umschalten (Home Assistant selbst hat keine Label-Aktion), z. B. ein Label 'Urlaub' einschalten, solange du verreist bist. Lege die Labels zuerst unter Einstellungen → Labels an, falls sie noch nicht existieren.",
           "ignore_patterns": "Optionale Liste von Glob-Mustern, die mit der entity_id verglichen werden (eines pro Zeile). Entitäten, deren ID auf ein Muster passt, werden bei der Zombie-Erkennung, der Liste unregistrierter Entitäten und bei Update-Abzügen nicht berücksichtigt. Gedacht für Entitäten ohne eindeutige ID, die kein Label tragen können (z. B. 'sensor.docker_*'). Die Platzhalter * und ? werden unterstützt.",

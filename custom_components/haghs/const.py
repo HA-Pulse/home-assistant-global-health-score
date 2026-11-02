@@ -90,6 +90,15 @@ EMPTY_DEVICE_LIST_CAP = 100
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
 # punishing normal user behaviour (most updates land within a few days).
 DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
+# The same timestamps in .storage, so the grace window survives Home Assistant
+# restarts (doc audit v2.4.0b4): restarting at least weekly used to restart it.
+UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
+UPDATE_FIRST_SEEN_STORE_VERSION = 1
+DATA_UPDATE_FIRST_SEEN_STORE = "_update_first_seen_store"
+DATA_UPDATE_FIRST_SEEN_LOADED = "_update_first_seen_loaded"
+# The latest_version each first-seen time belongs to: a newer offered version
+# is a new update and starts its own grace window.
+DATA_UPDATE_SEEN_VERSION = "_update_seen_version"
 UPDATE_GRACE_DAYS = 7
 
 # ---------------------------------------------------------------------------
@@ -125,9 +134,12 @@ REC_CORE_LAG = "\U0001f474 Legacy: Core version is ≥3 months old."
 REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected: unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
 REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration entry(ies) failed to set up."
+# Config-Audit purge bonus (doc audit v2.4.0b4): a recorder retention of at most Home Assistant's default.
+# HA always sets purge_keep_days (default 10), so "configured" alone was true on every installation.
+RECORDER_GOOD_KEEP_DAYS = 10
 REC_CONFIG_AUDIT = (
     "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
-    "(recorder purge days / entity filter)."
+    "(recorder keeps more than 10 days / no entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
 REC_DEAD_DEVICES = (
@@ -135,6 +147,18 @@ REC_DEAD_DEVICES = (
     "unavailable past the grace period."
 )
 REC_EMPTY_DEVICES = "\U0001f5c2\ufe0f Devices: {count} device(s) without any entity."
+REC_CPU_RAM_UNMEASURED = (
+    "\U0001f4ca Hardware: CPU and/or RAM are not measured (no PSI, no sensor selected); "
+    "the hardware score uses the other components."
+)
+
+# Where the hardware pillar's CPU and RAM values come from (attribute cpu_ram_source, #123).
+CPU_RAM_SOURCE_PSI = "psi"
+CPU_RAM_SOURCE_SENSORS = "sensors"
+CPU_RAM_SOURCE_PARTIAL = "partial"
+CPU_RAM_SOURCE_NONE = "none"
+# System Monitor's unique ids for processor and memory use (slugify(f"{key}_{argument}"), no argument).
+SYSTEM_MONITOR_UNIQUE_IDS = {"cpu_sensor": "processor_use", "ram_sensor": "memory_use_percent"}
 
 # Translation keys for the recommendation templates. Maps the slug used in the
 # "common" category of strings.json / translations/en.json to the English
@@ -151,6 +175,7 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_core_lag": REC_CORE_LAG,
     "rec_cpu_load_classic": REC_CPU_LOAD_CLASSIC,
     "rec_cpu_load_psi": REC_CPU_LOAD_PSI,
+    "rec_cpu_ram_unmeasured": REC_CPU_RAM_UNMEASURED,
     "rec_db_over_limit": REC_DB_OVER_LIMIT,
     "rec_dead_devices": REC_DEAD_DEVICES,
     "rec_empty_devices": REC_EMPTY_DEVICES,
@@ -212,6 +237,7 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_stale",
     "rec_pillar_fallback",
     "rec_update_failed",
+    "rec_cpu_ram_unmeasured",
 )
 
 
