@@ -58,7 +58,7 @@ All work below is committed on `dev` and described in detail in
 
 - **Pillar test coverage and CI (#107, #117, #128)**: `coordinator.py` at 100 %
   statement and branch coverage; CI runs on Python 3.14 and gates the package at
-  90 % and `coordinator.py` at 80 %. The suite holds 603 tests.
+  90 % and `coordinator.py` at 80 %. The suite holds 663 tests.
 - **Shorter README (#179)**: setup, labels, attributes, cards and release
   summaries in full under `docs/`; a test keeps the README at 400 lines or fewer.
 
