@@ -290,7 +290,7 @@ A cap at 99 means a zombie, an open repair or an overdue watched entity is repor
 No. Config entries of every older version (1.x, 2.x, 3.0–3.3) are migrated to the current layout automatically on the next restart, also for users who saw the *"Migration handler not found"* warning on v2.2.x (#75).
 
 **Why did my score change after an update?**
-The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list every behavior change per release, with upgrade notes. The recommendations and `rec_*` flags show which factors cost points right now.
+The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list the behavior changes per release; v2.3.0 and v2.4.0 include upgrade notes. The recommendations and `rec_*` flags show which factors cost points right now.
 
 **A pending update from yesterday is in the list but doesn't change my score yet — why?**
 Because of the 7-day update grace period. The list is informational and shows every pending update that is not ignored or disabled; the **score** only deducts after HAGHS has seen it pending for at least 7 days since the last Home Assistant restart.
