@@ -28,7 +28,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 **Behavior changes**
 
 * **Entity lists no longer in recorder history.** `zombie_entities`, `unregistered_entities`, `dead_devices`, `repairs`, `pending_updates` (and the new lists) keep their current values but are no longer recorded, so large instances stay below Home Assistant's 16 KB attribute limit; counts, breakdowns, pillars and flags stay in the history.
-* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with one or both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **CPU and RAM without PSI and without a sensor are not measured (#123).** The missing value is left out of the hardware score instead of counting as 0 % load; HAGHS always sets up, and `cpu_ram_source`, `rec_cpu_ram_unmeasured`, a recommendation line, a status line on both cards and a non-blocking repair show it.
 * **Zombie grace default unchanged at 5 minutes.** The b1 notes claimed a change from 15 minutes; the default was already 5 minutes in v2.3.0, and existing custom values are kept.
 
 **Bug fixes**
@@ -43,13 +43,14 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 **Infrastructure**
 
-* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 550 tests.
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 603 tests.
 
 **Documentation**
 
 * Dashboard cards v1.4 (Lite and Pro): zombie reasons and since, stale lists, calculation status lines and a link to every entity, device and settings page (#133, #137, #145, #154).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
+* Shorter README; setup, labels, attributes, cards and release summaries in full under `docs/` (#179).
 
 ### [v2.3.0] - 2026-05-25
 
