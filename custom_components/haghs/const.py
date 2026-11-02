@@ -90,6 +90,12 @@ EMPTY_DEVICE_LIST_CAP = 100
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
 # punishing normal user behaviour (most updates land within a few days).
 DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
+# The same timestamps in .storage, so the grace window survives Home Assistant
+# restarts (doc audit v2.4.0b4): restarting at least weekly used to restart it.
+UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
+UPDATE_FIRST_SEEN_STORE_VERSION = 1
+DATA_UPDATE_FIRST_SEEN_STORE = "_update_first_seen_store"
+DATA_UPDATE_FIRST_SEEN_LOADED = "_update_first_seen_loaded"
 UPDATE_GRACE_DAYS = 7
 
 # ---------------------------------------------------------------------------
