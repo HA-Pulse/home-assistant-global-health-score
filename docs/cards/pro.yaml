@@ -198,7 +198,7 @@ cards:
       <details>
       <summary>🗂️ Empty devices without any entity (informational, no score impact): {{ e_count }}</summary>
       <ul>{% for d in e_raw %}{% set device_id = e_ids[loop.index0] if loop.index0 < e_ids | length else none %}<li>{% if device_id %}<a href="{{ _device ~ device_id }}">{{ d }}</a>{% else %}{{ d }}{% endif %}</li>{% endfor %}</ul>
-      {% if e_count > e_raw | length %}<i>(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)</i>{% endif %}
+      {% if e_count > e_raw | length %}<i>(showing first {{ e_raw | length }}, {{ e_count - e_raw | length }} more hidden)</i><br>{% endif %}
       <a href="{{ _dev }}">→ Open Devices</a>
       </details>
       {% endif %}

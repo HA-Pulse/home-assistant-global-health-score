@@ -103,3 +103,12 @@ async def test_lite_card_has_no_space_padded_bullets(hass, cards) -> None:  # no
     assert "- Configure an `include` / `exclude` entity filter" in rendered
     # a blank line ends the tips list, so the metric line is not glued to the last tip
     assert "\n\n**Metric source**" in rendered
+
+
+async def test_open_devices_on_its_own_line_when_empty_devices_are_capped(
+    hass,
+    cards,  # noqa: F811 - fixture
+) -> None:
+    attrs = dict(await _many(hass), empty_device_count=105)
+    rendered = _render(hass, cards["Pro"], attrs)
+    assert "(showing first 3, 102 more hidden)</i><br>" in rendered
