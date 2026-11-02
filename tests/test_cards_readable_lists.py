@@ -101,3 +101,5 @@ async def test_lite_card_has_no_space_padded_bullets(hass, cards) -> None:  # no
     assert "&nbsp;" not in rendered
     assert "- Keep `purge_keep_days` at 10 days or less" in rendered
     assert "- Configure an `include` / `exclude` entity filter" in rendered
+    # a blank line ends the tips list, so the metric line is not glued to the last tip
+    assert "\n\n**Metric source**" in rendered
