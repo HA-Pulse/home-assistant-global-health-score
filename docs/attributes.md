@@ -38,8 +38,8 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `cpu_ram_source` | str/null | Where CPU and RAM come from: `psi`, `sensors` (both measured, at least one by a selected sensor), `partial` (one not measured), `none` (neither measured; no PSI and no sensor selected). Not measured values are left out of the hardware score. `null` while the hardware pillar has no measurement (first failed update, hardware fallback). |
-| `recorder_keep_days` | int/null | Configured purge days (null = not set) |
-| `recorder_filter_active` | bool | Whether entity filters are active |
+| `recorder_keep_days` | int/null | Days the recorder keeps history (`purge_keep_days`, Home Assistant's default is 10); null without a recorder |
+| `recorder_filter_active` | bool | Whether a user include/exclude entity filter is configured for the recorder |
 | `conditional_ignore_active` | bool | `True` while the conditional ignore labels apply (their helper is `on`); `False` when none are configured or the helper is `off`, unavailable, unknown or missing |
 | `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
 | `integration_unhealthy_entries` | list | The counted config entries as `domain: title` (bare `domain` when the entry has no title), sorted, capped at 50; entries excluded in the options are not listed; current only, excluded from recorder history (`integration_unhealthy_count` stays in the history) |

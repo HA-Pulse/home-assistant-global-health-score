@@ -7,7 +7,7 @@
     "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": "✅ System optimized",
     "rec_backup_stale": "🚨 Security: Stale backup detected!",
-    "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder purge days / entity filter).",
+    "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder keeps more than 10 days / no entity filter).",
     "rec_core_lag": "👴 Legacy: Core version is ≥3 months old.",
     "rec_cpu_load_classic": "⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).",
     "rec_cpu_load_psi": "⚡ Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%).",

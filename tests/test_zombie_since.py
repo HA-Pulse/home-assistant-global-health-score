@@ -72,8 +72,8 @@ DEV_RESULTS = {
         "rec_zombie": True,
         "recommendations": "🧟 Hygiene: 3 zombie(s) detected. Check before deleting: unavailable is "
         "not the same as unused.\n"
-        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder purge days / "
-        "entity filter).",
+        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder keeps more than 10 days / "
+        "no entity filter).",
         "recorder_filter_active": False,
         "recorder_keep_days": None,
         "repair_count": 0,
@@ -125,8 +125,8 @@ DEV_RESULTS = {
         "rec_zombie": True,
         "recommendations": "🧟 Hygiene: 108 zombie(s) detected. Check before deleting: unavailable is "
         "not the same as unused.\n"
-        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder purge days / "
-        "entity filter).\n"
+        "🔧 Config-Audit: 10 bonus point(s) not earned (recorder keeps more than 10 days / "
+        "no entity filter).\n"
         "🔌 Devices: 1 device(s) with all monitored entities unavailable past the "
         "grace period.",
         "recorder_filter_active": False,

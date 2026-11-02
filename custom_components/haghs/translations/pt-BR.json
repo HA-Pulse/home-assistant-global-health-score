@@ -7,7 +7,7 @@
     "rec_update_failed": "⚠️ Cálculo: o ciclo de atualização falhou; os resultados anteriores ou valores iniciais neutros são exibidos.",
     "rec_all_clear": "✅ Sistema otimizado",
     "rec_backup_stale": "🚨 Segurança: backup obsoleto detectado!",
-    "rec_config_audit": "🔧 Config-Audit: {missing} ponto(s) de bônus não ganhos (dias de retenção do Recorder / filtro de entidades).",
+    "rec_config_audit": "🔧 Config-Audit: {missing} ponto(s) de bônus não ganhos (Recorder guarda mais de 10 dias / sem filtro de entidades).",
     "rec_core_lag": "👴 Legado: a versão do Home Assistant Core tem ≥ 3 meses.",
     "rec_cpu_load_classic": "⚡ Otimização: a utilização da CPU está afetando a pontuação ({cpu_pct:.1f}%).",
     "rec_cpu_load_psi": "⚡ Otimização: o tempo de espera da CPU medido pelo PSI está afetando a pontuação ({cpu_pct:.1f}%).",

@@ -29,6 +29,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 * **Entity lists no longer in recorder history.** `zombie_entities`, `unregistered_entities`, `dead_devices`, `repairs`, `pending_updates` (and the new lists) keep their current values but are no longer recorded, so large instances stay below Home Assistant's 16 KB attribute limit; counts, breakdowns, pillars and flags stay in the history.
 * **CPU and RAM without PSI and without a sensor are not measured (#123).** The missing value is left out of the hardware score instead of counting as 0 % load; HAGHS always sets up, and `cpu_ram_source`, `rec_cpu_ram_unmeasured`, a recommendation line, a status line on both cards and a non-blocking repair show it.
+* **Config-Audit purge bonus only for a recorder retention of at most 10 days.** Home Assistant always reports a retention (default 10), so the +5 used to be given to every installation; a longer retention now earns no purge bonus.
 * **Zombie grace default unchanged at 5 minutes.** The b1 notes claimed a change from 15 minutes; the default was already 5 minutes in v2.3.0, and existing custom values are kept.
 
 **Bug fixes**
