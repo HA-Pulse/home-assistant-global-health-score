@@ -70,6 +70,7 @@ from .const import (
     INTEGRATION_UNHEALTHY_LIST_CAP,
     REC_FLAG_KEYS,
     REC_TEMPLATES,
+    RECORDER_GOOD_KEEP_DAYS,
     REPAIR_LIST_CAP,
     REPAIR_PENALTY_CAP,
     REPAIR_PENALTY_PER_ISSUE,
@@ -1678,13 +1679,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Calculate config audit bonus based on recorder configuration.
 
         Awards bonus points (reduces net penalty) for good practices:
-          +5  if purge_keep_days is configured
-          +5  if include/exclude entity filter is active
+          +5  if the recorder keeps at most RECORDER_GOOD_KEEP_DAYS days (HA's
+              default; HA always sets purge_keep_days, so "configured" alone
+              would reward every installation)
+          +5  if a user include/exclude entity filter is active (HA leaves
+              the filter at None without one)
         Max bonus: 10.
         """
         bonus = 0
         if self.recorder_info.available:
-            if self.recorder_info.keep_days is not None:
+            keep_days = self.recorder_info.keep_days
+            if keep_days is not None and keep_days <= RECORDER_GOOD_KEEP_DAYS:
                 bonus += 5
             if self.recorder_info.entity_filter_active:
                 bonus += 5

@@ -125,9 +125,12 @@ REC_CORE_LAG = "\U0001f474 Legacy: Core version is ≥3 months old."
 REC_POWER_UNSTABLE = "\u26a0\ufe0f Power: Under-voltage detected: unstable power supply!"
 REC_ALL_CLEAR = "\u2705 System optimized"
 REC_INTEGRATION_HEALTH = "\U0001f9e9 Integrations: {count} integration entry(ies) failed to set up."
+# Config-Audit purge bonus (doc audit v2.4.0b4): a recorder retention of at most Home Assistant's default.
+# HA always sets purge_keep_days (default 10), so "configured" alone was true on every installation.
+RECORDER_GOOD_KEEP_DAYS = 10
 REC_CONFIG_AUDIT = (
     "\U0001f527 Config-Audit: {missing} bonus point(s) not earned "
-    "(recorder purge days / entity filter)."
+    "(recorder keeps more than 10 days / no entity filter)."
 )
 REC_REPAIRS = "\U0001f6e0\ufe0f Repairs: {count} open repair issue(s) detected."
 REC_DEAD_DEVICES = (
