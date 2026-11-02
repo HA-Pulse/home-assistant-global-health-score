@@ -1,4 +1,4 @@
-"""Both README cards (v1.4) read cpu_ram_source: a status line and a matching metric source (#123 follow-up)."""
+"""Both dashboard cards (v1.4) read cpu_ram_source: a status line and a matching metric source (#123 follow-up)."""
 
 from __future__ import annotations
 

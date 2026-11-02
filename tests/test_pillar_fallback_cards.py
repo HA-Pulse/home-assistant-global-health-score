@@ -1,8 +1,7 @@
-"""Render the unchanged README dashboard YAML with actual coordinator results."""
+"""Render the unchanged dashboard card YAML (docs/cards/) with actual coordinator results."""
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -17,8 +16,9 @@ from tests.factories import make_coordinator
 
 @pytest.fixture
 def readme_text():
-    """Read source YAML outside the asynchronous template evaluation."""
-    return (Path(__file__).resolve().parents[1] / "README.md").read_text()
+    """Read both card configurations (docs/cards/) outside the asynchronous template evaluation."""
+    cards = Path(__file__).resolve().parents[1] / "docs" / "cards"
+    return {name: (cards / f"{name.lower()}.yaml").read_text() for name in ("Lite", "Pro")}
 
 
 @pytest.mark.parametrize("card_name", ["Lite", "Pro"])
@@ -27,9 +27,7 @@ async def test_existing_dashboard_failure_visibility(
     hass, monkeypatch, card_name, scenario, readme_text
 ):
     """Both original advisors show the current warning, never a general all-clear."""
-    section = readme_text.split(f"### HAGHS {card_name} v1.4", 1)[1]
-    snippet = re.search(r"```yaml\n(.*?)```", section, re.DOTALL).group(1)
-    card = yaml.safe_load(snippet)
+    card = yaml.safe_load(readme_text[card_name])
     coord = make_coordinator(hass)
     monkeypatch.setattr(coord, "_async_calc_hardware", AsyncMock(return_value=_HardwareResult()))
     monkeypatch.setattr(
