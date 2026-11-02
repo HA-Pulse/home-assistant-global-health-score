@@ -46,7 +46,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
 | `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
 | `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50); current only, excluded from recorder history (`repair_count` stays in the history) |
-| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after HAGHS has seen it pending for 7 days (restarts reset the 7 days); current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
+| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after HAGHS has seen that version pending for 7 days (also across restarts); current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, power, updates, zombies, dead and empty devices, stale reporting, backup, core lag, integration health, config audit, repairs, calculation warnings) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
@@ -55,7 +55,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
 | `rec_power_unstable` | bool | RPi under-voltage detected |
 | `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
-| `rec_updates_pending` | bool | At least one non-ignored update entity has been pending for 7 days as seen by HAGHS since the last Home Assistant restart |
+| `rec_updates_pending` | bool | At least one non-ignored update entity has had the same offered version pending for 7 days as seen by HAGHS (also across restarts) |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 months behind the latest release |
 | `rec_integration_health` | bool | At least one integration config entry is in an unhealthy state (source of the Integration Health penalty) |

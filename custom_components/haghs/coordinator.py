@@ -33,6 +33,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -59,6 +60,9 @@ from .const import (
     CPU_RAM_SOURCE_SENSORS,
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
+    DATA_UPDATE_FIRST_SEEN_LOADED,
+    DATA_UPDATE_FIRST_SEEN_STORE,
+    DATA_UPDATE_SEEN_VERSION,
     DEAD_DEVICE_LIST_CAP,
     DEFAULT_BATTERY_GRACE_MINUTES,
     DEFAULT_STALE_THRESHOLD_HOURS,
@@ -78,6 +82,8 @@ from .const import (
     STALE_PENALTY_CAP,
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
+    UPDATE_FIRST_SEEN_STORE_KEY,
+    UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
     ZOMBIE_REASONS,
@@ -93,6 +99,7 @@ _GB = 1024**3
 
 # Timeout for each scoring sub-calculation (seconds).
 PILLAR_TIMEOUT: float = 10.0
+FIRST_SEEN_SAVE_DELAY = 10  # seconds; one write for a burst of changes
 
 # Default HA SQLite database filename
 HA_DB_NAME = "home-assistant_v2.db"
@@ -382,12 +389,19 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
 
-        # First-seen timestamps for pending update entities (#26). Stored in
-        # hass.data so they survive integration reloads. Reset on HA restart,
-        # which is desired: a fresh boot effectively gives all current updates
-        # a new grace window.
+        # First-seen timestamps for pending update entities (#26). Shared in
+        # hass.data across reloads and config entries, and kept in a Store so
+        # the grace window also survives Home Assistant restarts (loaded once
+        # per run before the first update, saved when an entry changes).
         self._update_first_seen: dict[str, datetime] = hass_data.setdefault(
             DATA_UPDATE_FIRST_SEEN, {}
+        )
+        self._update_seen_version: dict[str, str | None] = hass_data.setdefault(
+            DATA_UPDATE_SEEN_VERSION, {}
+        )
+        self._first_seen_store: Store[dict[str, dict[str, str | None]]] = hass_data.setdefault(
+            DATA_UPDATE_FIRST_SEEN_STORE,
+            Store(hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_STORE_KEY),
         )
 
         # Track unregistered entities (no entity-registry entry) so we warn
@@ -558,6 +572,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         (100 / no penalty) and a warning is logged.
         """
         self._pillar_fallbacks: set[str] = set()
+        await self._async_load_update_first_seen()
         # Recorder info — read before app pillar so config audit can use it
         self.recorder_info = self._read_recorder_info()
 
@@ -1612,6 +1627,71 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             return 0.0
 
+    async def _async_load_update_first_seen(self) -> None:
+        """Merge the stored first-seen times once per Home Assistant run.
+
+        Each entry is {"since": ISO UTC, "version": offered latest_version}.
+        Entries already known in this run win. Invalid data (not a mapping,
+        not an update entity id, unparsable or future times, a version that
+        is not a string or null) is skipped entry by entry; those updates
+        start their window now. Without a store (first start after updating
+        HAGHS) every pending update starts now.
+        """
+        # One shared load per run: every coordinator (several config entries)
+        # awaits the same task before its first update calculation.
+        hass_data = self.hass.data[DOMAIN]
+        task = hass_data.get(DATA_UPDATE_FIRST_SEEN_LOADED)
+        if task is None:
+            task = hass_data[DATA_UPDATE_FIRST_SEEN_LOADED] = self.hass.async_create_task(
+                self._async_merge_update_first_seen(), "haghs update first-seen load"
+            )
+        await asyncio.shield(task)
+
+    async def _async_merge_update_first_seen(self) -> None:
+        """Read the store once and merge it into the shared first-seen dicts."""
+        try:
+            stored = await self._first_seen_store.async_load()
+        except Exception:
+            _LOGGER.debug(
+                "HAGHS: Stored update first-seen times unreadable; starting now", exc_info=True
+            )
+            return
+        if stored is None:
+            return
+        now = dt_util.utcnow()
+        skipped = 0
+        for entity_id, value in stored.items() if isinstance(stored, dict) else ():
+            since = value.get("since") if isinstance(value, dict) else None
+            version = value.get("version") if isinstance(value, dict) else None
+            seen = dt_util.parse_datetime(since) if isinstance(since, str) else None
+            if (
+                not isinstance(entity_id, str)
+                or not entity_id.startswith("update.")
+                or seen is None
+                or seen.tzinfo is None
+                or seen > now
+                or not (version is None or isinstance(version, str))
+            ):
+                skipped += 1
+                continue
+            if entity_id not in self._update_first_seen:
+                self._update_first_seen[entity_id] = seen
+                self._update_seen_version[entity_id] = version
+        if skipped or not isinstance(stored, dict):
+            _LOGGER.debug(
+                "HAGHS: Skipped invalid stored update first-seen data (%s entries)", skipped
+            )
+
+    def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
+        """The first-seen times as stored (ISO 8601, UTC) with their offered version."""
+        return {
+            entity_id: {
+                "since": seen.isoformat(),
+                "version": self._update_seen_version.get(entity_id),
+            }
+            for entity_id, seen in self._update_first_seen.items()
+        }
+
     def _calc_updates(self) -> tuple[int, int, int, int, list[str]]:
         """Calculate backup, update and core-lag penalties.
 
@@ -1630,6 +1710,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_count = 0
         pending_updates: list[str] = []
         currently_pending: set[str] = set()
+        changed = False
 
         for state in self.hass.states.async_all():
             if state.domain != "update" or state.state != "on":
@@ -1639,17 +1720,46 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             currently_pending.add(state.entity_id)
-            first_seen = self._update_first_seen.setdefault(state.entity_id, now)
+            version = state.attributes.get("latest_version")
+            version = version if version is None or isinstance(version, str) else str(version)
+            if (
+                state.entity_id not in self._update_first_seen
+                or self._update_seen_version.get(state.entity_id) != version
+            ):
+                # New pending update, or a newer offered version: a new window.
+                self._update_first_seen[state.entity_id] = now
+                self._update_seen_version[state.entity_id] = version
+                changed = True
+            first_seen = self._update_first_seen[state.entity_id]
             name = state.attributes.get("friendly_name", state.entity_id)
             pending_updates.append(name)
             if now - first_seen >= grace:
                 update_count += 1
 
-        # Prune entries for updates that are no longer pending so installed
-        # updates don't keep a stale timestamp around.
+        # Prune entries for updates that are done (installed or skipped: state
+        # "off"), ignored, or gone (no state and no registry entry). An update
+        # entity that is not ready yet (no state but registered, unavailable,
+        # unknown) keeps its stored window: right after a restart many update
+        # entities appear only after HAGHS's first refresh.
         for stale_id in list(self._update_first_seen):
-            if stale_id not in currently_pending:
-                del self._update_first_seen[stale_id]
+            if stale_id in currently_pending:
+                continue
+            state = self.hass.states.get(stale_id)
+            entity_entry = ent_reg.async_get(stale_id)
+            ignored = self._is_ignored(stale_id, entity_entry)  # disabled counts as ignored
+            if not ignored and state is None and entity_entry is not None:
+                continue  # registered, no state yet: not ready
+            if (
+                not ignored
+                and state is not None
+                and state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            ):
+                continue
+            del self._update_first_seen[stale_id]
+            self._update_seen_version.pop(stale_id, None)
+            changed = True
+        if changed:
+            self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 
         p_core_lag = 0
         core_entity_id = self._detect_core_update_entity()
