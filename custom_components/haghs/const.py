@@ -96,6 +96,9 @@ UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
 UPDATE_FIRST_SEEN_STORE_VERSION = 1
 DATA_UPDATE_FIRST_SEEN_STORE = "_update_first_seen_store"
 DATA_UPDATE_FIRST_SEEN_LOADED = "_update_first_seen_loaded"
+# The latest_version each first-seen time belongs to: a newer offered version
+# is a new update and starts its own grace window.
+DATA_UPDATE_SEEN_VERSION = "_update_seen_version"
 UPDATE_GRACE_DAYS = 7
 
 # ---------------------------------------------------------------------------

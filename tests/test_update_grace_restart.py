@@ -26,8 +26,16 @@ def _restart(hass: HomeAssistant) -> None:
     hass.data.pop(DOMAIN, None)
 
 
-def _stored(seen: dict[str, str]) -> dict:
-    return {"version": 1, "minor_version": 1, "key": KEY, "data": seen}
+def _stored(seen, *, raw: bool = False) -> dict:
+    """Store content; plain ISO strings become entries without an offered version."""
+    data = (
+        seen
+        if raw
+        else {
+            k: v if isinstance(v, dict) else {"since": v, "version": None} for k, v in seen.items()
+        }
+    )
+    return {"version": 1, "minor_version": 1, "key": KEY, "data": data}
 
 
 async def _update_count(hass: HomeAssistant) -> int:
@@ -45,7 +53,7 @@ async def test_window_is_kept_across_a_restart(
     freezer.tick(timedelta(seconds=11))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    first = hass_storage[KEY]["data"]["update.esphome"]
+    first = hass_storage[KEY]["data"]["update.esphome"]["since"]
 
     freezer.tick(timedelta(days=4))
     _restart(hass)
@@ -120,17 +128,19 @@ async def test_known_entries_of_this_run_win_and_load_happens_once(hass, hass_st
     "data",
     [
         ["update.esphome"],
-        {"update.esphome": "not a time"},
-        {"update.esphome": 5},
-        {"sensor.esphome": "2026-01-01T00:00:00+00:00"},
-        {"update.esphome": "2026-01-01T00:00:00"},
-        {"update.esphome": "2999-01-01T00:00:00+00:00"},
+        {"update.esphome": "2026-01-01T00:00:00+00:00"},
+        {"update.esphome": {"since": "not a time", "version": None}},
+        {"update.esphome": {"since": 5, "version": None}},
+        {"sensor.esphome": {"since": "2026-01-01T00:00:00+00:00", "version": None}},
+        {"update.esphome": {"since": "2026-01-01T00:00:00", "version": None}},
+        {"update.esphome": {"since": "2999-01-01T00:00:00+00:00", "version": None}},
+        {"update.esphome": {"since": "2026-01-01T00:00:00+00:00", "version": 7}},
     ],
 )
 async def test_invalid_stored_data_starts_now_with_one_debug(
     hass, hass_storage, caplog, data
 ) -> None:
-    hass_storage[KEY] = _stored(data)
+    hass_storage[KEY] = _stored(data, raw=True)
     hass.states.async_set("update.esphome", "on")
     caplog.set_level(logging.DEBUG, logger="custom_components.haghs.coordinator")
     assert await _update_count(hass) == 0
@@ -165,3 +175,45 @@ async def test_the_update_cycle_loads_the_store(hass, hass_storage) -> None:
     await coordinator.async_refresh()
     assert coordinator.data["rec_updates_pending"] is True
     assert coordinator.data["pending_updates"] == ["ESPHome"]
+
+
+async def test_a_newer_offered_version_starts_a_new_window(hass, hass_storage) -> None:
+    eight_days = (dt_util.utcnow() - timedelta(days=8)).isoformat()
+    hass_storage[KEY] = _stored({"update.esphome": {"since": eight_days, "version": "2026.10.0"}})
+    hass.states.async_set("update.esphome", "on", {"latest_version": "2026.11.0"})
+    assert await _update_count(hass) == 0
+    assert hass.data[DOMAIN]["_update_seen_version"]["update.esphome"] == "2026.11.0"
+
+
+async def test_the_same_offered_version_keeps_its_window_across_a_restart(
+    hass, hass_storage, freezer
+) -> None:
+    hass.states.async_set("update.esphome", "on", {"latest_version": "2026.10.0"})
+    assert await _update_count(hass) == 0
+    freezer.tick(timedelta(days=8))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass_storage[KEY]["data"]["update.esphome"]["version"] == "2026.10.0"
+    _restart(hass)
+    assert await _update_count(hass) == 1
+    hass.states.async_set("update.esphome", "on", {"latest_version": "2026.11.0"})
+    _restart(hass)
+    assert await _update_count(hass) == 0  # the newer release starts its own 7 days
+
+
+async def test_first_start_after_updating_haghs_counts_from_now(hass, hass_storage) -> None:
+    """No store yet: an update HA has offered for weeks costs nothing on the first start."""
+    hass_storage.pop(KEY, None)
+    hass.states.async_set("update.esphome", "on", {"latest_version": "2026.1.0"})
+    assert await _update_count(hass) == 0
+
+
+async def test_vanished_update_entities_leave_the_store(hass, hass_storage, freezer) -> None:
+    seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    hass_storage[KEY] = _stored({"update.gone": seen, "update.esphome": seen})
+    hass.states.async_set("update.esphome", "on")
+    assert await _update_count(hass) == 0
+    freezer.tick(timedelta(seconds=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert set(hass_storage[KEY]["data"]) == {"update.esphome"}
