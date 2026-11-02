@@ -95,7 +95,7 @@ cards:
       {{ 'Entity filter active' if filter else 'No entity filter' }} <br>
       Config-Audit bonus: {{ bonus }}/10
 
-      {% if keep in [none, 'unknown'] or not filter %}
+      {% if keep in [none, 'unknown'] or keep | int(0) > 10 or not filter %}
       💡 Tips to improve your score ([recorder docs](https://www.home-assistant.io/integrations/recorder/)): <br>
       {% if keep in [none, 'unknown'] or keep | int(0) > 10 %} &nbsp;&nbsp; • Keep `purge_keep_days` at 10 days or less in your recorder configuration (+5 pts)<br>{% endif %}
       {% if not filter %} &nbsp;&nbsp; • Configure an `include` / `exclude` entity filter for the recorder (+5 pts){% endif %}
