@@ -32,14 +32,15 @@ class MissingFallbackSensorRepairFlow(RepairsFlow):
 
         if user_input is not None:
             options = dict(entry.options)
-            options.update(user_input)
+            # Only what the user picked: an empty field keeps the current option (P4, doc audit v2.4.0b4).
+            options.update({key: value for key, value in user_input.items() if value})
             self.hass.config_entries.async_update_entry(entry, options=options)
             self.hass.config_entries.async_schedule_reload(entry.entry_id)
             return self.async_create_entry(data={})
 
         schema = vol.Schema(
             schema={
-                vol.Required(sensor): selector
+                vol.Optional(sensor): selector
                 for sensor, selector in FALLBACK_SENSORS_SCHEMA.items()
             }
         )
