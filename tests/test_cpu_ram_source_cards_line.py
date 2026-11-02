@@ -11,7 +11,7 @@ from tests.test_cards_v14_rendering import _attributes, _render, cards  # noqa: 
 NONE = "📊 CPU/RAM not measured (no PSI, no sensor selected); the hardware score uses the other components."
 PART = "📊 CPU/RAM partly measured (no PSI, one sensor missing); the hardware score uses the measured components."
 CLASSIC = "Classic sensors (CPU + RAM + Disk)"
-PSI = "PSI active (CPU + RAM + I/O + Disk)"
+PSI = "PSI active (CPU + RAM + Disk, I/O when the kernel provides it)"
 MEASURED = "hardware score uses the measured components"
 
 

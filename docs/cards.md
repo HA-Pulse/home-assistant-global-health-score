@@ -50,5 +50,5 @@ Configuration: [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-
 | Config-Audit bonus (earned) | No | Yes |
 | Database size + warning | No | Yes |
 | Recorder health (purge + filter) | Tips + docs link | Yes + docs link |
-| Metric source (PSI vs. Classic + component count, CPU/RAM not measured) | Yes (detailed) | Yes (detailed) |
+| Metric source (PSI vs. Classic, CPU/RAM not measured) | Yes (detailed) | Yes (detailed) |
 | Deep-links to HA settings | Yes | Yes |
