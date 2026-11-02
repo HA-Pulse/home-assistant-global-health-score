@@ -71,3 +71,21 @@ async def test_an_empty_submit_writes_nothing_and_the_repair_stays(hass: HomeAss
     assert done["type"] == "create_entry"
     assert dict(entry.options) == V230_OPTIONS
     assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+
+
+async def test_after_an_empty_submit_the_next_cycle_keeps_the_repair(hass: HomeAssistant) -> None:
+    """Nothing picked and CPU/RAM still not measured: the repair stays open after the reload and the next cycle."""
+    entry = await _update(hass, CPU_ONLY)
+    await _submit(hass, entry, {})
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+
+    async def _read(_self):
+        return CPU_ONLY
+
+    with patch(_PSI_SYNC_PATH, return_value=CPU_ONLY), patch(_PSI_ASYNC_PATH, _read), patch_disk():
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    assert coordinator.data["cpu_ram_source"] == "partial"
