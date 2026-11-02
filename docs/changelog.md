@@ -6,7 +6,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 ## Changelog
 
-### [v2.4.0] - 2026-09-29
+### [v2.4.0] - unreleased
 
 **Highlights**
 
@@ -28,7 +28,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 **Behavior changes**
 
 * **Entity lists no longer in recorder history.** `zombie_entities`, `unregistered_entities`, `dead_devices`, `repairs`, `pending_updates` (and the new lists) keep their current values but are no longer recorded, so large instances stay below Home Assistant's 16 KB attribute limit; counts, breakdowns, pillars and flags stay in the history.
-* **Setup stops without a CPU/RAM fallback when PSI is missing (#123).** Entries with one or both fields empty now raise the `fallback_missing` repair and do not set up until the sensors are configured.
+* **CPU and RAM without PSI and without a sensor are not measured (#123).** The missing value is left out of the hardware score instead of counting as 0 % load; HAGHS always sets up, and `cpu_ram_source`, `rec_cpu_ram_unmeasured`, a recommendation line, a status line on both cards and a non-blocking repair show it.
 * **Zombie grace default unchanged at 5 minutes.** The b1 notes claimed a change from 15 minutes; the default was already 5 minutes in v2.3.0, and existing custom values are kept.
 
 **Bug fixes**
@@ -43,15 +43,20 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 **Infrastructure**
 
-* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 550 tests.
+* Per-pillar test coverage for the hardware and application pillars (#107); CI runs on Python 3.14 and gates the package coverage at 90 % and `coordinator.py` at 80 % (#117, #128); the suite holds 603 tests.
 
 **Documentation**
 
 * Dashboard cards v1.4 (Lite and Pro): zombie reasons and since, stale lists, calculation status lines and a link to every entity, device and settings page (#133, #137, #145, #154).
 * Manual smoke-test guide for live instances in `tests/README.md` (#85).
 * Repository-wide documentation check ahead of this release (#130).
+* Shorter README; setup, labels, attributes, cards and release summaries in full under `docs/` (#179).
+
+**Upgrade notes:** Open repair issues now count toward the score (**5 pts each**, capped at **10 pts**) and hard-cap the application score at 99 while any repair is open, so instances with open repairs score lower than before, by design; use HA's native *Ignore* action on a repair to take it out of the score. Entities without an entity-registry entry no longer count as zombies, they are reported as informational *unregistered* entries, which can raise the score on instances that previously had such entries deducted. Without PSI, a CPU or RAM value with no sensor selected used to count as 0 % load, so it never lowered the score; now it is left out of the hardware score, which averages only the measured components and can therefore be lower. HAGHS keeps running, and a non-blocking **repair** lets you pick the sensors. Entity lists are no longer kept in the recorder history, recommendation texts follow the Home Assistant language, and new recommendation lines explain every missing point (see Highlights and Behavior changes above).
 
 ### [v2.3.0] - 2026-05-25
+
+**Upgrade notes:** v2.3 expanded zombie detection from 9 to 22 domains, added a 7-day grace period before pending updates count, and now hard-caps the application score at 99 while a zombie exists. Fewer update penalties and disabled entities no longer counted can raise the score; previously unnoticed zombies in the new domains can lower it. The recommendations and `rec_*` flags show which factors are active; the card *Tips* block only covers the recorder bonus.
 
 **Highlights**
 
@@ -65,7 +70,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 * **Unregistered ghost zombies marked (#61).** Entities without an entity-registry entry are surfaced in `zombie_entities` with a `[unregistered]` prefix and warned in the log.
 * **Power Supply Status detection (#21).** Auto-detects `binary_sensor.rpi_power_status` for Raspberry Pi under-voltage and applies a flat 20-point hardware penalty.
 * **Boolean `rec_*` recommendation flags.** Ten new state attributes (e.g. `rec_cpu_load`, `rec_zombie`, `rec_backup_stale`) alongside the existing `recommendations` string — easier to consume in templates and automations.
-* **PSI-aware recommendation text.** CPU and RAM advice are split into PSI ("12.5% PSI stall time") and classic ("65% CPU utilization") variants so the metric source is always explicit.
+* **PSI-aware recommendation text.** CPU and RAM advice are split into PSI ("PSI CPU stall time is impacting score (12.5%)") and classic ("CPU utilization is impacting score (65.0%)") variants so the metric source is always explicit.
 * **Config Flow refactor + RepairsFlow (#49).** CPU/RAM fallback sensors are optional when PSI is available. A new Repair flow lets you recover after PSI disappears post-setup without restarting Home Assistant.
 
 **Bug fixes**

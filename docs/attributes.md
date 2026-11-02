@@ -10,7 +10,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 
 | Attribute | Type | Description |
 |---|---|---|
-| `hardware_score` | int | Hardware pillar score (0–100), averaged from CPU, RAM, I/O (if PSI), and Disk |
+| `hardware_score` | int | Hardware pillar score (0–100): average of the measured components (CPU, RAM, I/O when PSI provides it, Disk) minus 20 points on RPi under-voltage |
 | `application_score` | int | Application pillar score (0–100) |
 | `stale_candidate_count` | int | Complete passive count of overdue sensor and binary_sensor entities |
 | `stale_candidates` | list | Alphabetically sorted passive entity IDs, capped at 100; current only, excluded from recorder history |
@@ -26,7 +26,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `zombie_since` | dict | Since when each listed zombie is unavailable/unknown (ISO timestamps, same 100 entries and order as `zombie_entities`); counted from the last HA restart at the earliest, because an earlier time is not reliably known; current only, excluded from recorder history; informational, no score impact |
 | `zombie_count_per_reason` | dict | Zombies per reason, keys in ranking order, only reasons that occur (e.g. {"integration_not_loaded": 3, "unavailable": 40}); always reflects the full count regardless of the list cap, the sum equals `zombie_count`; informational, no score impact |
 | `zombie_reasons` | dict | Reason per listed zombie (same 100 entries and order as `zombie_entities`), from Home Assistant facts only, first match in this order: `config_entry_missing` (the config entry the entity belonged to no longer exists; **the only strong hint of an orphaned entity**), `integration_not_loaded` (the entry exists but is not loaded; fix the integration, not a reason to delete), `not_provided` (HA only restored the stored state because no running integration provides the entity; not a reason to delete without checking), `unavailable` (the integration runs and reports the entity as unavailable/unknown, often temporary; not a reason to delete); current only, excluded from recorder history |
-| `unregistered_count` | int | Number of detected entities without an entity-registry entry (informational only, does not affect the score) |
+| `unregistered_count` | int | Number of entities without an entity-registry entry that are `unavailable`/`unknown` past the grace period in the monitored domains (informational only, does not affect the score) |
 | `unregistered_entities` | list | Entity IDs of unregistered entities (capped at 100); current only, excluded from recorder history (`unregistered_count` stays in the history) |
 | `unregistered_count_per_domain` | dict | Per-domain breakdown of unregistered entities |
 | `dead_device_count` | int | Number of devices whose monitored entities in `ZOMBIE_DOMAINS` are all unavailable past their respective grace periods; unknown does not count as an outage (informational, does not affect the score) |
@@ -46,7 +46,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `config_audit_bonus` | int | Earned Config-Audit bonus points (0–10) |
 | `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
 | `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50); current only, excluded from recorder history (`repair_count` stays in the history) |
-| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after a 7-day grace period; current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
+| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after HAGHS has seen it pending for 7 days (restarts reset the 7 days); current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, power, updates, zombies, dead and empty devices, stale reporting, backup, core lag, integration health, config audit, repairs, calculation warnings) |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
@@ -55,7 +55,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
 | `rec_power_unstable` | bool | RPi under-voltage detected |
 | `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
-| `rec_updates_pending` | bool | At least one non-ignored update entity has been pending past the 7-day grace period |
+| `rec_updates_pending` | bool | At least one non-ignored update entity has been pending for 7 days as seen by HAGHS since the last Home Assistant restart |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 months behind the latest release |
 | `rec_integration_health` | bool | At least one integration config entry is in an unhealthy state (source of the Integration Health penalty) |
@@ -70,4 +70,4 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_update_failed` | bool | The current update attempt failed outside a guarded pillar calculation |
 | `rec_cpu_ram_unmeasured` | bool | No PSI and no sensor selected for CPU and/or RAM: the value is not measured and left out of the hardware score (`cpu_ram_source` is `partial` or `none`) |
 
-**Calculation failures:** Neutral fallback values are not successful measurements. If a pillar fails or times out, `pillar_fallbacks` names the affected pillar and `recommendations` includes a warning instead of an all-clear message. Both dashboard examples display that recommendation. If the outer update cycle fails, `update_cycle_failed` is set and the existing numeric result is retained, or neutral values are returned on the first update. A successful refresh clears the failure indicators. Score formulas and numeric fallback values are unchanged.
+**Calculation failures:** Neutral fallback values are not successful measurements. If a pillar fails or times out, `pillar_fallbacks` names the affected pillar and `recommendations` includes a warning instead of an all-clear message. Both dashboard examples display that recommendation. If the outer update cycle fails, `update_cycle_failed` is set and the existing numeric result is retained, or neutral values are returned on the first update. A successful refresh clears the failure indicators. Failure indicators do not change the score.
