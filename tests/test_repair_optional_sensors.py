@@ -61,7 +61,13 @@ async def test_only_the_missing_ram_sensor_is_submitted(hass: HomeAssistant) -> 
 
 async def test_an_empty_submit_writes_nothing_and_the_repair_stays(hass: HomeAssistant) -> None:
     entry = await _update(hass, CPU_ONLY)
-    done = await _submit(hass, entry, {CONF_CPU_SENSOR: "", CONF_RAM_SENSOR: None})
+    with patch.object(
+        hass.config_entries,
+        "async_schedule_reload",
+        wraps=hass.config_entries.async_schedule_reload,
+    ) as reload:
+        done = await _submit(hass, entry, {CONF_CPU_SENSOR: "", CONF_RAM_SENSOR: None})
+    reload.assert_called_once_with(entry.entry_id)
     assert done["type"] == "create_entry"
     assert dict(entry.options) == V230_OPTIONS
     assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None

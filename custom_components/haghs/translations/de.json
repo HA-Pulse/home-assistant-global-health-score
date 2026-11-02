@@ -60,7 +60,7 @@
         "step": {
           "confirm": {
             "title": "CPU- und RAM-Sensor wählen",
-            "description": "Es sind keine Linux-PSI-Daten verfügbar und kein CPU-/RAM-Sensor ist gewählt, daher lässt HAGHS CPU und/oder RAM im Hardware-Score weg. HAGHS läuft weiter. Wähle beide Sensoren und bestätige, um sie einzubeziehen; die Prozessor- und Speichersensoren von System Monitor sind vorausgefüllt, wenn HAGHS sie findet.",
+            "description": "Es sind keine Linux-PSI-Daten verfügbar und kein CPU-/RAM-Sensor ist gewählt, daher lässt HAGHS CPU und/oder RAM im Hardware-Score weg. HAGHS läuft weiter. Wähle den Sensor für den fehlenden Wert (oder beide) und bestätige, um ihn einzubeziehen; ein leeres Feld behält seine Einstellung; die Prozessor- und Speichersensoren von System Monitor sind vorausgefüllt, wenn HAGHS sie findet.",
             "data": {
               "cpu_sensor": "Sensor für die CPU-Auslastung",
               "ram_sensor": "Sensor für die RAM-Auslastung"
