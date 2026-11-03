@@ -33,7 +33,7 @@ After adding it, navigate to its entity list and **manually enable** the process
     * Optionally select a **Database Size Sensor** for external databases (see the collapsible block below).
 
 ### 3. Options Flow (Runtime Settings)
-After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust the fields below (the table is generated from the options form; "none" means the field starts empty).
+After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust the fields below (the table is generated from the options form; "none" means the field has no default, the form shows your current values).
 
 <!-- BEGIN GENERATED: options (script/gen_docs.py) -->
 | Option | Default | Range | Description |

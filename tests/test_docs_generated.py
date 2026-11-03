@@ -35,10 +35,6 @@ def sources() -> gen_docs.Sources:
     return gen_docs.load_sources()
 
 
-def _render_all(src: gen_docs.Sources) -> str:
-    return "\n".join(render(src) for render in gen_docs.BLOCKS.values())
-
-
 def test_generated_blocks_match_the_files(sources: gen_docs.Sources) -> None:
     stale = [
         str(path.relative_to(ROOT))
@@ -145,6 +141,29 @@ def test_option_field_without_label_fails(sources: gen_docs.Sources) -> None:
     options = (*sources.options, gen_docs.OptionField("new_option", None))
     with pytest.raises(gen_docs.GenDocsError, match="options form fields"):
         gen_docs.render_options(dataclasses.replace(sources, options=options))
+
+
+def test_option_field_without_description_fails(sources: gen_docs.Sources) -> None:
+    init = sources.strings["options"]["step"]["init"]
+    descriptions = {k: v for k, v in init["data_description"].items() if k != "update_interval"}
+    strings = {
+        **sources.strings,
+        "options": {"step": {"init": {**init, "data_description": descriptions}}},
+    }
+    with pytest.raises(gen_docs.GenDocsError, match=r"data_description.*update_interval"):
+        gen_docs.render_options(dataclasses.replace(sources, strings=strings))
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class S:\n    def other(self):\n        return {}\n",
+        "class S:\n    def extra_state_attributes(self):\n        return None\n",
+    ],
+)
+def test_sensor_without_attribute_dict_fails(source: str) -> None:
+    with pytest.raises(gen_docs.GenDocsError, match="extra_state_attributes"):
+        gen_docs.published_attribute_keys(source, ())
 
 
 def test_changed_recommendation_text_changes_the_table(sources: gen_docs.Sources) -> None:

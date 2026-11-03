@@ -71,7 +71,9 @@ def published_attribute_keys(sensor_source: str, rec_flag_keys: tuple[str, ...])
     for node in ast.walk(ast.parse(sensor_source)):
         if isinstance(node, ast.FunctionDef) and node.name == "extra_state_attributes":
             returned = [n.value for n in ast.walk(node) if isinstance(n, ast.Return)]
-            mapping = next(v for v in returned if isinstance(v, ast.Dict))
+            mapping = next((v for v in returned if isinstance(v, ast.Dict)), None)
+            if mapping is None:
+                raise GenDocsError("extra_state_attributes returns no dict literal")
             keys: list[str] = []
             for key in mapping.keys:
                 if key is None:  # **{k: data[k] for k in REC_FLAG_KEYS}
@@ -206,6 +208,8 @@ def render_options(src: Sources) -> str:
         raise GenDocsError(
             f"options form fields and strings.json labels differ: {sorted(keys)} vs {sorted(labels)}"
         )
+    if missing := sorted(set(keys) - set(descriptions)):
+        raise GenDocsError(f"options without a data_description in strings.json: {missing}")
     rows = ["| Option | Default | Range | Description |", "|---|---|---|---|"]
     for option in src.options:
         default = "none" if option.default is None else f"`{option.default}`"
@@ -218,7 +222,7 @@ def render_options(src: Sources) -> str:
             span = "\u2013"
         rows.append(
             f"| **{_cell(labels[option.key])}** | {default} | {span} | "
-            f"{_cell(descriptions.get(option.key, ''))} |"
+            f"{_cell(descriptions[option.key])} |"
         )
     return "\n".join(rows)
 
