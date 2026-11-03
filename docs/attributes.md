@@ -8,6 +8,7 @@ Every attribute of `sensor.system_ha_global_health_score` with type and meaning.
 
 HAGHS exposes the following attributes for use in dashboard cards, automations, and templates:
 
+<!-- BEGIN GENERATED: attributes (script/gen_docs.py) -->
 | Attribute | Type | Description |
 |---|---|---|
 | `hardware_score` | int | Hardware pillar score (0–100): average of the measured components (CPU, RAM, I/O when PSI provides it, Disk) minus 20 points on RPi under-voltage |
@@ -18,9 +19,8 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `stale_watch_entities` | list | Alphabetically sorted overdue watched entity IDs, capped at 100; current only, excluded from recorder history |
 | `stale_penalty` | int | Raw application deduction before the configuration bonus, 5 per overdue watched entity, capped at 10 |
 | `stale_threshold_hours` | int | Effective reporting threshold in whole hours, default 24 |
-| `rec_stale` | bool | An overdue watched entity triggers the reporting recommendation; passive candidates alone do not |
 | `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
-| `zombie_entities`| list | Entity IDs of zombies (capped at 100; `zombie_count` carries the full total); current only, excluded from recorder history (`zombie_count` stays in the history) |
+| `zombie_entities` | list | Entity IDs of zombies (capped at 100; `zombie_count` carries the full total); current only, excluded from recorder history (`zombie_count` stays in the history) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
 | `zombie_count_per_integration` | dict | Zombies per integration, keyed by the entity's integration (e.g. {"matter": 12, "mqtt": 40}); always reflects the full count regardless of the list cap; informational, no score impact |
 | `zombie_since` | dict | Since when each listed zombie is unavailable/unknown (ISO timestamps, same 100 entries and order as `zombie_entities`); counted from the last HA restart at the earliest, because an earlier time is not reliably known; current only, excluded from recorder history; informational, no score impact |
@@ -48,6 +48,9 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `repairs` | list | `domain/issue_id` entries of the counted repair issues (capped at 50); current only, excluded from recorder history (`repair_count` stays in the history) |
 | `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after HAGHS has seen that version pending for 7 days (also across restarts); current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
 | `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, power, updates, zombies, dead and empty devices, stale reporting, backup, core lag, integration health, config audit, repairs, calculation warnings) |
+| `pillar_fallback_count` | int | Number of pillar calculations that failed or timed out during the current refresh attempt |
+| `pillar_fallbacks` | list | Affected pillars in stable order: `hardware`, then `application`; an empty list means no observed pillar failure in this attempt |
+| `update_cycle_failed` | bool | The current update attempt failed outside a guarded pillar calculation; existing numeric results are retained, or neutral values are used on the first update |
 | `rec_cpu_load` | bool | CPU load (PSI stall or classic utilization) is currently penalised |
 | `rec_ram_pressure` | bool | Memory pressure / utilization is currently penalised |
 | `rec_io_pressure` | bool | I/O PSI stall time is currently penalised |
@@ -63,11 +66,39 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_repairs` | bool | At least one open repair issue from another integration is counted |
 | `rec_dead_devices` | bool | At least one dead device (all monitored entities in `ZOMBIE_DOMAINS` unavailable past their respective grace periods) is reported; unknown does not count as an outage (informational, no score impact) |
 | `rec_empty_devices` | bool | At least one empty device (no entity at all, see `empty_device_count`) is reported; informational, no score impact |
-| `pillar_fallback_count` | int | Number of pillar calculations that failed or timed out during the current refresh attempt |
-| `pillar_fallbacks` | list | Affected pillars in stable order: `hardware`, then `application`; an empty list means no observed pillar failure in this attempt |
-| `update_cycle_failed` | bool | The current update attempt failed outside a guarded pillar calculation; existing numeric results are retained, or neutral values are used on the first update |
+| `rec_stale` | bool | An overdue watched entity triggers the reporting recommendation; passive candidates alone do not |
 | `rec_pillar_fallback` | bool | At least one pillar calculation failed or timed out during the current refresh attempt |
 | `rec_update_failed` | bool | The current update attempt failed outside a guarded pillar calculation |
 | `rec_cpu_ram_unmeasured` | bool | No PSI and no sensor selected for CPU and/or RAM: the value is not measured and left out of the hardware score (`cpu_ram_source` is `partial` or `none`) |
+<!-- END GENERATED: attributes -->
 
 **Calculation failures:** Neutral fallback values are not successful measurements. If a pillar fails or times out, `pillar_fallbacks` names the affected pillar and `recommendations` includes a warning instead of an all-clear message. Both dashboard examples display that recommendation. If the outer update cycle fails, `update_cycle_failed` is set and the existing numeric result is retained, or neutral values are returned on the first update. A successful refresh clears the failure indicators. Failure indicators do not change the score.
+
+## Recommendation texts
+
+Each `rec_*` flag adds one line to `recommendations` while it is set; with no flag set the line reads as in the last row. The table is generated from the English texts (`strings.json`); placeholders in braces are filled at runtime.
+
+<!-- BEGIN GENERATED: recommendations (script/gen_docs.py) -->
+| Flag | Recommendation text (English template) |
+|---|---|
+| `rec_cpu_load` | `⚡ Optimization: PSI CPU stall time is impacting score ({cpu_pct:.1f}%).`<br>`⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).` |
+| `rec_ram_pressure` | `⚡ Optimization: PSI memory stall time is impacting score ({ram_pct:.1f}%).`<br>`⚡ Optimization: Memory utilization is impacting score ({ram_pct:.1f}%).` |
+| `rec_io_pressure` | `⚡ Optimization: I/O pressure is impacting score ({io_pct:.1f}%).` |
+| `rec_disk_low` | `⚠️ Disk Space: Only {free_gb:.1f} GB free on {storage_type}!`<br>`⚠️ Disk Space: Less than 10% free ({free_gb:.1f} GB)!` |
+| `rec_db_over_limit` | `🗄️ Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB).` |
+| `rec_power_unstable` | `⚠️ Power: Under-voltage detected: unstable power supply!` |
+| `rec_backup_stale` | `🚨 Security: Stale backup detected!` |
+| `rec_updates_pending` | `📦 Maintenance: {count} update(s) pending.` |
+| `rec_zombie` | `🧟 Hygiene: {count} zombie(s) detected. Check before deleting: unavailable is not the same as unused.` |
+| `rec_core_lag` | `👴 Legacy: Core version is ≥3 months old.` |
+| `rec_integration_health` | `🧩 Integrations: {count} integration entry(ies) failed to set up.` |
+| `rec_config_audit` | `🔧 Config-Audit: {missing} bonus point(s) not earned (recorder keeps more than 10 days / no entity filter).` |
+| `rec_repairs` | `🛠️ Repairs: {count} open repair issue(s) detected.` |
+| `rec_dead_devices` | `🔌 Devices: {count} device(s) with all monitored entities unavailable past the grace period.` |
+| `rec_empty_devices` | `🗂️ Devices: {count} device(s) without any entity.` |
+| `rec_stale` | `Stale reporting: {count} watched entity/entities have not reported for more than {hours} hour(s); application penalty {penalty} point(s) before the configuration bonus.` |
+| `rec_pillar_fallback` | `⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.` |
+| `rec_update_failed` | `⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.` |
+| `rec_cpu_ram_unmeasured` | `📊 Hardware: CPU and/or RAM are not measured (no PSI, no sensor selected); the hardware score uses the other components.` |
+| (none set) | `✅ System optimized` |
+<!-- END GENERATED: recommendations -->
