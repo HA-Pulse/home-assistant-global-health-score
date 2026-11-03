@@ -127,6 +127,14 @@ async def test_composite_and_split_devices_are_not_empty(hass, changes) -> None:
         assert _empty(hass) == (["leftover"], 1)
 
 
+def test_child_collection_yielding_ids_is_resolved() -> None:
+    """A version whose ``child_devices`` yields ids (like old ``devices``) still marks the parents."""
+    child = SimpleNamespace(parent_device_id="parent", via_device_id=None)
+    registry = SimpleNamespace(child_devices=["child", "gone"], async_get={"child": child}.get)
+
+    assert coordinator_module._parent_device_ids(registry, []) == {"parent"}
+
+
 def test_is_composite_reads_every_marker_and_defaults_to_false() -> None:
     assert not coordinator_module._is_composite(SimpleNamespace())
     assert not coordinator_module._is_composite(
@@ -145,7 +153,7 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
     hub = _device(hass, owner, "hub")
     member = _device(hass, owner, "member", via_device_id=hub.id)
     _entity(hass, member.id, "member_power")
-    leftover = _device(hass, owner, "leftover")
+    _device(hass, owner, "leftover")
     fields = (
         "id",
         "name",
@@ -178,4 +186,3 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
         ),
     ):
         assert _empty(hass) == (["leftover"], 1)
-    assert leftover.name == "leftover"

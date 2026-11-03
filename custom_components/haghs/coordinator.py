@@ -289,7 +289,12 @@ def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]
     Child devices (HA 2026.9+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
     versions have no such collection, then only ``via_device_id`` counts, as before.
     """
-    children = list(getattr(dev_reg, "child_devices", ()) or ())
+    children = []
+    for item in getattr(dev_reg, "child_devices", ()) or ():
+        # Like ``devices`` in older versions, a collection may yield ids: resolve them.
+        child = dev_reg.async_get(item) if isinstance(item, str) else item
+        if child is not None:
+            children.append(child)
     parents = {d.via_device_id for d in devices + children if getattr(d, "via_device_id", None)}
     parents |= {c.parent_device_id for c in children if getattr(c, "parent_device_id", None)}
     return parents
@@ -1503,7 +1508,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Only Home Assistant facts, no name rules. A device counts when it has
         no entity in the entity registry (disabled ones included), is not
         disabled, is not a service entry, no other device points to it via
-        ``via_device_id`` (hubs, bridges, coordinators) and every one of its
+        ``via_device_id`` (hubs, bridges, coordinators), it has no child
+        devices, it is not a composite or split-composite device (one report
+        fewer rather than a wrong one) and every one of its
         config entries is loaded (a failing or loading integration may not
         have created its entities yet). Devices with an ignore label on the
         device or on its area are skipped; entity-id patterns cannot apply
