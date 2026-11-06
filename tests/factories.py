@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import DATA_BOOT_TIME, DOMAIN

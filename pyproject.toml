@@ -3,6 +3,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = [
+    "-p",
+    "no:respx",
     "-q",
     "--strict-markers",
     "--strict-config",

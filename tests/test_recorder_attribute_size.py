@@ -19,8 +19,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.json import json_bytes
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry, MockEntityPlatform
-from pytest_homeassistant_custom_component.components.recorder.common import (
+from pytest_homeassistant.common import MockConfigEntry, MockEntityPlatform
+from pytest_homeassistant.components.recorder.common import (
     async_wait_recording_done,
 )
 
