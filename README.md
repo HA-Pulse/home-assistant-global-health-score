@@ -149,11 +149,11 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
 
 > **Short version.** Every option, the integration-entry exclusion and the external database setup are in [docs/configuration.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md).
 
-HAGHS is installed via **HACS** and configured via the **UI**
+HAGHS is installed via the **Marketplace** (Home Assistant 2026.11 and later) or **HACS** (up to 2026.10) and configured via the **UI**.
 
 ### 1. Prerequisites
 
-Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not available in HACS.
+Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not in the Marketplace or HACS.
 
 After adding it, navigate to its entity list and **manually enable** the processor and memory usage entities (they are disabled by default), for example:
 * `sensor.system_monitor_processor_use` (Percentage %)
@@ -165,7 +165,7 @@ After adding it, navigate to its entity list and **manually enable** the process
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
 
 ### 2. Installation & Setup
-1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
+1.  **Home Assistant 2026.11 and later:** open **Settings > Marketplace**, search for **HAGHS** and select **Install**; the setup opens right away, no restart needed (continue with step 3). **Up to 2026.10:** download **HAGHS** in **HACS** and **Restart Home Assistant**.
 2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask: CPU and RAM sensors (only used without PSI), storage type, ignore labels and patterns, optionally a database size sensor for an external database.
 

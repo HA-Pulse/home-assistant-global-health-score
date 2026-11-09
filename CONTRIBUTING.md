@@ -37,7 +37,7 @@ closed.
 
 ## Documentation
 
-HACS shows the README in Home Assistant, so it stays short. These rules apply
+The Marketplace (HACS up to Home Assistant 2026.10) shows the README in Home Assistant, so it stays short. These rules apply
 to every pull request (feature, fix or docs) and are checked by
 `tests/test_docs_layout.py`:
 

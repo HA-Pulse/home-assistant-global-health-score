@@ -6,11 +6,11 @@ Setup, every option, external databases, ignore labels, dynamic exclusions, patt
 
 ## Configuration
 
-HAGHS is installed via **HACS** and configured via the **UI**
+HAGHS is installed via the **Marketplace** (Home Assistant 2026.11 and later) or **HACS** (up to 2026.10) and configured via the **UI**.
 
 ### 1. Prerequisites
 
-Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not available in HACS.
+Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not in the Marketplace or HACS.
 
 After adding it, navigate to its entity list and **manually enable** the processor and memory usage entities (they are disabled by default), for example:
 * `sensor.system_monitor_processor_use` (Percentage %)
@@ -22,8 +22,8 @@ After adding it, navigate to its entity list and **manually enable** the process
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
 
 ### 2. Installation & Setup
-1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
-> **Note on HACS installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page) that can be downloaded manually and dropped into `<config>/custom_components/haghs/`. HACS itself installs straight from the repository content.
+1.  **Home Assistant 2026.11 and later:** open **Settings > Marketplace**, search for **HAGHS** and select **Install**; the setup opens right away, no restart needed (continue with step 3). **Up to 2026.10:** download **HAGHS** in **HACS** and **Restart Home Assistant**.
+> **Note on manual installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page) that can be downloaded manually and dropped into `<config>/custom_components/haghs/`. The Marketplace and HACS install straight from the repository content.
 2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask:
     * Select your **CPU** and **RAM** sensors (smart PSI fallback - only used if PSI data is not available on your host).
@@ -31,6 +31,11 @@ After adding it, navigate to its entity list and **manually enable** the process
     * Select one or more **Ignore labels** (multi-select). The `haghs_ignore` label is created automatically and pre-selected.
     * Optionally fill the **Ignore entity-id patterns** field with glob patterns.
     * Optionally select a **Database Size Sensor** for external databases (see the collapsible block below).
+
+#### Updates and beta versions
+- **Updates:** new HAGHS versions appear under **Settings > Updates**. An update needs a restart of Home Assistant; on 2026.11 and later a repair reminds you and can restart for you. Installations made with HACS move to the Marketplace automatically when you update Home Assistant to 2026.11 and keep receiving updates.
+- **Beta versions on Home Assistant 2026.11 and later:** go to **Settings > Devices & Services > Marketplace**, open the HAGHS device, enable the **Pre-release** entity (disabled by default) and turn it on. The Marketplace checks for new versions every 6 hours.
+- **Beta versions up to 2026.10 (HACS):** open HAGHS in HACS, use the three-dot menu, **Redownload**, turn on **Show beta versions**, pick the version and restart Home Assistant.
 
 ### 3. Options Flow (Runtime Settings)
 After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust the fields below (the table is generated from the options form; "none" means the field has no default, the form shows your current values).

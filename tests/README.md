@@ -53,7 +53,7 @@ a live instance before a release and after changes to `coordinator.py`,
 
 **Prerequisites**
 
-- A live Home Assistant instance with HAGHS installed (HACS or a manual
+- A live Home Assistant instance with HAGHS installed (Marketplace, HACS or a manual
   copy of `custom_components/haghs/`).
 - Access to **Settings > System > Logs** and **Developer Tools > States**.
 - 10 to 15 minutes; the zombie steps must wait out the grace period
