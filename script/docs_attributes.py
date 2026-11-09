@@ -60,7 +60,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "zombie_since": (
         "dict",
-        "Since when each listed zombie is unavailable/unknown (ISO timestamps, same ${ZOMBIE_LIST_CAP} entries and order as `zombie_entities`); counted from the last HA restart at the earliest, because an earlier time is not reliably known; $unrecorded; informational, no score impact",
+        "Since when each listed zombie is unavailable/unknown (ISO timestamps, same ${ZOMBIE_LIST_CAP} entries and order as `zombie_entities`); counted at the earliest from the first HAGHS start in the current Home Assistant run (usually the last restart), because an earlier time is not reliably known; $unrecorded; informational, no score impact",
     ),
     "zombie_count_per_reason": (
         "dict",

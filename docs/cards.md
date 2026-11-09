@@ -10,7 +10,7 @@ HAGHS provides all data as sensor attributes. Dashboard visualization happens en
 
 Below are two ready-to-use card configurations:
 
-Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the slug depends on the device and entity name), replace it everywhere it appears: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
+Both configurations are wired to the entity ID `sensor.system_ha_global_health_score`. If your sensor has a different ID (the ID comes from the sensor name "System: HA - Global Health Score"; it differs when you renamed the entity or another entity already had that ID), replace it everywhere it appears: the `entity:` line of the gauge card and the `{% set e = ... %}` line at the top of each markdown card.
 
 On older Home Assistant versions (tested: 2024.10) a link to a single entity opens the Entities page, but not that entity's more-info dialog; on the newer versions checked in a browser before each release (2026.9 to 2026.11) it opens the dialog directly. All other card links behaved the same on all checked versions.
 
