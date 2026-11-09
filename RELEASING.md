@@ -42,17 +42,23 @@ Everything else runs without further confirmation.
 - Publish a GitHub pre-release with tag `vX.Y.Zb1` on `main`.
   `manifest.json` already contains `X.Y.Z`; the release workflow verifies
   that the tag base fits the manifest version and allows the `bN` suffix.
-- HACS shows pre-releases only to users who enable the beta channel for the
-  repository (off by default). The announcement for testers must explain how
-  to enable it.
+- Pre-releases reach only users who opt in for the repository (off by
+  default). The announcement for testers must explain both ways:
+  - Home Assistant 2026.11 and later (built-in Marketplace): **Settings >
+    Devices & Services > Marketplace**, the HAGHS device, enable the
+    **Pre-release** entity (disabled by default) and turn it on. The
+    Marketplace checks for new versions every 6 hours.
+  - Up to 2026.10 (HACS): HAGHS in HACS, three-dot menu, **Redownload**,
+    **Show beta versions**, pick the version, restart Home Assistant.
 
 ## 4. Stable release
 
 - After a few days without new beta reports, publish `vX.Y.Z` (regular
   release, not marked as pre-release).
 - Draft the release notes from the changelog.
-- The release workflow attaches the HACS ZIP asset (`haghs.zip`) to the
-  release automatically.
+- The release workflow attaches the ZIP asset (`haghs.zip`, for manual
+  installs) to the release automatically. The Marketplace and HACS install
+  from the repository content.
 - Afterwards: close the completed issues and post the announcement
   (community forum / Reddit).
 
