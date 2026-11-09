@@ -23,7 +23,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `zombie_entities` | list | Entity IDs of zombies (capped at 100; `zombie_count` carries the full total); current only, excluded from recorder history (`zombie_count` stays in the history) |
 | `zombie_count_per_domain` | dict | Per-domain zombie breakdown (e.g. {"sensor": 3, "switch": 1}); always reflects the full count regardless of the list cap |
 | `zombie_count_per_integration` | dict | Zombies per integration, keyed by the entity's integration (e.g. {"matter": 12, "mqtt": 40}); always reflects the full count regardless of the list cap; informational, no score impact |
-| `zombie_since` | dict | Since when each listed zombie is unavailable/unknown (ISO timestamps, same 100 entries and order as `zombie_entities`); counted from the last HA restart at the earliest, because an earlier time is not reliably known; current only, excluded from recorder history; informational, no score impact |
+| `zombie_since` | dict | Since when each listed zombie is unavailable/unknown (ISO timestamps, same 100 entries and order as `zombie_entities`); counted at the earliest from the first HAGHS start in the current Home Assistant run (usually the last restart), because an earlier time is not reliably known; current only, excluded from recorder history; informational, no score impact |
 | `zombie_count_per_reason` | dict | Zombies per reason, keys in ranking order, only reasons that occur (e.g. {"integration_not_loaded": 3, "unavailable": 40}); always reflects the full count regardless of the list cap, the sum equals `zombie_count`; informational, no score impact |
 | `zombie_reasons` | dict | Reason per listed zombie (same 100 entries and order as `zombie_entities`), from Home Assistant facts only, first match in this order: `config_entry_missing` (the config entry the entity belonged to no longer exists; **the only strong hint of an orphaned entity**), `integration_not_loaded` (the entry exists but is not loaded; fix the integration, not a reason to delete), `not_provided` (HA only restored the stored state because no running integration provides the entity; not a reason to delete without checking), `unavailable` (the integration runs and reports the entity as unavailable/unknown, often temporary; not a reason to delete); current only, excluded from recorder history |
 | `unregistered_count` | int | Number of entities without an entity-registry entry that are `unavailable`/`unknown` past the grace period in the monitored domains (informational only, does not affect the score) |
@@ -76,7 +76,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 
 ## Recommendation texts
 
-Each `rec_*` flag adds one line to `recommendations` while it is set; with no flag set the line reads as in the last row. The table is generated from the English texts (`strings.json`); placeholders in braces are filled at runtime.
+Each `rec_*` flag adds one line to `recommendations` while it is set; with no flag set the line reads as in the last row. Exception: after a failed update cycle (`update_cycle_failed`) the other flags keep their last values, and `recommendations` shows only the failure warning. The table is generated from the English texts (`strings.json`); placeholders in braces are filled at runtime.
 
 <!-- BEGIN GENERATED: recommendations (script/gen_docs.py) -->
 | Flag | Recommendation text (English template) |

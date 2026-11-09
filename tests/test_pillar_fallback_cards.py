@@ -83,7 +83,10 @@ async def test_existing_dashboard_failure_visibility(
         if scenario == "outer":
             assert "update cycle failed" in rendered
             # v1.4: the language-independent status line from update_cycle_failed.
-            assert "The last update cycle failed; previous results are shown." in rendered
+            assert (
+                "The last update cycle failed; previous results or neutral initial values are shown."
+                in rendered
+            )
         else:
             # v1.4: the language-independent status line from pillar_fallbacks.
             assert "Calculation incomplete:" in rendered
