@@ -46,9 +46,11 @@ As Home Assistant matures into a mission-critical Smart Home OS, the need for a 
 
 **Detailed documentation**
 - [Configuration and labels](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md): every option, external databases, ignore labels, dynamic exclusions, pattern-based ignore, stale reporting
+- [Scoring](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md): every component, threshold, penalty and cap of both pillars
 - [Sensor attributes](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/attributes.md): every attribute with type and meaning
 - [Dashboard cards](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards.md): installation, entity ID, Lite vs. Pro
   - [Lite card YAML](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/lite.yaml) · [Pro card YAML](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/cards/pro.yaml)
+- [FAQ](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md): every question with its full answer
 - [Release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md): one summary per release
 
 ---
@@ -67,81 +69,37 @@ $$Score_{Global} = \lfloor (Score_{Hardware} \cdot 0.4) + (Score_{Application} \
 
 ## Pillar 1: Hardware Performance (40%)
 
-Evaluates the physical constraints of the host machine using real system metrics. The hardware score is the average of all available component scores (CPU, RAM, I/O, Disk).
+> **Short version.** Every threshold, tier table and the component rules are in [docs/scoring.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md#pillar-1-hardware-performance-40).
 
-* **Metric Source (Smart Fallback):** HAGHS reads **Pressure Stall Information (PSI)** directly from the Linux kernel (`/proc/pressure/cpu`, `/proc/pressure/memory`, `/proc/pressure/io`). If PSI is unavailable, it automatically falls back to the manually configured CPU/RAM sensors. PSI measures real *stall time* (how long tasks waited for a resource), while classic sensors measure *utilization* (how busy a resource is). Because these scales differ fundamentally, HAGHS uses **separate threshold tiers** for each source.
+The hardware score is the average of the measured components: CPU, RAM, I/O (when the kernel provides it) and Disk.
 
-<details>
-<summary><b>Penalty tier tables</b> - exact thresholds for CPU, RAM, and I/O</summary>
+* **Metric source:** HAGHS reads **Pressure Stall Information (PSI)** from the Linux kernel where available and falls back to the CPU and RAM sensors you select. PSI measures stall time, classic sensors measure utilization, so each source has its own threshold tiers.
+* **Storage:** disk usage is detected automatically, with thresholds per storage type (SD card and eMMC by free GB, SSD by free percent).
+* **Power:** a reported Raspberry Pi under-voltage costs a flat **20 points**.
 
-* **CPU Load (Tiered):**
-
-  | | Classic Sensor (Utilization) | PSI (Stall Time) |
-  |---|---|---|
-  | No penalty | 0–25% | 0–5% |
-  | Light (10 pts) | 26–40% | 6–15% |
-  | Medium (25 pts) | 41–60% | 16–30% |
-  | Heavy (50 pts) | 61–80% | 31–50% |
-  | Critical (80 pts) | >80% | >50% |
-
-* **Memory Pressure (Tiered):**
-
-  | | Classic Sensor (Utilization) | PSI (Stall Time) |
-  |---|---|---|
-  | No penalty | 0–69% | 0–5% |
-  | Gradual ramp | 70–89% (linear) | — |
-  | Light (10 pts) | — | 6–10% |
-  | Medium (25 pts) | — | 11–25% |
-  | Heavy (50 pts) | — | 26–40% |
-  | Critical (80 pts) | ≥90% | >40% |
-
-* **I/O Pressure (PSI-only):** Only available on systems with PSI support. Measures disk/storage stall time.
-
-  | | PSI I/O (Stall Time) |
-  |---|---|
-  | No penalty | 0–5% |
-  | Light (10 pts) | 6–15% |
-  | Medium (25 pts) | 16–30% |
-  | Heavy (50 pts) | 31–50% |
-  | Critical (80 pts) | >50% |
-
-</details>
-
-  > When PSI I/O is available, the hardware score uses **4 components** (CPU + RAM + I/O + Disk) / 4. Without I/O, it falls back to **3 components** (CPU + RAM + Disk) / 3. Without PSI, a CPU or RAM value whose sensor is not selected is **not measured** and left out of the average (never counted as 0 % load); `cpu_ram_source` and `rec_cpu_ram_unmeasured` show it.
-
-**PSI-aware recommendations:** The advisor text is split into PSI and classic variants for CPU and RAM. On PSI-equipped systems you see "PSI CPU stall time is impacting score (12.5%)" (the actual blocking time); on fallback systems "CPU utilization is impacting score (65.0%)" (the busy-ness). The metric source is always explicit so you know whether you are looking at stalls or load.
-
-**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English. Translations: English (built in), Brazilian Portuguese, German.
-
-**Power supply detection (Raspberry Pi):** HAGHS auto-detects `binary_sensor.rpi_power_status` when available and applies a flat **20-point** hardware penalty while under-voltage is reported.
-
-* **Storage Integrity (Smart Thresholds):** Disk usage is **auto-detected** via `psutil`, no manual sensor needed. Thresholds adapt to your storage type:
-  * **SD-Card / eMMC:** Critical at **<3 GB free**, Warning at **<5 GB free**.
-  * **SSD:** Warning at **<10% free** space.
+[All hardware details →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md#pillar-1-hardware-performance-40)
 
 ---
 
 ## Pillar 2: Application Hygiene (60%)
 
-Measures "maintenance debt", the hidden factors that cause sluggishness, failed backups, and slow restarts. Every point difference below 100 is explained: each deduction and each unearned bonus prints a recommendation line and sets a matching `rec_*` flag (after a failed update cycle the score keeps its last value, or a neutral one before the first result, and the recommendations show only the failure warning).
+> **Short version.** Every rule, cap and exception is in [docs/scoring.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md#pillar-2-application-hygiene-60).
 
-* **Zombie Entities (Ratio-based, max 20 pts, hard-cap at 99):** Detects entities with `unavailable` or `unknown` state in 22 physical/UI-relevant domains (automations, scripts, etc. are excluded). Penalties scale with the percentage of zombies relative to the entities in the monitored domains. Two **configurable grace periods** prevent false positives: a regular window (default **5 min**) for all zombie-eligible entities and an extended window (default **60 min**) for `device_class: battery`. Both are adjustable in the Options Flow (1–240 min each). **Disabled** entities are silently ignored - disabling an entity in HA is an alternative to applying an ignore label. While at least one zombie is reported, the application score is **hard-capped at 99** so the Config-Audit bonus can never mask a real zombie. The `zombie_entities` attribute lists up to **100** entries (the recorder's 16 KB attribute limit). Entities without an entity-registry entry (YAML-defined templates, Utility Meter, Riemann Sum, ...) are **not** zombies: when they are `unavailable` or `unknown` past the grace period in the monitored domains, they are reported separately as *unregistered* (`unregistered_count`, `unregistered_entities`, `unregistered_count_per_domain`) and do **not** affect the score. `zombie_count` and `zombie_count_per_domain` always carry the full totals. A zombie is an availability signal, not proof that an entity is orphaned, unused or safe to delete: a temporary outage, an idle device or an entity that only reports in some operating modes looks the same. Before deleting an entity, check its integration, device and config entry. When `zombie_count` is higher than the 100 listed entries, `zombie_count_per_domain` and `zombie_count_per_integration` show where the rest come from.
-  
-* **Dead Devices (informational, no score impact):** Flags devices only when all monitored entities in `ZOMBIE_DOMAINS` are `unavailable` beyond their respective grace periods. `unknown` does not count as an outage, and entities outside the monitored domains are excluded. Devices without monitored entities are not flagged. Reported via `dead_device_count`, `dead_devices` and the `rec_dead_devices` flag. Entity-level zombie points stay authoritative, so no second penalty is added. A dead device is hidden only when all of its monitored entities are ignored (device label, or every entity by label or pattern).
+Measures "maintenance debt". Every missing point prints a recommendation line and sets a matching `rec_*` flag.
 
-* **Empty Devices (informational, no score impact):** Flags devices that have no entity at all in the entity registry (disabled entities included), using Home Assistant facts only: the device is not disabled, not a service entry, no other device is connected through it (hubs and bridges are skipped), it has no child devices and is not a merged (composite) device, and its config entry is loaded. Typical leftovers after removing or re-pairing a device. Respects ignore labels on the device and its area; nothing is checked before the zombie grace period has passed after a restart. Reported via `empty_device_count`, `empty_devices` and the `rec_empty_devices` flag (#93).
+| Factor | Points | Rule |
+|---|---|---|
+| Zombie entities | up to −20, caps at 99 | Entities `unavailable` or `unknown` past the grace period (5 min, battery 60 min), scaled by their share. An availability signal, not a deletion list. |
+| Updates and Core age | −5 per update, −20 Core lag, at most −35 | An update counts after HAGHS has seen that version pending for 7 days, also across restarts. |
+| Integration health | −5 per entry, at most −15 | Config entries stuck in setup error, setup retry or failed unload. |
+| Repairs | −5 each, at most −10, caps at 99 | Open repairs of other integrations; Home Assistant's "Ignore" takes one out. |
+| Watched entities | −5 each, at most −10, caps at 99 | Opt-in: entities with a watch label that stopped reporting. |
+| Database | −10, or −30 | Above `1000 MB + 2.5 MB × entities`, or above 2.5 times that limit. |
+| Backup | −30 | Stale backup. |
+| Config audit | up to +10 | Recorder keeps at most 10 days (+5); user-set entity filter (+5). |
+| Dead and empty devices | none | Informational: devices whose entities are all unavailable, or that have no entity. |
 
-* **Database Hygiene (Dynamic Limit):** Database size is **auto-detected** for the built-in SQLite database, no manual FileSize sensor or YAML needed. For **external databases** (MariaDB, PostgreSQL), you can configure a custom database size sensor in the setup or options menu (see [External Database](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#external-database-mariadb)). The limit scales with your system: `Limit_MB = 1000 + (Total_Entities × 2.5)`. Example: 200 entities = 1.5 GB limit. Above the limit the database costs **10 pts**, above 2.5 times the limit **30 pts**.
-  
-* **Updates & Core Age:** Tracks pending updates and lists them by name (e.g., `pending_updates: ["ESPHome 2024.2"]`). Pending updates only contribute to the penalty after HAGHS has seen them pending for **7 days**, counted from the first time HAGHS saw that version offered, also across restarts; a newer offered version starts its own 7 days. The list shows them immediately, only the score is delayed. Each grace-aged update costs **5 pts**, Core lag (≥3 months) adds **20 pts**, capped at **35 pts** total. Update entities respect the same ignore labels and patterns as zombie detection; disabled update entities are excluded automatically.
-  
-* **Integration Health:** Natively detects integrations stuck in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` via HA's ConfigEntry API. Penalty: **5 pts per unhealthy config entry**, capped at **15 pts**. The affected entries are counted in `integration_unhealthy_count` and reported in the recommendations.
-  
-* **Repairs:** Open repair issues from HA's issue registry cost **5 pts each**, capped at **10 pts**. Counted are only issues that are currently active, not dismissed and owned by another integration; repairs raised by HAGHS itself describe the integration's own prerequisites and are excluded. While any repair is open, the application score is **hard-capped at 99** - the Config-Audit bonus can never mask a broken integration. Count and list are exposed as `repair_count` and `repairs`, the flag is `rec_repairs`. To take a repair out of the score, use HA's native **"Ignore"** action on it (Settings > Repairs); no HAGHS option is needed. Note that a broken backend often raises a repair issue *and* leaves its config entry unhealthy, so one root cause can cost up to **25 pts** together (15 integration health + 10 repairs).
-  
-* **Backup Health:** A static **30-point deduction** for stale backups.
-  
-* **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene: a recorder retention of at most 10 days, Home Assistant's default (+5), and a user-set include/exclude entity filter (+5). Unearned bonus points are reported in the recommendations and in `rec_config_audit` (meaning "bonus points are missing", not "the configuration is bad").
+[All application rules →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md#pillar-2-application-hygiene-60)
 
 ---
 
@@ -153,16 +111,7 @@ HAGHS is installed via the **Marketplace** (Home Assistant 2026.11 and later) or
 
 ### 1. Prerequisites
 
-Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not in the Marketplace or HACS.
-
-After adding it, navigate to its entity list and **manually enable** the processor and memory usage entities (they are disabled by default), for example:
-* `sensor.system_monitor_processor_use` (Percentage %)
-* `sensor.system_monitor_memory_usage` (Percentage %)
-
-> **Note:** Where the Linux kernel provides PSI, HAGHS uses it automatically and these sensors are only a safety net. They are optional in the setup flow; without PSI the System Monitor sensors are suggested when HAGHS finds them, but HAGHS never selects them by itself.
-> > **Without PSI and without these sensors:** HAGHS still sets up and keeps running. CPU and/or RAM are left out of the hardware score, a recommendation line says so, and a non-blocking **Repair** in *Settings > System > Repairs* lets you pick the missing sensor (System Monitor's processor and memory sensors are pre-filled when found; both fields are optional, an empty field keeps its setting). Submitting it includes them without restarting Home Assistant.
-
-**That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
+Where the Linux kernel provides PSI, nothing is needed. Otherwise add the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration and enable its processor and memory usage entities (disabled by default). Database size and disk usage are detected automatically.
 
 ### 2. Installation & Setup
 1.  **Home Assistant 2026.11 and later:** open **Settings > Marketplace**, search for **HAGHS** and select **Install**; the setup opens right away, no restart needed (continue with step 3). **Up to 2026.10:** download **HAGHS** in **HACS** and **Restart Home Assistant**.
@@ -179,17 +128,11 @@ Change any of it later in **Settings > Devices & Services > Integrations > HAGHS
 
 > **Short version.** Label tips, conditional ignore labels, automations, pattern-based ignore and stale reporting are in [docs/configuration.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#label-configuration-smart-whitelisting).
 
-To prevent false positives from sleeping tablets or seasonal devices, you have three ways to exclude entities from HAGHS scoring - pick whichever feels most natural:
+Three ways keep an entity out of the score:
 
-1. **Disable the entity** (*Settings > Devices & Services > Entity > Disable entity*). HAGHS respects `entity_registry.disabled_by` automatically, so disabled entities never count as zombies or contribute to update penalties. No HAGHS configuration needed.
-2. **Apply an ignore label** (described below) for entities you want to keep enabled but exclude from scoring (e.g. vacation devices, tablets that sleep).
-3. **Use a glob pattern** (see [Pattern-Based Ignore](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#pattern-based-ignore-for-entities-without-a-unique-id)) for entities without a unique ID, which cannot carry a label.
-
-To use ignore labels:
-1.  Go to **Settings > Areas, labels & zones > Labels**.
-2.  The `haghs_ignore` label is created automatically during setup. Create additional labels if needed (e.g. `vacation`, `guest_mode`).
-3.  Open **Settings > Devices & Services > HAGHS > Configure** and add every label you want HAGHS to honour to the **Ignore labels** field. The field accepts a list, so all listed labels are evaluated.
-4.  Assign any of those labels to any **Area**, **Device**, **Entity**, or **Update Entity**. A device label covers all of its entities.
+1. **Disable the entity**; disabled entities never count.
+2. **Apply an ignore label** to an area, device, entity or update entity. The `haghs_ignore` label is created during setup; list further labels in **HAGHS > Configure > Ignore labels**.
+3. **Use a glob pattern** for entities without a unique ID, which cannot carry a label.
 
 [All label options →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#label-configuration-smart-whitelisting)
 
@@ -203,19 +146,19 @@ The most used attributes for dashboard cards, automations, and templates:
 
 | Attribute | Type | Description |
 |---|---|---|
-| `hardware_score` | int | Hardware pillar score (0–100): average of the measured components (CPU, RAM, I/O when PSI provides it, Disk) minus 20 points on RPi under-voltage |
-| `application_score` | int | Application pillar score (0–100) |
-| `recommendations` | string | Advisor recommendations (CPU, RAM, I/O, disk, DB, power, updates, zombies, dead and empty devices, stale reporting, backup, core lag, integration health, config audit, repairs, calculation warnings) |
-| `zombie_count` | int | Total number of zombie entities (unavailable/unknown past the grace period, with an entity-registry entry) |
-| `zombie_entities` | list | Entity IDs of zombies (capped at 100; `zombie_count` carries the full total); current only, excluded from recorder history (`zombie_count` stays in the history) |
-| `zombie_reasons` | dict | Reason per listed zombie (same 100 entries and order as `zombie_entities`), from Home Assistant facts only, first match in this order: `config_entry_missing` (the config entry the entity belonged to no longer exists; **the only strong hint of an orphaned entity**), `integration_not_loaded` (the entry exists but is not loaded; fix the integration, not a reason to delete), `not_provided` (HA only restored the stored state because no running integration provides the entity; not a reason to delete without checking), `unavailable` (the integration runs and reports the entity as unavailable/unknown, often temporary; not a reason to delete); current only, excluded from recorder history |
-| `pending_updates` | list | Names of pending updates (e.g., `["ESPHome 2024.2"]`). Listed immediately; only counted toward the score after HAGHS has seen that version pending for 7 days (also across restarts); current only, excluded from recorder history (`rec_updates_pending` stays in the history) |
-| `repair_count` | int | Number of open repair issues counted toward the score (own domain and dismissed issues excluded) |
-| `integration_unhealthy_count` | int | Number of config entries in `SETUP_ERROR`, `SETUP_RETRY`, or `FAILED_UNLOAD` (source of the Integration Health penalty) |
-| `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
-| `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
-| `cpu_ram_source` | str/null | Where CPU and RAM come from: `psi`, `sensors` (both measured, at least one by a selected sensor), `partial` (one not measured), `none` (neither measured; no PSI and no sensor selected). Not measured values are left out of the hardware score. `null` while the hardware pillar has no measurement (first failed update, hardware fallback). |
-| `stale_watch_count` | int | Complete count of overdue directly labelled watched entities in any domain |
+| `hardware_score` | int | Hardware pillar score (0–100). |
+| `application_score` | int | Application pillar score (0–100). |
+| `recommendations` | string | Advisor lines naming what costs points or needs a look, or a healthy message. |
+| `zombie_count` | int | Total number of zombie entities. |
+| `zombie_entities` | list | Entity IDs of zombies, at most 100. |
+| `zombie_reasons` | dict | Why each listed zombie is reported; only `config_entry_missing` strongly points to an orphaned entity. |
+| `pending_updates` | list | Names of pending updates, listed at once and counted after 7 days. |
+| `repair_count` | int | Number of open repair issues counted toward the score. |
+| `integration_unhealthy_count` | int | Number of config entries stuck in setup error, setup retry or failed unload. |
+| `db_size_mb` | float | Current database size in MB. |
+| `psi_available` | bool | `True` when PSI provides both CPU and memory data. |
+| `cpu_ram_source` | str/null | Where CPU and RAM come from: `psi`, `sensors`, `partial` or `none`. |
+| `stale_watch_count` | int | Number of overdue watched entities. |
 
 [All attributes →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/attributes.md)
 
@@ -247,59 +190,24 @@ HAGHS provides all data as sensor attributes; two ready-to-use dashboard cards s
 
 ## FAQ
 
-**Why do I still see zombies or Repairs after excluding an integration entry?**
-
-The integration-entry exclusion only changes Integration Health. It does not suppress entity or device detection, update checks or Repairs. Review those findings separately and use their existing exclusion or ignore mechanisms where appropriate.
-
-**How do I hide entities during a vacation without Spook?**
-
-Use the **Conditional ignore labels** with a helper such as `input_boolean.vacation_mode`. While the helper is `on`, the labels act as ignore labels; switch it from your vacation automation. Details in [Dynamic exclusions via automation](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#dynamic-exclusions-via-automation).
-
-**Can I delete all zombie entities?**
-
-No, not without checking them. A zombie only means that the entity has been `unavailable` or `unknown` for longer than the grace period. That also happens during a temporary outage, for an idle device or for an entity that only reports in some operating modes. Check the entity's integration, device and config entry before deleting it; for entities you want to keep, use an ignore label or disable them. With more than 100 zombies, `zombie_count_per_integration` shows which integration they come from. `zombie_reasons` tells you why each one is listed: only `config_entry_missing` is a strong hint of an orphaned entity; `integration_not_loaded`, `not_provided` and `unavailable` are no reason to delete.
+> **Short version.** All questions and full answers are in [docs/faq.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md).
 
 **Why is my score so low?**
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
 
-**Does HAGHS send any data to external servers?**
-No. All data collection is strictly local. HAGHS reads directly from Linux kernel interfaces (`/proc/pressure/*`), `psutil`, and the HA internal state machine. No outbound network traffic is ever initiated by this integration.
-
-**Does HAGHS work with Docker / Kubernetes?**
-Yes. HAGHS reads disk usage via `psutil` and the database size from the SQLite file or the configured sensor. The Core update entity is detected dynamically, no Supervisor dependency.
-
-**How does PSI work and why does HAGHS use it?**
-[PSI (Pressure Stall Information)](https://docs.kernel.org/accounting/psi.html) is a Linux kernel feature that measures how long tasks wait for CPU, memory, or I/O, rather than how busy a resource is. HAGHS uses PSI as the primary metric where available, falling back to classic utilization sensors on systems without PSI support. Because their scales differ fundamentally, HAGHS uses separate penalty thresholds for each. When PSI is active, I/O monitoring is also included, giving a 4-component hardware score (CPU + RAM + I/O + Disk). Without PSI, the score averages Disk with the CPU and RAM values that have a sensor selected (1 to 3 components, plus I/O pressure when the kernel provides it). The classic sensors selected during setup are only used when PSI is unavailable.
-
-**I use an external database (MariaDB / PostgreSQL). How do I monitor it?**
-See [External Database](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#external-database-mariadb) for full setup instructions. The sensor must report the database size in **MB**. Without a sensor HAGHS measures `home-assistant_v2.db` in the config folder; only when that file does not exist is the database part neutral. A leftover SQLite file from before the switch is still measured.
-
-**Do I still need a disk usage sensor?**
-No. HAGHS reads disk usage directly via `psutil`. No manual sensor selection required.
-
-**How are update penalties calculated?**
-Each update whose offered version HAGHS has seen pending for at least 7 days (also across restarts) costs **5 pts**. A Core version lag (≥3 months behind) adds **20 pts**. The combined penalty is capped at **35 pts**.
-
-**How does the zombie grace period work?**
-Entities that just became `unavailable` or `unknown` are ignored for **5 minutes by default**, configurable in the Options Flow from 1 to 240 minutes. This prevents your score from dropping during brief network hiccups or device reboots. Battery-class entities (`device_class: battery`) get a separate, longer window (default 60 minutes).
-
-**Why is my score capped at 99 right after a restart?**
-A cap at 99 means a zombie, an open repair or an overdue watched entity is reported; the Config-Audit bonus can never lift it to 100. A restart itself does not create zombies: HAGHS uses `max(last_changed, boot_time)` as the floor for the grace window, so states restored from the recorder still get the full grace window, and zombie detection waits for `EVENT_HOMEASSISTANT_STARTED` before its first run.
-
-**Do I need to remove and re-add HAGHS after an update?**
-No. Config entries of every older version (1.x, 2.x, 3.0–3.3) are migrated to the current layout automatically on the next restart, also for users who saw the *"Migration handler not found"* warning on v2.2.x (#75).
+**Can I delete all zombie entities?**
+No, not without checking them. A zombie only means that the entity has been `unavailable` or `unknown` for longer than the grace period. Check its integration, device and config entry first; `zombie_reasons` tells you why each one is listed.
 
 **Why did my score change after an update?**
-The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list the behavior changes per release; v2.3.0 and v2.4.0 include upgrade notes. The recommendations and `rec_*` flags show which factors cost points right now.
+The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list the behavior changes per release. The recommendations and `rec_*` flags show which factors cost points right now.
 
-**A pending update from yesterday is in the list but doesn't change my score yet — why?**
-Because of the 7-day update grace period. The list is informational and shows every pending update that is not ignored or disabled; the **score** only deducts after HAGHS has seen that version pending for at least 7 days, also across restarts.
+**Does HAGHS send any data to external servers?**
+No. All data collection is strictly local. No outbound network traffic is ever initiated by this integration.
 
-**Can I change the update interval?**
-Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.
+**How does PSI work and why does HAGHS use it?**
+[PSI (Pressure Stall Information)](https://docs.kernel.org/accounting/psi.html) is a Linux kernel feature that measures how long tasks wait for CPU, memory, or I/O, rather than how busy a resource is. HAGHS uses it where available and falls back to classic utilization sensors otherwise.
 
-**What happens if a sub-calculation fails?**
-HAGHS wraps the whole update cycle in a safety net: a pillar that fails or times out (time limit 10 seconds) falls back to a neutral score (100 / no penalty) for that refresh and the failure is logged, so the sensor keeps updating. If a failure happens outside the two guarded pillars, the **last valid result is kept** instead, and only before the first successful update is a fully neutral result returned.
+[All questions →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md)
 
 ---
 
