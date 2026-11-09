@@ -8,7 +8,7 @@ file and is refreshed whenever a release lands.
 
 ## Completed in v2.4
 
-All work below is committed on `dev` and described in detail in
+All work below is released in v2.4.0 and described in detail in
 [`v2.4.0_CHANGELOG.md`](./v2.4.0_CHANGELOG.md).
 
 ### Features
@@ -64,7 +64,7 @@ All work below is committed on `dev` and described in detail in
 
 ## Completed in v2.3
 
-All work below is committed on `dev` and described in detail in
+All work below is released in v2.3.0 and described in detail in
 [`v2.3_CHANGELOG.md`](./v2.3_CHANGELOG.md).
 
 ### Features
