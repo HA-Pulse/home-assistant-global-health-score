@@ -6,7 +6,7 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 ## Changelog
 
-### [v2.4.0] - unreleased
+### [v2.4.0] - 2026-11-10
 
 **Highlights**
 
