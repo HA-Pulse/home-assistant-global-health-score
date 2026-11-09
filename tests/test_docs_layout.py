@@ -20,6 +20,9 @@ REPO = "HA-Pulse/home-assistant-global-health-score"
 BLOB = f"https://github.com/{REPO}/blob/main/"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main/"
 BUDGET = 400
+WORD_BUDGET = 2000
+BLOCK_WORDS = 80
+README_ATTRIBUTE_WORDS = 20
 NOTICE = "> **Short version.** "
 BACK_MD = f"[← Back to the README]({BLOB}README.md)"
 BACK_YAML = f"# Back to the README: {BLOB}README.md"
@@ -106,6 +109,42 @@ def test_readme_stays_within_the_line_budget() -> None:
     )
 
 
+def test_readme_stays_within_the_word_budget() -> None:
+    words = len(_read(README).split())
+    assert words <= WORD_BUDGET, (
+        f"README has {words} words, budget {WORD_BUDGET}: move details to docs/ (CONTRIBUTING.md)"
+    )
+
+
+def _blocks(text: str) -> list[tuple[int, str]]:
+    """Every README line outside code fences, a table row split into its cells."""
+    found: list[tuple[int, str]] = []
+    fenced = False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        cells = line.strip().strip("|").split("|") if line.lstrip().startswith("|") else [line]
+        found.extend((number, cell) for cell in cells)
+    return found
+
+
+def test_no_readme_paragraph_or_cell_over_80_words() -> None:
+    long = [
+        f"line {n}: {len(b.split())} words"
+        for n, b in _blocks(_read(README))
+        if len(b.split()) > BLOCK_WORDS
+    ]
+    assert long == []
+
+
+def test_a_long_readme_paragraph_fails() -> None:
+    text = "intro\n" + " ".join(["word"] * 81) + "\n| a | " + " ".join(["w"] * 81) + " |\n"
+    assert [n for n, b in _blocks(text) if len(b.split()) > BLOCK_WORDS] == [2, 3]
+
+
 def test_readme_sections_match_the_registry() -> None:
     assert [h for h, _ in _sections(_read(README))] == [s["heading"] for s in REGISTRY]
 
@@ -188,11 +227,24 @@ def test_every_repository_link_resolves(source: Path) -> None:
     assert broken == []
 
 
-def test_readme_attribute_rows_are_rows_of_the_full_table() -> None:
+def _cells(row: str) -> list[str]:
+    return [c.strip() for c in row.strip().strip("|").split("|")]
+
+
+def test_readme_attribute_rows_match_the_full_table() -> None:
+    """A README row keeps name and type of its full row exactly; its description is one short sentence."""
     rows = [x for x in dict(_sections(_read(README)))["Sensor Attributes"] if x.startswith("| `")]
-    full = set(_read(DOCS / "attributes.md").splitlines())
+    full = {
+        _cells(r)[0]: _cells(r)[1]
+        for r in _read(DOCS / "attributes.md").splitlines()
+        if r.startswith("| `")
+    }
     assert rows
-    assert [r for r in rows if r not in full] == []
+    assert [r for r in rows if full.get(_cells(r)[0]) != _cells(r)[1]] == []
+    too_long = [r for r in rows if len(_cells(r)[2].split()) > README_ATTRIBUTE_WORDS]
+    assert too_long == []
+    more_sentences = [r for r in rows if re.search(r"[.!?]\s+[A-Z`]", _cells(r)[2].rstrip(". "))]
+    assert more_sentences == []
 
 
 def test_card_yaml_files_carry_their_version_line() -> None:
