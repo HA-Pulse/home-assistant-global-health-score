@@ -8,7 +8,7 @@ file and is refreshed whenever a release lands.
 
 ## Completed in v2.4
 
-All work below is committed on `dev` and described in detail in
+All work below is released in v2.4.0 and described in detail in
 [`v2.4.0_CHANGELOG.md`](./v2.4.0_CHANGELOG.md).
 
 ### Features
@@ -58,13 +58,13 @@ All work below is committed on `dev` and described in detail in
 
 - **Pillar test coverage and CI (#107, #117, #128)**: `coordinator.py` at 100 %
   statement and branch coverage; CI runs on Python 3.14 and gates the package at
-  90 % and `coordinator.py` at 80 %. The suite holds 663 tests.
+  90 % and `coordinator.py` at 80 %.
 - **Shorter README (#179)**: setup, labels, attributes, cards and release
   summaries in full under `docs/`; a test keeps the README at 400 lines or fewer.
 
 ## Completed in v2.3
 
-All work below is committed on `dev` and described in detail in
+All work below is released in v2.3.0 and described in detail in
 [`v2.3_CHANGELOG.md`](./v2.3_CHANGELOG.md).
 
 ### Features

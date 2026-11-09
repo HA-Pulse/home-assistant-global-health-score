@@ -29,7 +29,10 @@ async def test_psi_line_has_no_component_count(hass, cards) -> None:  # noqa: F8
         assert "3 components" not in rendered, name
 
 
-async def test_classic_line_keeps_its_three_components(hass, cards) -> None:  # noqa: F811
+async def test_classic_line_names_its_components(hass, cards) -> None:  # noqa: F811
     attrs = dict(await _base(hass), psi_available=False, cpu_ram_source="sensors")
     for name in ("Lite", "Pro"):
-        assert "hardware score uses 3 components" in _render(hass, cards[name], attrs), name
+        assert (
+            "Classic sensors (CPU + RAM + Disk); I/O pressure counts when the kernel provides it"
+            in _render(hass, cards[name], attrs)
+        ), name

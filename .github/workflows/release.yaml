@@ -2,7 +2,7 @@ name: Attach HACS Release Asset
 
 on:
   release:
-    types: [published, created]
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -10,6 +10,9 @@ on:
         required: true
         default: 'v2.2.2'
 
+concurrency:
+  group: release-asset-${{ github.event.release.tag_name || github.event.inputs.tag }}
+  cancel-in-progress: false
 jobs:
   attach-zip:
     runs-on: ubuntu-latest

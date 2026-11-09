@@ -37,7 +37,7 @@ closed.
 
 ## Documentation
 
-HACS shows the README in Home Assistant, so it stays short. These rules apply
+The Marketplace (HACS up to Home Assistant 2026.10) shows the README in Home Assistant, so it stays short. These rules apply
 to every pull request (feature, fix or docs) and are checked by
 `tests/test_docs_layout.py`:
 
@@ -61,6 +61,21 @@ to every pull request (feature, fix or docs) and are checked by
   link names a file (and heading) of the checkout.
 - The dashboard cards live in `docs/cards/lite.yaml` and `docs/cards/pro.yaml`;
   their first line carries the card version.
+- **Behaviour follows into the docs:** a change to the score, a penalty, a
+  threshold, a default, an option, an attribute, a recommendation, a repair,
+  the setup or a migration updates the README/docs places that describe it in
+  the same pull request. This applies to external pull requests too.
+- **Generated blocks:** the attribute table and the recommendation texts in
+  `docs/attributes.md` and the options table in `docs/configuration.md` are
+  generated from the code between `<!-- BEGIN GENERATED: … -->` and
+  `<!-- END GENERATED: … -->`. Never edit them by hand: change the code (or
+  the attribute wording in `script/docs_attributes.py`) and run
+  `python script/gen_docs.py`. `tests/test_docs_generated.py` fails in CI when
+  a block is out of date, an attribute has no row or a row names an attribute
+  the sensor no longer publishes.
+- **No test counts** in the README, `ROADMAP.md` or `docs/`: a count goes out
+  of date with every pull request. Changelog files may keep the counts of
+  their time.
 
 ## Changelog
 

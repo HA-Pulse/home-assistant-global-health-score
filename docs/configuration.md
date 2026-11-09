@@ -6,11 +6,11 @@ Setup, every option, external databases, ignore labels, dynamic exclusions, patt
 
 ## Configuration
 
-HAGHS is installed via **HACS** and configured via the **UI**
+HAGHS is installed via the **Marketplace** (Home Assistant 2026.11 and later) or **HACS** (up to 2026.10) and configured via the **UI**.
 
 ### 1. Prerequisites
 
-Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not available in HACS.
+Install the built-in [**System Monitor**](https://www.home-assistant.io/integrations/systemmonitor/) integration via **Settings > Devices & Services > Add Integration** and search for "System Monitor". This is a **native HA integration**, it is not in the Marketplace or HACS.
 
 After adding it, navigate to its entity list and **manually enable** the processor and memory usage entities (they are disabled by default), for example:
 * `sensor.system_monitor_processor_use` (Percentage %)
@@ -22,8 +22,8 @@ After adding it, navigate to its entity list and **manually enable** the process
 **That's it.** Database size and disk usage are detected automatically. No `configuration.yaml` changes needed.
 
 ### 2. Installation & Setup
-1.  Download **HAGHS** in **HACS** and **Restart Home Assistant**.
-> **Note on HACS installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page) that can be downloaded manually and dropped into `<config>/custom_components/haghs/`. HACS itself installs straight from the repository content.
+1.  **Home Assistant 2026.11 and later:** open **Settings > Marketplace**, search for **HAGHS** and select **Install**; the setup opens right away, no restart needed (continue with step 3). **Up to 2026.10:** download **HAGHS** in **HACS** and **Restart Home Assistant**.
+> **Note on manual installation:** Each release attaches a pre-built `haghs.zip` asset (see the GitHub Releases page) that can be downloaded manually and dropped into `<config>/custom_components/haghs/`. The Marketplace and HACS install straight from the repository content.
 2.  Go to **Settings > Devices & Services > Integrations > Add Integration** and search for **HAGHS**.
 3.  Follow the setup mask:
     * Select your **CPU** and **RAM** sensors (smart PSI fallback - only used if PSI data is not available on your host).
@@ -32,22 +32,34 @@ After adding it, navigate to its entity list and **manually enable** the process
     * Optionally fill the **Ignore entity-id patterns** field with glob patterns.
     * Optionally select a **Database Size Sensor** for external databases (see the collapsible block below).
 
-### 3. Options Flow (Runtime Settings)
-After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust:
-* CPU / RAM sensors
-* Storage type
-* **Ignore labels** (multi-select)
-* **Ignore entity-id patterns** (glob list)
-* **Conditional ignore labels** and **Active while (helper)** (both empty by default) - extra ignore labels that apply only while the selected `input_boolean`, `switch` or `binary_sensor` is `on`, e.g. a vacation mode. Set both or neither. See [Dynamic exclusions via automation](#dynamic-exclusions-via-automation).
-* **Exclude integration entries from Integration Health** (multi-select, empty by default). Select individual entries by title, domain and entry ID. Other entries from the same integration remain included.
-* **Stale threshold** (1–8760 hours, default: 24) - how long a sensor may stay silent before it is reported as stale (see Stale reporting).
-* **Stale watch labels** (multi-select, empty by default) - labels whose entities cost points when they are overdue (see Stale reporting).
-* **Database size sensor** (for external databases)
-* **Update interval** (10–3600 seconds, default: 60s)
-* **Zombie grace period** (1–240 minutes, default: 5) - how long an entity must stay `unavailable` / `unknown` before it counts as a zombie. Lower values make detection more aggressive; higher values mask short outages.
-* **Battery-class grace period** (1–240 minutes, default: 60) - extended window for entities with `device_class: battery`. Independent from the regular grace; can be set lower if you do not care about that distinction.
+#### Updates and beta versions
+- **Updates:** new HAGHS versions appear under **Settings > Updates**. An update needs a restart of Home Assistant; on 2026.11 and later a repair reminds you and can restart for you. Installations made with HACS move to the Marketplace automatically when you update Home Assistant to 2026.11 and keep receiving updates.
+- **Beta versions on Home Assistant 2026.11 and later:** go to **Settings > Devices & Services > Marketplace**, open the HAGHS device, enable the **Pre-release** entity (disabled by default) and turn it on. The Marketplace checks for new versions every 6 hours.
+- **Beta versions up to 2026.10 (HACS):** open HAGHS in HACS, use the three-dot menu, **Redownload**, turn on **Show beta versions**, pick the version and restart Home Assistant.
 
-Changes apply immediately, no restart required.
+### 3. Options Flow (Runtime Settings)
+After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Configure** to adjust the fields below (the table is generated from the options form; "none" means the field has no default, the form shows your current values).
+
+<!-- BEGIN GENERATED: options (script/gen_docs.py) -->
+| Option | Default | Range | Description |
+|---|---|---|---|
+| **CPU usage sensor** | none | – | Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Without PSI, an empty field is not measured and is left out of the hardware score; HAGHS still sets up. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use'). |
+| **RAM usage sensor** | none | – | Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Without PSI, an empty field is not measured and is left out of the hardware score; HAGHS still sets up. Select the sensor that reports memory usage in percent (e.g. 'Memory usage'). |
+| **Storage type** | `sd-card` | `sd-card`, `ssd`, `emmc` | Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space. |
+| **Ignore labels** | none | – | Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation with the 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions provided by the Spook custom integration (Home Assistant itself has no label service), e.g. switch a 'vacation' label on while you are away. Create the labels first under Settings → Labels if they do not exist yet. |
+| **Ignore entity-id patterns** | none | – | Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported. |
+| **Database size sensor (optional)** | none | – | Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size'). |
+| **Stale threshold (hours)** | `24` | 1–8760 h | Time since the last state report, not the last value change. Whole hours from 1 to 8760; default: 24. Passive findings cover sensor and binary_sensor only and do not affect the score. |
+| **Stale watch labels** | none | – | Opt entities in to stale scoring using labels applied directly to entities in any domain. Device and area labels do not opt in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus; application score is at most 99 while any are overdue. Leave empty to disable stale scoring. |
+| **Conditional ignore labels** | none | – | Extra ignore labels that apply only while the helper below is on, e.g. a 'vacation' label during a vacation mode. They exclude entities and devices exactly like the ignore labels above. Leave empty to disable. |
+| **Active while (helper)** | none | – | An input_boolean, switch or binary_sensor. While it is 'on', the conditional ignore labels apply; 'off', unavailable, unknown or a deleted helper means they do not. Switch it from an automation with a normal Home Assistant action (e.g. input_boolean.turn_on), no Spook needed. HAGHS updates right after the helper changes. |
+| **Update interval** | `60` | 10–3600 s | How often HAGHS recalculates the health score, in seconds. Lower values mean faster updates but slightly more CPU usage. Default: 60 seconds. |
+| **Zombie grace period (minutes)** | `5` | 1–240 min | How long an entity must stay in 'unavailable' or 'unknown' before HAGHS counts it as a zombie. Allowed range: 1 to 240 minutes. Lower values make detection more aggressive (more false positives from briefly-offline devices). Higher values mask short outages but let real failures linger. Default: 5 minutes. |
+| **Battery-class grace period (minutes)** | `60` | 1–240 min | Extended grace period specifically for entities with 'device_class: battery'. Zigbee and Homematic radios routinely take longer than the regular window to re-poll battery devices, so flagging them as zombies after only 5 minutes produces false positives. Allowed range: 1 to 240 minutes. If you set this lower than the regular grace, it effectively disables the extension. Default: 60 minutes. |
+| **Exclude integration entries from Integration Health** | none | – | Select individual integration entries to exclude from the Integration Health count, penalty and recommendation. Each entry is identified by its title, domain and entry ID. Leave empty to include all entries. This does not exclude entities or devices from zombie detection, and does not ignore Repairs. Device and entity ignore labels do not exclude integration entries. |
+<!-- END GENERATED: options -->
+
+Changes apply immediately, no restart required. The conditional ignore labels and their helper are set together, see [Dynamic exclusions via automation](#dynamic-exclusions-via-automation); the stale options are explained under [Stale reporting](#stale-reporting).
 
 ### Excluding individual integration entries
 

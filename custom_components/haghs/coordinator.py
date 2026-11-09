@@ -283,6 +283,32 @@ def _device_config_entry_ids(device: dr.DeviceEntry) -> set[str]:
     return set(legacy or ())
 
 
+def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]) -> set[str]:
+    """Ids of devices other devices hang off: ``via_device_id`` targets and parents of child devices.
+
+    Child devices (HA 2026.9+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
+    versions have no such collection, then only ``via_device_id`` counts, as before.
+    """
+    children = []
+    for item in getattr(dev_reg, "child_devices", ()) or ():
+        # Like ``devices`` in older versions, a collection may yield ids: resolve them.
+        child = dev_reg.async_get(item) if isinstance(item, str) else item
+        if child is not None:
+            children.append(child)
+    parents = {d.via_device_id for d in devices + children if getattr(d, "via_device_id", None)}
+    parents |= {c.parent_device_id for c in children if getattr(c, "parent_device_id", None)}
+    return parents
+
+
+def _is_composite(device: dr.DeviceEntry) -> bool:
+    """A merged (composite) device or one split from it (HA 2026.10+); never on older versions."""
+    return bool(
+        getattr(device, "composite_device_id", None)
+        or getattr(device, "has_composite_identifiers", False)
+        or getattr(device, "is_composite_device", False)
+    )
+
+
 @dataclass
 class _RecorderInfo:
     """Recorder configuration data — prepared for Phase 3 scoring."""
@@ -1482,7 +1508,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Only Home Assistant facts, no name rules. A device counts when it has
         no entity in the entity registry (disabled ones included), is not
         disabled, is not a service entry, no other device points to it via
-        ``via_device_id`` (hubs, bridges, coordinators) and every one of its
+        ``via_device_id`` (hubs, bridges, coordinators), it has no child
+        devices, it is not a composite or split-composite device (one report
+        fewer rather than a wrong one) and every one of its
         config entries is loaded (a failing or loading integration may not
         have created its entities yet). Devices with an ignore label on the
         device or on its area are skipped; entity-id patterns cannot apply
@@ -1501,7 +1529,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         dev_reg = dr.async_get(self.hass)
         area_reg = ar.async_get(self.hass)
         devices = _device_entries(dev_reg)
-        parents = {device.via_device_id for device in devices if device.via_device_id}
+        parents = _parent_device_ids(dev_reg, devices)
         ignore = set(self.ignore_labels)
 
         found: list[tuple[str, str]] = []
@@ -1510,6 +1538,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 device.disabled_by is not None
                 or device.entry_type is not None
                 or device.id in parents
+                or _is_composite(device)
             ):
                 continue
             entry_ids = _device_config_entry_ids(device)

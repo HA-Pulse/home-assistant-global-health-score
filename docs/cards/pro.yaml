@@ -34,7 +34,7 @@ cards:
 
       {% if fallbacks %} ⚠️ Calculation incomplete: {{ fallbacks | map('title') | join(', ') }}; the formula uses neutral fallback values, not measurements. {% endif %}
 
-      {% if cycle_failed %} ⚠️ The last update cycle failed; previous results are shown. {% endif %}
+      {% if cycle_failed %} ⚠️ The last update cycle failed; previous results or neutral initial values are shown. {% endif %}
 
       {% if conditional %} 🏖️ Conditional ignore labels are active; some entities are hidden from the score. {% endif %}
       {% endif %}
@@ -106,7 +106,7 @@ cards:
 
       ---
 
-      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + Disk, I/O when the kernel provides it){% else %}⚙️ Classic sensors (CPU + RAM + Disk): hardware score uses 3 components{% endif %}
+      **Metric source**: {% if cpu_ram in ['none', 'partial'] %}📊 No PSI and {{ 'no CPU/RAM sensor' if cpu_ram == 'none' else 'one CPU/RAM sensor' }} selected: hardware score uses the measured components{% elif psi %}🟢 PSI active (CPU + RAM + Disk, I/O when the kernel provides it){% else %}⚙️ Classic sensors (CPU + RAM + Disk); I/O pressure counts when the kernel provides it{% endif %}
       {% endif %}
   - type: markdown
     title: ⏱️ Stale Reporting
