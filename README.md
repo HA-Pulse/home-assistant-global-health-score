@@ -93,11 +93,11 @@ Measures "maintenance debt". Every missing point prints a recommendation line an
 | Updates and Core age | −5 per update, −20 Core lag, at most −35 | An update counts after HAGHS has seen that version pending for 7 days, also across restarts. |
 | Integration health | −5 per entry, at most −15 | Config entries stuck in setup error, setup retry or failed unload. |
 | Repairs | −5 each, at most −10, caps at 99 | Open repairs of other integrations; Home Assistant's "Ignore" takes one out. |
-| Watched entities | −5 each, at most −10, caps at 99 | Opt-in: entities with a watch label that stopped reporting. |
+| Watched entities | −5 each, at most −10, caps at 99 | Opt-in: entities labelled directly with a stale watch label that have not reported for longer than the stale threshold (default 24 h). |
 | Database | −10, or −30 | Above `1000 MB + 2.5 MB × entities`, or above 2.5 times that limit. |
 | Backup | −30 | Stale backup. |
 | Config audit | up to +10 | Recorder keeps at most 10 days (+5); user-set entity filter (+5). |
-| Dead and empty devices | none | Informational: devices whose entities are all unavailable, or that have no entity. |
+| Dead and empty devices | none | Informational: devices whose monitored entities are all unavailable, or that have no entity. |
 
 [All application rules →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md#pillar-2-application-hygiene-60)
 

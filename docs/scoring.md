@@ -78,4 +78,6 @@ Measures "maintenance debt", the hidden factors that cause sluggishness, failed 
   
 * **Backup Health:** A static **30-point deduction** for stale backups.
   
+* **Watched entities (Stale reporting, opt-in):** Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus. While a watched entity is overdue, the application score cannot exceed 99. Only entities with one of the selected stale watch labels set directly on them count, once Home Assistant has not received a report for longer than the stale threshold (default 24 hours); unknown, unavailable and ignored entities are excluded. Details in [Stale reporting](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/configuration.md#stale-reporting).
+  
 * **Config Audit (Bonus):** Awards up to **+10 points** for good recorder hygiene: a recorder retention of at most 10 days, Home Assistant's default (+5), and a user-set include/exclude entity filter (+5). Unearned bonus points are reported in the recommendations and in `rec_config_audit` (meaning "bonus points are missing", not "the configuration is bad").
