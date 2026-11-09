@@ -41,7 +41,10 @@ The Marketplace (HACS up to Home Assistant 2026.10) shows the README in Home Ass
 to every pull request (feature, fix or docs) and are checked by
 `tests/test_docs_layout.py`:
 
-- **Length budget:** `README.md` has at most 400 lines.
+- **Length budget:** `README.md` has at most 2 000 words and 400 lines, and no
+  paragraph, list item or table cell has more than 80 words. A README attribute
+  row keeps name and type of its `docs/attributes.md` row and describes it in
+  one sentence of at most 20 words.
 - **Where things go:** a new feature gets at most one to three sentences plus a
   link in the README. Details, tables, YAML examples and options go into the
   matching page under `docs/`; extend an existing page, add a new one only when

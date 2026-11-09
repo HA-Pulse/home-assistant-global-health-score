@@ -62,6 +62,19 @@ Everything else runs without further confirmation.
 - Afterwards: close the completed issues and post the announcement
   (community forum / Reddit).
 
+## 5. Documentation-only release
+
+The Marketplace shows the README of the installed or latest released
+version, so a documentation fix reaches its users only with a release.
+
+- Allowed only when `git diff vX.Y.Z..dev -- custom_components/` changes
+  nothing but `version` in `manifest.json`. Code waiting on `dev` blocks it.
+- Patch version (`vX.Y.Z+1`), no beta.
+- Slim release check: CI green, link check (`tests/test_docs_layout.py` and
+  every README/docs link after the merge into `main`), and a documentation
+  audit of every changed statement. No version matrix, no full reference run.
+- Steps 1, 2 and 4 otherwise unchanged.
+
 ## Tag and version check
 
 The release workflow checks the tag against the `version` field in
