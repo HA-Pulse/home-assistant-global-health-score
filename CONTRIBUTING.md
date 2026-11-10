@@ -10,9 +10,9 @@ standards.
 
 **Mandatory reading:**
 
-1. [`HAGHS_PHILOSOPHY.md`](./HAGHS_PHILOSOPHY.md) — vision, scope, hard rules
+1. [`HAGHS_PHILOSOPHY.md`](./HAGHS_PHILOSOPHY.md): vision, scope, hard rules
    on local-only data, transparency and backward compatibility.
-2. [`DEVELOPMENT_GUIDELINES.md`](./DEVELOPMENT_GUIDELINES.md) — Home Assistant
+2. [`DEVELOPMENT_GUIDELINES.md`](./DEVELOPMENT_GUIDELINES.md): Home Assistant
    Core coding standards we align with.
 
 If your PR contradicts either document, it will be asked to change or be
@@ -93,7 +93,7 @@ to every pull request (feature, fix or docs) and are checked by
 
 - One topic per PR. Split refactors, features and fixes.
 - Purely decorative features (UI polish unrelated to health signals) are
-  low priority or declined — see `HAGHS_PHILOSOPHY.md` §Core Focus.
+  low priority or declined; see `HAGHS_PHILOSOPHY.md` §Core Focus.
 - Don't refactor neighboring code unless it's necessary for the change.
 
 ## Hard Rules
@@ -111,7 +111,7 @@ to every pull request (feature, fix or docs) and are checked by
   either a migration (`async_migrate_entry`) or a major version bump with
   release notes.
 - Removing constants or defaults that users relied on is also a breaking
-  change — document it.
+  change: document it.
 
 ### Home Assistant Core rules
 
@@ -130,7 +130,7 @@ to every pull request (feature, fix or docs) and are checked by
 
 - All user-facing strings live in `strings.json`.
 - `translations/en.json` must mirror `strings.json` 1:1.
-- Translation keys used at runtime must match exactly — mismatches are a
+- Translation keys used at runtime must match exactly. Mismatches are a
   blocker, not a nit.
 - For repair issues, the schema marks `issues.<id>.description` and
   `issues.<id>.fix_flow` as mutually exclusive (`vol.Exclusive("fixable")`).
@@ -172,7 +172,7 @@ pytest --cov=custom_components.haghs --cov-report=term-missing
 tests do not need a per-test marker.
 
 Manual validation steps still belong in the PR description under
-"Test plan" — they complement unit tests, not replace them.
+"Test plan". They complement unit tests, not replace them.
 
 ## Checks That Must Pass
 
@@ -180,11 +180,11 @@ Three GitHub Actions workflows run on pull requests and on pushes (the CI
 workflow on pushes to `main` and `dev`). All must be green
 before merge:
 
-- **Hassfest** (`.github/workflows/hassfest.yaml`) — Home Assistant manifest,
+- **Hassfest** (`.github/workflows/hassfest.yaml`): Home Assistant manifest,
   `strings.json` / `translations` schema, integration metadata.
-- **HACS Validation** (`.github/workflows/hacs_validation.yaml`) — HACS
+- **HACS Validation** (`.github/workflows/hacs_validation.yaml`): HACS
   packaging and naming rules.
-- **CI** (`.github/workflows/ci.yml`) — `ruff check`, `ruff format --check`
+- **CI** (`.github/workflows/ci.yml`): `ruff check`, `ruff format --check`
   and `pytest` with coverage scoped to `custom_components/haghs`.
 
 If one of these fails on your PR, fix the underlying issue rather than
