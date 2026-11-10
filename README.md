@@ -2,7 +2,7 @@
 
 **The open standard for Home Assistant instance health monitoring.**
 
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![Marketplace | HACS – Default](https://img.shields.io/badge/Marketplace%20%7C%20HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/README.md#2-installation--setup)
 [![GitHub Release](https://img.shields.io/github/v/release/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/HA-Pulse/home-assistant-global-health-score/releases)
 ![Tracked Installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Tracked%20Installs&suffix=%2B&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)
 [![GitHub Stars](https://img.shields.io/github/stars/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/HA-Pulse/home-assistant-global-health-score/stargazers)
