@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.json import json_bytes
-from pytest_homeassistant_custom_component.common import MockEntityPlatform
-from pytest_homeassistant_custom_component.components.recorder.common import (
+from pytest_homeassistant.common import MockEntityPlatform
+from pytest_homeassistant.components.recorder.common import (
     async_wait_recording_done,
 )
 

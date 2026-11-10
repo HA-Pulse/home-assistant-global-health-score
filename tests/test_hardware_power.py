@@ -9,7 +9,7 @@ pattern that future per-pillar suites should follow.
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs.const import DOMAIN, REC_POWER_UNSTABLE
 from custom_components.haghs.coordinator import (
