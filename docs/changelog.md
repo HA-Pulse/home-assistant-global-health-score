@@ -6,6 +6,10 @@ A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https
 
 ## Changelog
 
+### [v2.4.2] - 2026-11-10
+
+Documentation only, no integration change. The README badge names both ways to install ("Marketplace | HACS – Default") and links to the installation steps; `CONTRIBUTING.md` without em dashes. For developers: the tests run on the Core-maintained `pytest-homeassistant` (#192, #200).
+
 ### [v2.4.1] - 2026-11-10
 
 Documentation only, no integration change. The README is much shorter (about 1 700 words): each section keeps a short version, and the full text moved word for word to [docs/scoring.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/scoring.md) and [docs/faq.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md). Released so that the Home Assistant Marketplace, which shows the README of the released version, shows the shorter one.
