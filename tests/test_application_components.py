@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs.coordinator import _RecorderInfo
 from tests.factories import make_coordinator

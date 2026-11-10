@@ -13,7 +13,7 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.haghs.const import DOMAIN
 from tests.factories import make_coordinator
@@ -308,7 +308,7 @@ async def test_a_disabled_update_entity_leaves_the_store(hass, hass_storage) -> 
 
 async def test_an_ignored_update_without_a_state_leaves_the_store(hass, hass_storage) -> None:
     from homeassistant.helpers import entity_registry as er
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.haghs.const import CONF_IGNORE_PATTERNS
     from custom_components.haghs.coordinator import HaghsDataUpdateCoordinator
