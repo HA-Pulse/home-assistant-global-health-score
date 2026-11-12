@@ -1,10 +1,10 @@
-<img width="732" height="256" alt="logo" src="https://github.com/user-attachments/assets/625f23d8-f328-4c6f-ab93-b0b80086548a" />
+<a href="https://hapulse.dev"><img width="830" alt="HAGHS, a health score for your Home Assistant" src="https://github.com/user-attachments/assets/20c0cb8b-ba7e-4484-8767-8f0e5fee06e8" /></a>
 
 **The open standard for Home Assistant instance health monitoring.**
 
 [![Marketplace | HACS – Default](https://img.shields.io/badge/Marketplace%20%7C%20HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/README.md#2-installation--setup)
 [![GitHub Release](https://img.shields.io/github/v/release/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/HA-Pulse/home-assistant-global-health-score/releases)
-![Tracked Installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Tracked%20Installs&suffix=%2B&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)
+[![Installs (opt-in analytics)](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Installs%20%28opt-in%20analytics%29&suffix=%2B&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md#how-many-people-use-haghs)
 [![GitHub Stars](https://img.shields.io/github/stars/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/HA-Pulse/home-assistant-global-health-score/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Support%20My%20Work-buy%20me%20a%20coffee-yellow?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/DN91)
 ![AI-Assisted](https://img.shields.io/badge/AI-Assisted-blue?style=for-the-badge)
@@ -95,7 +95,7 @@ Measures "maintenance debt". Every missing point prints a recommendation line an
 | Repairs | −5 each, at most −10, caps at 99 | Open repairs of other integrations; Home Assistant's "Ignore" takes one out. |
 | Watched entities | −5 each, at most −10, caps at 99 | Opt-in: entities labelled directly with a stale watch label that have not reported for longer than the stale threshold (default 24 h). |
 | Database | −10, or −30 | Above `1000 MB + 2.5 MB × entities`, or above 2.5 times that limit. |
-| Backup | −30 | Stale backup. |
+| Backup | −30 | Stale backup: `binary_sensor.backups_stale` of the Google Drive Backup add-on is on. Without the add-on no backup check. |
 | Config audit | up to +10 | Recorder keeps at most 10 days (+5); user-set entity filter (+5). |
 | Dead and empty devices | none | Informational: devices whose monitored entities are all unavailable, or that have no entity. |
 
