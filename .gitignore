@@ -28,3 +28,6 @@ env/
 .vscode/
 *.swp
 .DS_Store
+
+# Claude Code (local)
+.claude/settings.local.json
