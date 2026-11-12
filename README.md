@@ -1,4 +1,4 @@
-<img width="732" height="256" alt="logo" src="https://github.com/user-attachments/assets/625f23d8-f328-4c6f-ab93-b0b80086548a" />
+<a href="https://hapulse.dev"><img width="830" alt="HAGHS, a health score for your Home Assistant" src="https://github.com/user-attachments/assets/20c0cb8b-ba7e-4484-8767-8f0e5fee06e8" /></a>
 
 **The open standard for Home Assistant instance health monitoring.**
 
