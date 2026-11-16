@@ -16,6 +16,21 @@ Use the **Conditional ignore labels** with a helper such as `input_boolean.vacat
 
 No, not without checking them. A zombie only means that the entity has been `unavailable` or `unknown` for longer than the grace period. That also happens during a temporary outage, for an idle device or for an entity that only reports in some operating modes. Check the entity's integration, device and config entry before deleting it; for entities you want to keep, use an ignore label or disable them. With more than 100 zombies, `zombie_count_per_integration` shows which integration they come from. `zombie_reasons` tells you why each one is listed: only `config_entry_missing` is a strong hint of an orphaned entity; `integration_not_loaded`, `not_provided` and `unavailable` are no reason to delete.
 
+## How do I find and remove empty devices?
+
+An empty device has no entity at all, often a leftover after removing or re-pairing a device. HAGHS lists them in `empty_devices` and `empty_device_ids` (first 100, same order; `empty_device_count` has the full number). The Pro card shows the list with a link to each device. In **Developer tools > Template** you get the same list:
+
+```jinja
+{% set e = 'sensor.system_ha_global_health_score' %}
+{% set names = state_attr(e, 'empty_devices') or [] %}
+{% set ids = state_attr(e, 'empty_device_ids') or [] %}
+{% for name in names %}
+- {{ name }}: /config/devices/device/{{ ids[loop.index0] }}
+{% endfor %}
+```
+
+To remove one, open its device page and use **⋮ > Delete**. This option only appears when the integration supports removing devices; otherwise remove the device in the integration itself (for example exclude or remove it there, or delete the integration entry it belongs to). To keep a device and stop the report, give the device (or its area) the `haghs_ignore` label. Empty devices never cost points.
+
 ## Why is my score so low?
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
 
