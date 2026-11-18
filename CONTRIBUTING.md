@@ -26,7 +26,10 @@ closed.
 - PRs into `dev` are merged as **squash merges**, once CI is green.
 - `main` is release-only: it receives changes exclusively through a release
   PR from `dev`, merged with a **merge commit** so the `dev` history is
-  preserved. See [`RELEASING.md`](./RELEASING.md) for the release flow.
+  preserved, or, for documentation-only changes, through a maintainer merge
+  from `dev` while no code is waiting on `dev` (see
+  [`RELEASING.md`](./RELEASING.md)). See [`RELEASING.md`](./RELEASING.md) for
+  the release flow.
 
 ## Language
 

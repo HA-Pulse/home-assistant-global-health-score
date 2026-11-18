@@ -2,7 +2,9 @@
 
 This document describes the release flow. It builds on the branching model
 in [`CONTRIBUTING.md`](./CONTRIBUTING.md): feature work lands on `dev` via
-squash-merged pull requests, and `main` only receives release PRs from `dev`.
+squash-merged pull requests, and `main` only receives release PRs from `dev`
+and, while no code waits on `dev`, documentation merges (see "Roadmap between
+releases").
 
 ## Overview
 
@@ -26,7 +28,8 @@ Everything else runs without further confirmation.
 - Bump `version` in `custom_components/haghs/manifest.json` to `X.Y.Z`.
 - Finish the active changelog for this version (rename the file when the
   version number changes).
-- Update `ROADMAP.md` for the release.
+- Move the finished entries in `ROADMAP.md` from "Planned" to "Completed in
+  vX.Y". The milestone `vX.Y.Z` is closed with the stable release (section "4. Stable release").
 - Open a PR into `dev`. CI (Ruff, Pytest, Hassfest, HACS validation) must
   be green before merge.
 
@@ -59,8 +62,8 @@ Everything else runs without further confirmation.
 - The release workflow attaches the ZIP asset (`haghs.zip`, for manual
   installs) to the release automatically. The Marketplace and HACS install
   from the repository content.
-- Afterwards: close the completed issues and post the announcement
-  (community forum / Reddit).
+- Afterwards: close the completed issues and the milestone `vX.Y.Z`, and
+  post the announcement (community forum / Reddit).
 
 ## 5. Documentation-only release
 
@@ -74,6 +77,15 @@ version, so a documentation fix reaches its users only with a release.
   every README/docs link after the merge into `main`), and a documentation
   audit of every changed statement. No version matrix, no full reference run.
 - Steps 1, 2 and 4 otherwise unchanged.
+
+## Roadmap between releases
+
+Every version commitment gets its milestone `vX.Y.Z` and a line under
+"Planned" in `ROADMAP.md` when it is made, not at the release; the
+milestones show the live state. While no code waits on `dev`
+(`git diff origin/main..origin/dev -- custom_components/` is empty), such a
+documentation change also reaches `main` through a merge from `dev` (merge
+commit); otherwise `main` follows with the next release.
 
 ## Tag and version check
 
