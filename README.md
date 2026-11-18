@@ -3,7 +3,7 @@
 **The open standard for Home Assistant instance health monitoring.**
 
 [![Marketplace | HACS – Default](https://img.shields.io/badge/Marketplace%20%7C%20HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/README.md#2-installation--setup)
-[![GitHub Release](https://img.shields.io/github/v/release/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=green)](https://github.com/HA-Pulse/home-assistant-global-health-score/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=10B981)](https://github.com/HA-Pulse/home-assistant-global-health-score/releases)
 [![Installs (opt-in analytics)](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Installs%20%28opt-in%20analytics%29&suffix=%2B&cacheSeconds=15600&style=for-the-badge&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.haghs.total)](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/faq.md#how-many-people-use-haghs)
 [![GitHub Stars](https://img.shields.io/github/stars/HA-Pulse/home-assistant-global-health-score?style=for-the-badge&color=yellow)](https://github.com/HA-Pulse/home-assistant-global-health-score/stargazers)
 [![Buy Me a Coffee](https://img.shields.io/badge/Support%20My%20Work-buy%20me%20a%20coffee-yellow?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/DN91)
