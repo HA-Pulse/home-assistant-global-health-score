@@ -2,7 +2,9 @@
 
 This document describes the release flow. It builds on the branching model
 in [`CONTRIBUTING.md`](./CONTRIBUTING.md): feature work lands on `dev` via
-squash-merged pull requests, and `main` only receives release PRs from `dev`.
+squash-merged pull requests, and `main` only receives release PRs from `dev`
+and, while no code waits on `dev`, documentation merges (see "Roadmap between
+releases").
 
 ## Overview
 
@@ -27,7 +29,7 @@ Everything else runs without further confirmation.
 - Finish the active changelog for this version (rename the file when the
   version number changes).
 - Move the finished entries in `ROADMAP.md` from "Planned" to "Completed in
-  vX.Y". The milestone `vX.Y.Z` is closed with the stable release (step 4).
+  vX.Y". The milestone `vX.Y.Z` is closed with the stable release (section "4. Stable release").
 - Open a PR into `dev`. CI (Ruff, Pytest, Hassfest, HACS validation) must
   be green before merge.
 
