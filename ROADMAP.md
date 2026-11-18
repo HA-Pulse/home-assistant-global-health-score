@@ -183,6 +183,15 @@ show the live state between releases.
 
 ### v2.5
 
+- **Repair sync without stopping the update cycle (#217)**: an error while
+  syncing HAGHS's own repair no longer stops the score from updating, and
+  several HAGHS entries keep separate state.
+- **Backup Health from the built-in backup integration (#218)**: backups are
+  checked without the Google Drive Backup add-on, through Home Assistant's own
+  automatic backups.
+- **Full support for child devices (#219)**: dead and empty device checks cover
+  child devices with their own entities, and ignore labels on a parent apply
+  to its child devices.
 - **Child devices read without deprecated access (#214)**: HAGHS no longer
   triggers Home Assistant's warning after each restart, before that access
   stops working in Home Assistant 2027.9.
