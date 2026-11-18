@@ -177,7 +177,28 @@ All work below is released in v2.3.0 and described in detail in
 
 ## Planned
 
-### Repairs penalties: severity weighting and a grace window (v2.5 candidate)
+Every entry below belongs to an issue in the milestone of its version; the
+[milestones](https://github.com/HA-Pulse/home-assistant-global-health-score/milestones)
+show the live state between releases.
+
+### v2.5
+
+- **Child devices read without deprecated access (#214)**: HAGHS no longer
+  triggers Home Assistant's warning after each restart, before that access
+  stops working in Home Assistant 2027.9.
+
+### v3.0
+
+- **Module framework (#139)**: new health dimensions arrive as removable
+  modules on one shared state snapshot, so the core never depends on them.
+- **Battery monitor (#140)**: batteries that stay low for hours count in the
+  score, not only batteries that go unavailable.
+- **Documentation and release preparation (#141)**: docs, changelog and the
+  beta call ship together with v3.0.0.
+
+### Not scheduled yet
+
+#### Repairs penalties: severity weighting and a grace window
 
 **Status:** Deliberately out of scope for #97.
 
@@ -216,4 +237,4 @@ clickable links. This would require a feature request to HA Core.
 
 ---
 
-*Last updated: 2026-10-31*
+*Last updated: 2026-11-18*
