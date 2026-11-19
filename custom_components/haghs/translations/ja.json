@@ -1,0 +1,121 @@
+{
+  "common": {
+    "rec_stale": "未報告：監視対象のエンティティ {count} 件が {hours} 時間を超えて状態を報告していません。アプリケーションの減点は、設定ボーナス適用前で {penalty} ポイントです。",
+    "pillar_hardware": "ハードウェア",
+    "pillar_application": "アプリケーション",
+    "rec_pillar_fallback": "⚠️ 計算：{pillars} の計算に失敗またはタイムアウトしました。代替の中立値は測定値ではありません。",
+    "rec_update_failed": "⚠️ 計算：更新サイクルに失敗しました。前回の結果、または中立の初期値を表示しています。",
+    "rec_all_clear": "✅ システムは最適な状態です",
+    "rec_backup_stale": "🚨 セキュリティ：古いバックアップを検出しました！",
+    "rec_config_audit": "🔧 設定監査：ボーナス {missing} ポイントを獲得できていません（レコーダーの保持期間が 10 日を超えている／エンティティフィルターがない）。",
+    "rec_core_lag": "👴 旧バージョン：Core のバージョンが 3 か月以上前のものです。",
+    "rec_cpu_load_classic": "⚡ 最適化：CPU 使用率がスコアに影響しています（{cpu_pct:.1f}%）。",
+    "rec_cpu_load_psi": "⚡ 最適化：PSI の CPU ストール時間がスコアに影響しています（{cpu_pct:.1f}%）。",
+    "rec_db_over_limit": "🗄️ データベース：DB（{db_gb:.1f} GB）が動的な上限（{limit_gb:.1f} GB）を超えています。",
+    "rec_dead_devices": "🔌 デバイス：監視対象のエンティティがすべて猶予期間を過ぎても利用不可のデバイスが {count} 件あります。",
+    "rec_empty_devices": "🗂️ デバイス：エンティティを持たないデバイスが {count} 件あります。",
+    "rec_disk_sd_low": "⚠️ ディスク容量：{storage_type} の空きが {free_gb:.1f} GB しかありません！",
+    "rec_disk_ssd_low": "⚠️ ディスク容量：空きが 10% 未満です（{free_gb:.1f} GB）！",
+    "rec_integration_health": "🧩 インテグレーション：セットアップに失敗したインテグレーションエントリが {count} 件あります。",
+    "rec_io_pressure": "⚡ 最適化：I/O の負荷がスコアに影響しています（{io_pct:.1f}%）。",
+    "rec_power_unstable": "⚠️ 電源：低電圧を検出しました。電源供給が不安定です！",
+    "rec_ram_pressure_classic": "⚡ 最適化：メモリ使用率がスコアに影響しています（{ram_pct:.1f}%）。",
+    "rec_ram_pressure_psi": "⚡ 最適化：PSI のメモリストール時間がスコアに影響しています（{ram_pct:.1f}%）。",
+    "rec_repairs": "🛠️ 修復：修復に関する未解決の問題が {count} 件検出されました。",
+    "rec_updates_pending": "📦 メンテナンス：未適用のアップデートが {count} 件あります。",
+    "rec_zombies": "🧟 整理：ゾンビが {count} 件検出されました。削除する前に確認してください。利用不可は未使用と同じではありません。",
+    "rec_cpu_ram_unmeasured": "📊 ハードウェア：CPU または RAM（あるいは両方）が測定されていません（PSI がなく、センサーも未選択です）。ハードウェアのスコアは他の要素で計算されます。"
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Global Health Score のセットアップ",
+        "description": "HAGHS は Home Assistant インスタンスを監視し、0 から 100 のヘルススコアを算出します。データベースのサイズ、ディスク使用量、更新状況は自動で検出されるため、設定が必要なのは下の 2 つの入力欄だけです。",
+        "data": {
+          "cpu_sensor": "CPU 使用率センサー",
+          "ram_sensor": "RAM 使用率センサー",
+          "storage_type": "ストレージの種類",
+          "ignore_labels": "除外ラベル",
+          "ignore_patterns": "除外エンティティ ID パターン",
+          "db_sensor": "データベースサイズセンサー（任意）"
+        },
+        "data_description": {
+          "cpu_sensor": "スマートフォールバック専用です。HAGHS は通常、ホストシステムから取得する高精度な Linux PSI（Pressure Stall Information）の値を使ってスコアを計算します。この手動センサーは、お使いのシステムが PSI データを提供しない場合（例：Windows、古い Docker 構成、Linux 以外のホスト）にのみ使われます。PSI がない状態でこの欄を空にすると、測定されずハードウェアのスコアから除外されますが、HAGHS のセットアップは完了します。CPU 使用率をパーセントで報告するセンサー（例：「Processor Use」）を選択してください。",
+          "ram_sensor": "スマートフォールバック専用です。HAGHS は通常、ホストシステムから取得する高精度な Linux PSI（Pressure Stall Information）の値を使ってスコアを計算します。この手動センサーは、お使いのシステムが PSI データを提供しない場合（例：Windows、古い Docker 構成、Linux 以外のホスト）にのみ使われます。PSI がない状態でこの欄を空にすると、測定されずハードウェアのスコアから除外されますが、HAGHS のセットアップは完了します。メモリ使用率をパーセントで報告するセンサー（例：「Memory Use Percent」）を選択してください。",
+          "storage_type": "HA インスタンスが動作しているストレージの種類を選択してください。Raspberry Pi 環境では SD カードが安全な既定値です。SSD では、空き容量の絶対値ではなく割合に基づくしきい値を使います。",
+          "ignore_labels": "Home Assistant のラベルから、1 つ以上のラベルを選択します。これらのラベルのいずれかが付いたエンティティとデバイスは、ゾンビ検出とアップデートの減点から除外されます。Spook カスタムインテグレーションが提供する「homeassistant.add_label_to_entity」と「homeassistant.remove_label_from_entity」のサービスアクションを使えば、オートメーションから除外を動的に切り替えられます（Home Assistant 自体にはラベル用のサービスがありません）。たとえば、不在の間だけ「vacation」ラベルをオンにする、といった使い方ができます。ラベルがまだない場合は、先に 設定 → ラベル で作成してください。",
+          "ignore_patterns": "entity_id に対して照合する glob パターンの一覧です（任意・1 行に 1 つ）。ID がいずれかのパターンに一致するエンティティは、ゾンビ検出、未登録エンティティの一覧、アップデートの減点から除外されます。固有 ID がなくラベルを付けられないエンティティ（例：「sensor.docker_*」）に使用してください。ワイルドカードの * と ? が使えます。",
+          "db_sensor": "外部データベース（MariaDB、PostgreSQL）を使用している場合にのみ必要です。内蔵の SQLite 自動検出を使う場合は、空のままにしてください。センサーはデータベースのサイズを MB 単位で報告する必要があります（例：「sensor.mariadb_size」）。"
+        }
+      }
+    }
+  },
+  "issues": {
+    "fallback_missing": {
+      "title": "CPU と RAM が未測定",
+      "fix_flow": {
+        "abort": {
+          "config_entry_missing": "HAGHS の設定エントリが存在しなくなりました。"
+        },
+        "step": {
+          "confirm": {
+            "title": "CPU と RAM のセンサーを選択",
+            "description": "Linux の PSI データが利用できず、CPU / RAM センサーも選択されていないため、HAGHS は CPU または RAM（あるいは両方）をハードウェアのスコアから除外しています。HAGHS は動作を続けます。不足している値（または両方）のセンサーを選択して送信すると、その値がスコアに含まれるようになります。欄を空にした場合は、現在の設定が維持されます。HAGHS が System Monitor のプロセッサーセンサーとメモリセンサーを見つけた場合は、あらかじめ入力されています。",
+            "data": {
+              "cpu_sensor": "CPU 使用率センサー",
+              "ram_sensor": "RAM 使用率センサー"
+            },
+            "data_description": {
+              "cpu_sensor": "CPU 使用率をパーセントで報告するセンサーを選択してください。",
+              "ram_sensor": "メモリ使用率をパーセントで報告するセンサーを選択してください。"
+            }
+          }
+        }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_stale_threshold": "時間を 1 から 8760 までの整数で入力してください。",
+      "conditional_ignore_incomplete": "条件付き除外ラベルとヘルパーの両方を設定するか、両方とも空のままにしてください。"
+    },
+    "step": {
+      "init": {
+        "title": "HAGHS のオプション",
+        "description": "実行時の設定を調整します。変更は保存後すぐに適用されます。",
+        "data": {
+          "cpu_sensor": "CPU 使用率センサー",
+          "ram_sensor": "RAM 使用率センサー",
+          "storage_type": "ストレージの種類",
+          "ignore_labels": "除外ラベル",
+          "ignore_patterns": "除外エンティティ ID パターン",
+          "db_sensor": "データベースサイズセンサー（任意）",
+          "update_interval": "更新間隔",
+          "stale_threshold_hours": "未報告のしきい値（時間）",
+          "stale_watch_labels": "未報告の監視ラベル",
+          "conditional_ignore_labels": "条件付き除外ラベル",
+          "conditional_ignore_entity": "有効にする条件（ヘルパー）",
+          "zombie_grace_minutes": "ゾンビの猶予期間（分）",
+          "ignored_integration_entries": "インテグレーションヘルスから除外するインテグレーションエントリ",
+          "battery_grace_minutes": "バッテリークラスの猶予期間（分）"
+        },
+        "data_description": {
+          "cpu_sensor": "スマートフォールバック専用です。HAGHS は通常、ホストシステムから取得する高精度な Linux PSI（Pressure Stall Information）の値を使ってスコアを計算します。この手動センサーは、お使いのシステムが PSI データを提供しない場合（例：Windows、古い Docker 構成、Linux 以外のホスト）にのみ使われます。PSI がない状態でこの欄を空にすると、測定されずハードウェアのスコアから除外されますが、HAGHS のセットアップは完了します。CPU 使用率をパーセントで報告するセンサー（例：「Processor Use」）を選択してください。",
+          "ram_sensor": "スマートフォールバック専用です。HAGHS は通常、ホストシステムから取得する高精度な Linux PSI（Pressure Stall Information）の値を使ってスコアを計算します。この手動センサーは、お使いのシステムが PSI データを提供しない場合（例：Windows、古い Docker 構成、Linux 以外のホスト）にのみ使われます。PSI がない状態でこの欄を空にすると、測定されずハードウェアのスコアから除外されますが、HAGHS のセットアップは完了します。メモリ使用率をパーセントで報告するセンサー（例：「Memory Use Percent」）を選択してください。",
+          "storage_type": "HA インスタンスが動作しているストレージの種類を選択してください。Raspberry Pi 環境では SD カードが安全な既定値です。SSD では、空き容量の絶対値ではなく割合に基づくしきい値を使います。",
+          "ignore_labels": "Home Assistant のラベルから、1 つ以上のラベルを選択します。これらのラベルのいずれかが付いたエンティティとデバイスは、ゾンビ検出とアップデートの減点から除外されます。Spook カスタムインテグレーションが提供する「homeassistant.add_label_to_entity」と「homeassistant.remove_label_from_entity」のサービスアクションを使えば、オートメーションから除外を動的に切り替えられます（Home Assistant 自体にはラベル用のサービスがありません）。たとえば、不在の間だけ「vacation」ラベルをオンにする、といった使い方ができます。ラベルがまだない場合は、先に 設定 → ラベル で作成してください。",
+          "ignore_patterns": "entity_id に対して照合する glob パターンの一覧です（任意・1 行に 1 つ）。ID がいずれかのパターンに一致するエンティティは、ゾンビ検出、未登録エンティティの一覧、アップデートの減点から除外されます。固有 ID がなくラベルを付けられないエンティティ（例：「sensor.docker_*」）に使用してください。ワイルドカードの * と ? が使えます。",
+          "db_sensor": "外部データベース（MariaDB、PostgreSQL）を使用している場合にのみ必要です。内蔵の SQLite 自動検出を使う場合は、空のままにしてください。センサーはデータベースのサイズを MB 単位で報告する必要があります（例：「sensor.mariadb_size」）。",
+          "update_interval": "HAGHS がヘルススコアを再計算する間隔を秒単位で指定します。値を小さくすると更新は速くなりますが、CPU 使用量がわずかに増えます。既定値：60 秒。",
+          "stale_threshold_hours": "値が最後に変化した時点ではなく、最後に状態が報告された時点からの経過時間です。1 から 8760 までの整数の時間数で指定します（既定値：24）。参考情報として表示される検出結果は sensor と binary_sensor のみが対象で、スコアには影響しません。",
+          "stale_watch_labels": "任意のドメインのエンティティに直接付けたラベルで、未報告判定の対象にするエンティティを選びます。デバイスやエリアに付けたラベルでは対象になりません。除外ルールが優先されます。報告が期限を過ぎた監視対象のエンティティ 1 件につき、アプリケーションのスコアが 5 ポイント減点されます。減点は設定ボーナス適用前で最大 10 ポイントです。期限を過ぎたものが 1 件でもある間は、アプリケーションのスコアは最大でも 99 になります。未報告判定を無効にするには、空のままにしてください。",
+          "conditional_ignore_labels": "下のヘルパーがオンの間だけ適用される追加の除外ラベルです。たとえば、休暇モードの間だけ「vacation」ラベルを使う場合などです。上の除外ラベルとまったく同じように、エンティティとデバイスを除外します。無効にするには、空のままにしてください。",
+          "conditional_ignore_entity": "input_boolean、switch、binary_sensor のいずれかを指定します。これが「on」の間は条件付き除外ラベルが適用され、「off」、「unavailable」、「unknown」の場合や、ヘルパーが削除された場合は適用されません。通常の Home Assistant のアクション（例：input_boolean.turn_on）でオートメーションから切り替えられるため、Spook は不要です。HAGHS はヘルパーが変更された直後に更新されます。",
+          "zombie_grace_minutes": "エンティティが「unavailable」または「unknown」の状態をどれだけ続けたら、HAGHS がゾンビとして数えるかを指定します。指定できる範囲は 1〜240 分です。値を小さくすると検出が積極的になります（一時的にオフラインになったデバイスの誤検出が増えます）。値を大きくすると短時間の停止は見逃されますが、本当の故障が長く残ります。既定値：5 分。",
+          "ignored_integration_entries": "インテグレーションヘルスの件数、減点、推奨事項から除外するインテグレーションエントリを個別に選択します。各エントリは、タイトル、ドメイン、エントリ ID で識別されます。すべてのエントリを対象にするには、空のままにしてください。この設定は、エンティティやデバイスをゾンビ検出から除外するものではなく、修復を除外するものでもありません。デバイスやエンティティの除外ラベルでは、インテグレーションエントリは除外されません。",
+          "battery_grace_minutes": "「device_class: battery」を持つエンティティ専用の、延長された猶予期間です。Zigbee や Homematic の無線機器は、バッテリー駆動のデバイスを再ポーリングするのに通常の猶予期間より長くかかるのが普通なので、5 分だけでゾンビと判定すると誤検出が発生します。指定できる範囲は 1〜240 分です。通常の猶予期間より小さい値にすると、この延長は事実上無効になります。既定値：60 分。"
+        }
+      }
+    }
+  }
+}
