@@ -6,8 +6,8 @@
 
 Link to issue, community thread, or short rationale.
 
-Use `Fixes #<number>` to close the issue automatically on merge. Use
-`Refs #<number>` if the PR only partially addresses the issue.
+Use `Fixes #<number>` to link the issue; it closes when the release reaches
+`main`. Use `Refs #<number>` if the PR only partially addresses the issue.
 
 ## Changes
 
@@ -32,12 +32,16 @@ taken to validate the change.
       notes and any user-visible behavior change called out)
 - [ ] No outbound network calls / external APIs introduced
 - [ ] All I/O is async or wrapped in `async_add_executor_job`
-- [ ] All new user-facing text is in `strings.json` and mirrored in
-      `translations/en.json`
+- [ ] All new user-facing text is in `strings.json`, mirrored in
+      `translations/en.json`, and added to `de.json` and `pt-BR.json`
+      (or the PR says which translation is missing)
 - [ ] Translation keys used in code match the keys defined in
       `strings.json`
 - [ ] Type hints on all new public functions / methods
-- [ ] `ruff` clean locally
+- [ ] `ruff check .` and `ruff format --check .` clean locally
+- [ ] Coverage limits from CI met (90 % overall, 80 % `coordinator.py`)
+- [ ] Docs updated for any behaviour change; `python script/gen_docs.py`
+      run if attributes or options changed
 - [ ] Migration path documented for any breaking change
 
 ## Breaking changes?
