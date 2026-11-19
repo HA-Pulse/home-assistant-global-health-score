@@ -2,7 +2,7 @@
 
 # Release summaries
 
-A short summary per release. Every change in detail: [v2.4.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.4.0_CHANGELOG.md) and [v2.3_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.3_CHANGELOG.md).
+A short summary per release. Every change in detail: [v2.5.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.5.0_CHANGELOG.md), [v2.4.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.4.0_CHANGELOG.md) and [v2.3_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.3_CHANGELOG.md).
 
 ## Changelog
 

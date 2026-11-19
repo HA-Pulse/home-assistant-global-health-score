@@ -86,7 +86,7 @@ to every pull request (feature, fix or docs) and are checked by
 ## Changelog
 
 - Every change that lands on `dev` must include a matching entry in
-  the current active changelog file (`v2.4.0_CHANGELOG.md`).
+  the newest `vX.Y.Z_CHANGELOG.md` at the repo root.
 - The entry should describe the *why*, list files touched, and flag any
   behavior change users might notice.
 - Silent behavior changes (constant removal, default changes, etc.) must be
@@ -140,11 +140,21 @@ to every pull request (feature, fix or docs) and are checked by
   A fixable issue uses **only** `fix_flow` plus its inner step description;
   putting both at the same level fails hassfest with the cryptic message
   *"two or more values in the same group of exclusion 'fixable'"*.
+- `translations/de.json` and `translations/pt-BR.json` must contain every key
+  of `en.json`, with the same structure and the same format fields
+  (`tests/test_de_translations.py`, `tests/test_pt_br_translations.py`).
+- Recommendation texts must be translated (not identical to English) and
+  keep the emoji prefix of the English text, because the dashboard cards
+  filter by it (checked for German in `tests/test_de_translations.py`).
+- If you cannot translate a language, say so in the PR; the maintainer adds
+  it before the merge.
 
 ### Code quality
 
-- Type hints on every public function and method (PEP 484 / strict mode).
-- Formatting and linting: `ruff` clean.
+- Type hints on every public function and method (PEP 484). The CI does not
+  check types; the review does.
+- Formatting and linting: `ruff check .` and `ruff format --check .` must both
+  be clean, as the CI runs them.
 - PEP 8 naming. Module-private names start with a single underscore.
 
 ## Tests
@@ -161,14 +171,18 @@ first per-pillar test landed in v2.3 (issue #54).
   exists / doesn't exist, idempotency at the current version). See
   `tests/test_migration.py`.
 
-**Run locally:**
+The CI requires at least 90 % coverage for `custom_components/haghs` and
+80 % for `coordinator.py`.
+
+**Run locally** (Python 3.14, as in the CI):
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements_test.txt
 pytest
-pytest --cov=custom_components.haghs --cov-report=term-missing
+pytest --cov=custom_components.haghs --cov-report=term-missing --cov-fail-under=90
+coverage report --include='custom_components/haghs/coordinator.py' --fail-under=80
 ```
 
 `pytest-asyncio` is configured in `auto` mode in `pyproject.toml`, so async
@@ -187,11 +201,16 @@ before merge:
   `strings.json` / `translations` schema, integration metadata.
 - **HACS Validation** (`.github/workflows/hacs_validation.yaml`): HACS
   packaging and naming rules.
-- **CI** (`.github/workflows/ci.yml`): `ruff check`, `ruff format --check`
-  and `pytest` with coverage scoped to `custom_components/haghs`.
+- **CI** (`.github/workflows/ci.yml`): `ruff check .` and
+  `ruff format --check .` must both be clean, and `pytest` must reach at
+  least 90 % coverage for `custom_components/haghs` and 80 % for
+  `coordinator.py`.
 
 If one of these fails on your PR, fix the underlying issue rather than
 disabling the check.
+
+SonarCloud also runs on pull requests; it is informational and not a merge
+criterion.
 
 ## Review Process
 
