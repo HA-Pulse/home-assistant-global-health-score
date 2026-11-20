@@ -6,7 +6,7 @@
   it would introduce an outbound connection during normal operation, it does not ship. The
   only permitted exception is an explicitly opt-in telemetry capability (see "Health
   Telemetry" below) — off by default and never active unless the user consciously enables it.
-- **Pragmatism:** The simplest effective solution always wins, followed by a deeper technical explanation. Accuracy is more important than simplicity.
+- **Pragmatism:** The simplest solution that measures correctly wins; when in doubt, correctness beats simplicity.
 - **Transparency:** All scoring logic must be fully visible in the codebase. No hidden penalties, no obfuscated thresholds.
 - **Backward Compatibility:** Score changes between versions must be documented and justified. Users should understand why their score changed after an update. Renaming or removing sensor attributes is a breaking change.
 - **Vision of HAGHS:** Short-term: establish HAGHS as the community standard for instance
