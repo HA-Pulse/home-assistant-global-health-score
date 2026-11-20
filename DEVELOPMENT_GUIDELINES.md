@@ -14,5 +14,5 @@
 
 ## 3. Safety & Stability
 - **Safety Net:** All sub-calculations must use the safety-net pattern (`_safe_calc` with timeout). A failing pillar must never crash the sensor. The coordinator itself must never raise.
-- **Error Handling:** `_safe_calc` catches exceptions and timeouts of a sub-calculation: the pillar falls back to a neutral score, the fallback is counted in `pillar_fallback_count`, and a warning is logged. If the whole update cycle fails, the last valid result is kept (#103). Degraded states are logged as warnings, not raised.
+- **Error Handling:** `_safe_calc` catches exceptions and timeouts of a sub-calculation: the pillar falls back to a neutral score, the fallback is counted in `pillar_fallback_count`, and a warning is logged. If the whole update cycle fails, the last valid result is kept and the failure is logged as an error with traceback (#103). Nothing is raised to Home Assistant.
 - **Testing:** Every change to integration code must include tests; new scoring logic needs unit tests with known input/output pairs. CI enforces at least 90 % coverage for `custom_components/haghs` and 80 % for `coordinator.py`. This is a prerequisite for HA Core adoption.
