@@ -1,6 +1,6 @@
 import voluptuous as vol
 from homeassistant import data_entry_flow
-from homeassistant.components.repairs import RepairsFlow
+from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant
 
 from .config_flow import FALLBACK_SENSORS_SCHEMA, system_monitor_suggestion
@@ -62,3 +62,6 @@ async def async_create_fix_flow(
     """Create flow."""
     if issue_id == IssueIds.FALLBACK_MISSING:
         return MissingFallbackSensorRepairFlow(data["entry_id"])
+    if issue_id == IssueIds.UPDATE_FIRST_SEEN_UNREADABLE:
+        # Information only: confirming acknowledges it and removes the repair.
+        return ConfirmRepairFlow()

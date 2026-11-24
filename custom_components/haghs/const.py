@@ -96,6 +96,11 @@ UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
 UPDATE_FIRST_SEEN_STORE_VERSION = 1
 DATA_UPDATE_FIRST_SEEN_STORE = "_update_first_seen_store"
 DATA_UPDATE_FIRST_SEEN_LOADED = "_update_first_seen_loaded"
+# Set when the store could not be read and no copy could be kept: saving is
+# paused for this run so the unreadable file is never overwritten.
+DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED = "_update_first_seen_save_blocked"
+# Translation key of the repair for a store that could not be copied.
+UPDATE_FIRST_SEEN_NO_BACKUP_KEY = "update_first_seen_unreadable_no_backup"
 # The latest_version each first-seen time belongs to: a newer offered version
 # is a new update and starts its own grace window.
 DATA_UPDATE_SEEN_VERSION = "_update_seen_version"
@@ -256,6 +261,7 @@ class IssueIds(StrEnum):
     """Issue ids."""
 
     FALLBACK_MISSING = "fallback_missing"
+    UPDATE_FIRST_SEEN_UNREADABLE = "update_first_seen_unreadable"
 
 
 # Current config entry version. Bumped whenever entry.data/options need

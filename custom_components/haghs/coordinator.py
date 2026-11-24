@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import re
+import shutil
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -61,6 +62,7 @@ from .const import (
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
     DATA_UPDATE_FIRST_SEEN_LOADED,
+    DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED,
     DATA_UPDATE_FIRST_SEEN_STORE,
     DATA_UPDATE_SEEN_VERSION,
     DEAD_DEVICE_LIST_CAP,
@@ -82,6 +84,7 @@ from .const import (
     STALE_PENALTY_CAP,
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
+    UPDATE_FIRST_SEEN_NO_BACKUP_KEY,
     UPDATE_FIRST_SEEN_STORE_KEY,
     UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
@@ -1680,10 +1683,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read the store once and merge it into the shared first-seen dicts."""
         try:
             stored = await self._first_seen_store.async_load()
-        except Exception:
-            _LOGGER.debug(
-                "HAGHS: Stored update first-seen times unreadable; starting now", exc_info=True
-            )
+        except Exception as err:
+            # Any store failure (I/O, a store from a newer HAGHS, a broken
+            # envelope) must not break the update cycle (#103). It must not stay
+            # silent either: copy the file before anything can overwrite it,
+            # warn once (this runs once per Home Assistant run) and raise a repair.
+            await self._async_report_unreadable_first_seen_store(err)
             return
         if stored is None:
             return
@@ -1710,6 +1715,46 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug(
                 "HAGHS: Skipped invalid stored update first-seen data (%s entries)", skipped
             )
+
+    async def _async_report_unreadable_first_seen_store(self, err: Exception) -> None:
+        """Keep a copy of an unreadable store, warn once and raise a HAGHS repair.
+
+        Without a copy, saving stays paused for this run so the unreadable file
+        is never overwritten. HAGHS's own repairs do not count in the score.
+        """
+        store_path = self._first_seen_store.path
+        backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+        try:
+            await self.hass.async_add_executor_job(shutil.copy2, store_path, backup)
+        except OSError:
+            self.hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED] = True
+            _LOGGER.warning(
+                "HAGHS: Stored update first-seen times unreadable and no copy could be kept;"
+                " pending updates start a new 7-day window and saving is paused for this run (%s)",
+                store_path,
+                exc_info=err,
+            )
+            translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
+            placeholders = {"store_path": store_path}
+        else:
+            _LOGGER.warning(
+                "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
+                " 7-day window; copy kept at %s",
+                backup,
+                exc_info=err,
+            )
+            translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
+            placeholders = {"backup_path": backup}
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            IssueIds.UPDATE_FIRST_SEEN_UNREADABLE,
+            is_fixable=True,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+        )
 
     def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
         """The first-seen times as stored (ISO 8601, UTC) with their offered version."""
@@ -1787,7 +1832,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             del self._update_first_seen[stale_id]
             self._update_seen_version.pop(stale_id, None)
             changed = True
-        if changed:
+        if changed and not self.hass.data[DOMAIN].get(DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED):
             self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 
         p_core_lag = 0

@@ -72,6 +72,28 @@
           }
         }
       }
+    },
+    "update_first_seen_unreadable": {
+      "title": "HAGHS could not read its stored update times",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Confirm",
+            "description": "HAGHS could not read the times it first saw your pending updates. Those updates now count from this moment, so for up to 7 days they do not lower the score. The unreadable file was kept as a copy: {backup_path}. You can restore it from a backup if you want. Submit to confirm this message."
+          }
+        }
+      }
+    },
+    "update_first_seen_unreadable_no_backup": {
+      "title": "HAGHS could not read its stored update times",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Confirm",
+            "description": "HAGHS could not read the times it first saw your pending updates and could not keep a copy of the file ({store_path}). Those updates now count from this moment, so for up to 7 days they do not lower the score. HAGHS does not overwrite the file as long as it cannot keep a copy. Check the file and the log, then submit to confirm this message."
+          }
+        }
+      }
     }
   },
   "options": {
