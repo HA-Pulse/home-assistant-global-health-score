@@ -73,10 +73,10 @@ def system_monitor_suggestion(hass: HomeAssistant) -> dict[str, str]:
 
 FALLBACK_SENSORS_SCHEMA = {
     CONF_CPU_SENSOR: selector.EntitySelector(
-        selector.EntitySelectorConfig(filter=(selector.EntityFilterSelectorConfig(domain="sensor")))
+        selector.EntitySelectorConfig(filter={"domain": "sensor"})
     ),
     CONF_RAM_SENSOR: selector.EntitySelector(
-        selector.EntitySelectorConfig(filter=(selector.EntityFilterSelectorConfig(domain="sensor")))
+        selector.EntitySelectorConfig(filter={"domain": "sensor"})
     ),
 }
 
@@ -95,7 +95,7 @@ _BASE_SCHEMA = {
         selector.TextSelectorConfig(multiple=True)
     ),
     vol.Optional(CONF_DB_SENSOR): selector.EntitySelector(
-        selector.EntitySelectorConfig(filter=selector.EntityFilterSelectorConfig(domain="sensor"))
+        selector.EntitySelectorConfig(filter={"domain": "sensor"})
     ),
 }
 
@@ -144,9 +144,7 @@ _EXTRA_OPTIONS_SCHEMA = {
         selector.LabelSelectorConfig(multiple=True)
     ),
     vol.Optional(CONF_CONDITIONAL_IGNORE_ENTITY): selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            filter=selector.EntityFilterSelectorConfig(domain=list(CONDITIONAL_IGNORE_DOMAINS))
-        )
+        selector.EntitySelectorConfig(filter={"domain": list(CONDITIONAL_IGNORE_DOMAINS)})
     ),
     vol.Optional(
         CONF_UPDATE_INTERVAL,
@@ -236,7 +234,8 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(schema, suggested),
+            # Two voluptuous type sources (stub and package) in the environment; same class at runtime.
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),  # pyright: ignore[reportArgumentType]
         )
 
 
@@ -327,8 +326,9 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             errors=errors,
+            # Two voluptuous type sources (stub and package) in the environment; same class at runtime.
             data_schema=self.add_suggested_values_to_schema(
-                schema,
+                schema,  # pyright: ignore[reportArgumentType]
                 current,
             ),
         )
