@@ -46,6 +46,11 @@ def _break_load(monkeypatch, coordinator, error: Exception) -> None:
     monkeypatch.setattr(coordinator._first_seen_store, "async_load", broken)
 
 
+def _read(path: Path) -> bytes:
+    """Read a file (sync helper, kept out of the async tests)."""
+    return path.read_bytes()
+
+
 def _records(caplog) -> list[logging.LogRecord]:
     return [r for r in caplog.records if MESSAGE in r.getMessage()]
 
@@ -70,7 +75,8 @@ async def test_unreadable_store_keeps_a_copy_warns_once_and_raises_a_repair(
     records = _records(caplog)
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING
-    assert records[0].exc_info is not None and records[0].exc_info[1] is error
+    assert records[0].exc_info is not None
+    assert records[0].exc_info[1] is error
 
     issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
     assert issue is not None
@@ -81,7 +87,7 @@ async def test_unreadable_store_keeps_a_copy_warns_once_and_raises_a_repair(
     backup = Path(issue.translation_placeholders["backup_path"])
     assert backup.parent == path.parent
     assert re.fullmatch(rf"{re.escape(KEY)}\.unreadable\.\d{{8}}T\d{{6}}Z", backup.name)
-    assert backup.read_bytes() == ORIGINAL
+    assert _read(backup) == ORIGINAL
     assert backup.name in records[0].getMessage()
     assert "_update_first_seen_save_blocked" not in hass.data[DOMAIN]
     assert coordinator.data["update_cycle_failed"] is False
@@ -102,7 +108,7 @@ async def test_the_next_save_leaves_the_copy_untouched(
 
     assert "update.esphome" in hass_storage[KEY]["data"]  # saving goes on with the new window
     issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
-    assert Path(issue.translation_placeholders["backup_path"]).read_bytes() == ORIGINAL
+    assert _read(Path(issue.translation_placeholders["backup_path"])) == ORIGINAL
 
 
 async def test_without_a_copy_saving_is_paused_and_the_repair_says_so(
@@ -131,12 +137,13 @@ async def test_without_a_copy_saving_is_paused_and_the_repair_says_so(
     await hass.async_block_till_done()
 
     assert saves == []
-    assert path.read_bytes() == ORIGINAL
+    assert _read(path) == ORIGINAL
     assert hass.data[DOMAIN]["_update_first_seen_save_blocked"] is True
     records = _records(caplog)
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING
-    assert records[0].exc_info is not None and records[0].exc_info[1] is error
+    assert records[0].exc_info is not None
+    assert records[0].exc_info[1] is error
     issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
     assert issue.translation_key == "update_first_seen_unreadable_no_backup"
     assert issue.translation_placeholders == {"store_path": str(path)}
