@@ -68,7 +68,7 @@ No. Config entries of every older version (1.x, 2.x, 3.0–3.3) are migrated to 
 The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list the behavior changes per release; v2.3.0 and v2.4.0 include upgrade notes. The recommendations and `rec_*` flags show which factors cost points right now.
 
 ## A pending update from yesterday is in the list but doesn't change my score yet. Why?
-Because of the 7-day update grace period. The list is informational and shows every pending update that is not ignored or disabled; the **score** only deducts after HAGHS has seen that version pending for at least 7 days, also across restarts. If HAGHS cannot read its stored times, pending updates count from that moment and a HAGHS repair names the copy it kept of the unreadable file.
+Because of the 7-day update grace period. The list is informational and shows every pending update that is not ignored or disabled; the **score** only deducts after HAGHS has seen that version pending for at least 7 days, also across restarts. If HAGHS cannot read its stored times, pending updates count from that moment and a HAGHS repair names the copy it kept of the unreadable file (if no copy could be kept, the repair says so and HAGHS does not overwrite the file).
 
 ## Can I change the update interval?
 Yes. Go to **Settings > Devices & Services > Integrations > HAGHS > Configure** and adjust the update interval (10–3600 seconds). Lower values give faster updates, higher values save resources.

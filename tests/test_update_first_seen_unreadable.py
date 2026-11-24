@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import UnsupportedStorageVersionError
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.haghs import coordinator as coordinator_module
@@ -176,14 +177,24 @@ async def test_the_incident_changes_no_score_or_attribute(
     assert f"{DOMAIN}/{ISSUE}" not in broken.data["repairs"]
 
 
-async def test_the_repair_is_confirmed_with_one_step(hass) -> None:
-    flow = await async_create_fix_flow(hass, ISSUE, None)
-    assert isinstance(flow, ConfirmRepairFlow)
-    flow.hass = hass
-    flow.handler = DOMAIN
-    flow.issue_id = ISSUE
-    form = await flow.async_step_init()
+async def test_confirming_the_repair_removes_it(hass, monkeypatch) -> None:
+    """Through Home Assistant's repairs flow manager, with HAGHS's own repairs platform."""
+    assert await async_setup_component(hass, "repairs", {})
+    hass.config.components.add(DOMAIN)
+    _store_file(hass)
+    coordinator = make_coordinator(hass)
+    _break_load(monkeypatch, coordinator, OSError("permission denied"))
+    await coordinator.async_refresh()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is not None
+
+    platform = await hass.data["repairs"]["platforms"].async_get_platform(DOMAIN)
+    assert platform.async_create_fix_flow is async_create_fix_flow
+    assert isinstance(await async_create_fix_flow(hass, ISSUE, None), ConfirmRepairFlow)
+
+    manager = hass.data["repairs"]["flow_manager"]
+    form = await manager.async_init(DOMAIN, context={"issue_id": ISSUE})
     assert form["type"] == FlowResultType.FORM
     assert form["step_id"] == "confirm"
-    done = await flow.async_step_confirm({})
+    done = await manager.async_configure(form["flow_id"], {})
     assert done["type"] == FlowResultType.CREATE_ENTRY
+    assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is None
