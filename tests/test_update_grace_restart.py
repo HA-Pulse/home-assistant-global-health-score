@@ -164,7 +164,9 @@ async def test_unreadable_store_starts_now_with_one_warning(hass, caplog, monkey
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING
     assert records[0].exc_info is not None
-    assert isinstance(records[0].exc_info[1], ValueError)
+    # No store file here, so the copy fails: the WARNING carries that reason, the load error as its context.
+    assert isinstance(records[0].exc_info[1], FileNotFoundError)
+    assert isinstance(records[0].exc_info[1].__context__, ValueError)
 
 
 async def test_the_update_cycle_loads_the_store(hass, hass_storage) -> None:

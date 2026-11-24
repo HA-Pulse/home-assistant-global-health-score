@@ -1726,13 +1726,17 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
         try:
             await self.hass.async_add_executor_job(shutil.copy2, store_path, backup)
-        except OSError:
+        except OSError as copy_err:
             self.hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED] = True
+            # One traceback shows both: the copy error, with the load error as its context.
+            if copy_err.__context__ is None:
+                copy_err.__context__ = err
             _LOGGER.warning(
-                "HAGHS: Stored update first-seen times unreadable and no copy could be kept;"
+                "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
                 " pending updates start a new 7-day window and saving is paused for this run (%s)",
+                copy_err,
                 store_path,
-                exc_info=err,
+                exc_info=copy_err,
             )
             translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
             placeholders = {"store_path": store_path}
