@@ -26,7 +26,7 @@ from pytest_homeassistant.components.recorder.common import (
 
 from custom_components.haghs.const import DOMAIN
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import make_coordinator, patch_disk, patch_psi
+from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
 
 FROZEN = "2026-10-24T12:00:00+00:00"  # clock of the dev capture
 LISTS = {"zombie_entities", "unregistered_entities", "dead_devices", "repairs", "pending_updates"}
@@ -148,6 +148,9 @@ async def test_worst_case_is_recorded_without_size_warning(
         assert key in recorded
     assert all(key in recorded for key in attrs if key.startswith("rec_"))
     object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)
+    await (
+        sensor.coordinator.async_shutdown()
+    )  # no refresh timer left behind (older test package, #237)
 
 
 async def test_every_list_or_dict_attribute_is_excluded_or_allow_listed(
@@ -175,7 +178,7 @@ async def test_current_attributes_are_unchanged(hass: HomeAssistant, freezer) ->
     # source; PSI in this scenario); this
     # scenario has no unhealthy entry, every device carries an entity and no conditional labels are
     # configured. The dead device ids follow the captured names, looked up in the registry.
-    by_name = {device.name: device.id for device in dr.async_get(hass).devices}
+    by_name = {device.name: device.id for device in device_entries(dr.async_get(hass))}
     assert sensor.extra_state_attributes == {
         **DEV_ATTRIBUTES,
         "integration_unhealthy_entries": [],

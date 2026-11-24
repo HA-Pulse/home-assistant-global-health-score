@@ -32,7 +32,7 @@ async def test_an_unknown_haghs_issue_can_be_confirmed_and_disappears(hass) -> N
         translation_key=STALE,
     )
     manager = hass.data["repairs"]["flow_manager"]
-    form = await manager.async_init(DOMAIN, context={"issue_id": STALE})
+    form = await manager.async_init(DOMAIN, context={"issue_id": STALE}, data={"issue_id": STALE})
     assert form["type"] == FlowResultType.FORM
     done = await manager.async_configure(form["flow_id"], {})
     assert done["type"] == FlowResultType.CREATE_ENTRY

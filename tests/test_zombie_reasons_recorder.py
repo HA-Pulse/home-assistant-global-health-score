@@ -45,3 +45,4 @@ async def test_no_attribute_size_warning_with_more_than_100_zombies(
     assert len(json_bytes(recorded)) < 16384
     unrecorded = {k: state.attributes[k] for k in ("zombie_reasons", "zombie_since")}
     assert len(json_bytes(unrecorded)) > 8000  # the new data would matter if it were recorded
+    await coord.async_shutdown()  # no refresh timer left behind (older test package, #237)
