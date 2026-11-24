@@ -227,3 +227,28 @@ async def test_confirming_the_repair_removes_it(hass, monkeypatch) -> None:
     done = await manager.async_configure(form["flow_id"], {})
     assert done["type"] == FlowResultType.CREATE_ENTRY
     assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is None
+
+
+async def test_the_read_error_is_attached_when_the_copy_error_has_no_context(
+    hass, caplog, monkeypatch
+) -> None:
+    """Called outside an `except`: the copy error gets the read error as its context explicitly."""
+    coordinator = make_coordinator(hass)
+    read_error = OSError("permission denied")
+    copy_error = OSError("read-only file system")
+
+    def no_copy(*_args) -> None:
+        raise copy_error
+
+    monkeypatch.setattr(coordinator_module.shutil, "copy2", no_copy)
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+
+    await coordinator._async_report_unreadable_first_seen_store(read_error)
+
+    records = _records(caplog)
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    assert records[0].exc_info[1] is copy_error
+    assert copy_error.__context__ is read_error
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
+    assert issue.translation_key == "update_first_seen_unreadable_no_backup"
