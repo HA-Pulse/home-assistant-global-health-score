@@ -195,6 +195,12 @@ show the live state between releases.
 - **Child devices read without deprecated access (#214)**: HAGHS no longer
   triggers Home Assistant's warning after each restart, before that access
   stops working in Home Assistant 2027.9.
+- **Recorder read through Home Assistant's helper (#236)**: the config audit
+  uses Home Assistant's public recorder API instead of an internal data key.
+- **Minimum Home Assistant 2026.6.0, tested in CI (#237)**: the minimum version
+  is the one CI checks; older Home Assistant installations stay on HAGHS 2.4.2.
+- **psutil declared in the manifest (#238)**: the dependency is visible, with a
+  lower bound only, so Home Assistant's own psutil version never changes.
 
 ### v3.0
 
