@@ -34,6 +34,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.recorder import get_instance as get_recorder_instance
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -1920,15 +1921,16 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
 
     def _read_recorder_info(self) -> _RecorderInfo:
-        """Read recorder configuration from hass.data.
+        """Read recorder configuration through Home Assistant's recorder helper (#236).
 
         Safe access — returns empty _RecorderInfo if recorder is not loaded
         or not available (e.g. external database without recorder component).
         """
         try:
-            recorder = self.hass.data.get("recorder_instance")
-            if recorder is None:
-                _LOGGER.debug("HAGHS: Recorder instance not found in hass.data")
+            try:
+                recorder = get_recorder_instance(self.hass)
+            except KeyError:
+                _LOGGER.debug("HAGHS: Recorder not set up; config audit without recorder data")
                 return _RecorderInfo()
 
             keep_days = getattr(recorder, "keep_days", None)
