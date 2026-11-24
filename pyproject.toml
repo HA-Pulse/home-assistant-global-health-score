@@ -33,6 +33,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011", "PT011"]
 
+[tool.pyright]
+include = ["custom_components"]
+exclude = [".venv", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+
 [tool.coverage.run]
 source = ["custom_components/haghs"]
 branch = true
