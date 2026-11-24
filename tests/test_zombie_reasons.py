@@ -23,7 +23,7 @@ from custom_components.haghs.const import (
     ZOMBIE_REASONS,
 )
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import make_coordinator, patch_disk, patch_psi
+from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
 
 NEW_KEYS = {"zombie_count_per_reason", "zombie_reasons"}
 # Added after #154-d by later plans (#134, #93, conditional ignore labels, #123 CPU/RAM source);
@@ -172,7 +172,7 @@ async def test_score_and_existing_attributes_are_unchanged(
     assert result["rec_empty_devices"] is False
     assert result["conditional_ignore_active"] is False
     assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)
-    by_name = {device.name: device.id for device in dr.async_get(hass).devices}
+    by_name = {device.name: device.id for device in device_entries(dr.async_get(hass))}
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
     assert list(result["zombie_since"]) == result["zombie_entities"]

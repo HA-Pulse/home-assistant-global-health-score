@@ -19,7 +19,7 @@ from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import DOMAIN
-from tests.factories import make_coordinator
+from tests.factories import HAS_CHILD_DEVICES, device_entries, make_coordinator, via
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +69,7 @@ def _empty(hass: HomeAssistant):
     return coord._calc_empty_devices()
 
 
+@pytest.mark.skipif(not HAS_CHILD_DEVICES, reason="child devices need Home Assistant 2026.11")
 async def test_parent_whose_entities_sit_on_child_devices_is_not_empty(hass) -> None:
     owner = _owner(hass)
     parent = _device(hass, owner, "dishwasher")
@@ -79,6 +80,7 @@ async def test_parent_whose_entities_sit_on_child_devices_is_not_empty(hass) -> 
     assert _empty(hass) == (["leftover"], 1)
 
 
+@pytest.mark.skipif(not HAS_CHILD_DEVICES, reason="child devices need Home Assistant 2026.11")
 async def test_parent_with_a_child_without_entities_is_not_empty(hass) -> None:
     owner = _owner(hass)
     parent = _device(hass, owner, "hub")
@@ -151,7 +153,7 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
     """HA 2024.10 shape: no ``child_devices`` collection, device entries without composite fields."""
     owner = _owner(hass)
     hub = _device(hass, owner, "hub")
-    member = _device(hass, owner, "member", via_device_id=hub.id)
+    member = _device(hass, owner, "member", **via(hub))
     _entity(hass, member.id, "member_power")
     _device(hass, owner, "leftover")
     fields = (
@@ -172,7 +174,7 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
             config_entries={owner.entry_id},
         )
 
-    old_registry = SimpleNamespace(devices=[old(d) for d in dr.async_get(hass).devices])
+    old_registry = SimpleNamespace(devices=[old(d) for d in device_entries(dr.async_get(hass))])
     assert not hasattr(old_registry, "child_devices")
     assert coordinator_module._parent_device_ids(old_registry, old_registry.devices) == {hub.id}
     assert not any(coordinator_module._is_composite(d) for d in old_registry.devices)

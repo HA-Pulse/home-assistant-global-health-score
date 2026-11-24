@@ -1,0 +1,6 @@
+# Test environment for the minimum supported Home Assistant version (hacs.json, #237).
+# Python 3.14 (Home Assistant 2026.6 requires >= 3.14.2). Used by the "minimum Home Assistant" CI job.
+homeassistant==2026.6.0
+pytest-homeassistant-custom-component==0.13.336
+pytest-cov==7.1.0
+freezegun==1.5.5

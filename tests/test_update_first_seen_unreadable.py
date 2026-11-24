@@ -22,6 +22,7 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.haghs import coordinator as coordinator_module
+from custom_components.haghs import repairs as repairs_module
 from custom_components.haghs.const import DOMAIN
 from custom_components.haghs.repairs import async_create_fix_flow
 from tests.factories import make_coordinator
@@ -216,17 +217,24 @@ async def test_confirming_the_repair_removes_it(hass, monkeypatch) -> None:
     await coordinator.async_refresh()
     assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is not None
 
-    platform = await hass.data["repairs"]["platforms"].async_get_platform(DOMAIN)
-    assert platform.async_create_fix_flow is async_create_fix_flow
+    # HAGHS's own repairs platform must create the flow (not Home Assistant's fallback): spy on it.
+    calls: list[str] = []
+
+    async def spy(hass_arg, issue_id, data):
+        calls.append(issue_id)
+        return await async_create_fix_flow(hass_arg, issue_id, data)
+
+    monkeypatch.setattr(repairs_module, "async_create_fix_flow", spy)
     assert isinstance(await async_create_fix_flow(hass, ISSUE, None), ConfirmRepairFlow)
 
     manager = hass.data["repairs"]["flow_manager"]
-    form = await manager.async_init(DOMAIN, context={"issue_id": ISSUE})
+    form = await manager.async_init(DOMAIN, context={"issue_id": ISSUE}, data={"issue_id": ISSUE})
     assert form["type"] == FlowResultType.FORM
     assert form["step_id"] == "confirm"
     done = await manager.async_configure(form["flow_id"], {})
     assert done["type"] == FlowResultType.CREATE_ENTRY
     assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is None
+    assert calls == [ISSUE]
 
 
 async def test_the_read_error_is_attached_when_the_copy_error_has_no_context(
