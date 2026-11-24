@@ -1,10 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import voluptuous as vol
-from homeassistant import data_entry_flow
 from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant
 
 from .config_flow import FALLBACK_SENSORS_SCHEMA, system_monitor_suggestion
 from .const import IssueIds
+
+if TYPE_CHECKING:  # type only; not imported at runtime (minimum Home Assistant 2024.10)
+    from homeassistant.components.repairs import RepairsFlowResult
 
 
 class MissingFallbackSensorRepairFlow(RepairsFlow):
@@ -15,15 +21,13 @@ class MissingFallbackSensorRepairFlow(RepairsFlow):
         super().__init__()
         self._entry_id = entry_id
 
-    async def async_step_init(
-        self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    async def async_step_init(self, user_input: dict[str, str] | None = None) -> RepairsFlowResult:
         """Handle the repair form."""
         return await self.async_step_confirm()
 
     async def async_step_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the confirm step of a fix flow."""
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
@@ -50,7 +54,8 @@ class MissingFallbackSensorRepairFlow(RepairsFlow):
 
         return self.async_show_form(
             step_id="confirm",
-            data_schema=self.add_suggested_values_to_schema(schema, current),
+            # Two voluptuous type sources (stub and package) in the environment; same class at runtime.
+            data_schema=self.add_suggested_values_to_schema(schema, current),  # pyright: ignore[reportArgumentType]
         )
 
 
@@ -61,7 +66,9 @@ async def async_create_fix_flow(
 ) -> RepairsFlow:
     """Create flow."""
     if issue_id == IssueIds.FALLBACK_MISSING:
-        return MissingFallbackSensorRepairFlow(data["entry_id"])
-    if issue_id == IssueIds.UPDATE_FIRST_SEEN_UNREADABLE:
-        # Information only: confirming acknowledges it and removes the repair.
-        return ConfirmRepairFlow()
+        # Without a usable entry id the flow aborts with "config_entry_missing" instead of raising.
+        entry_id = (data or {}).get("entry_id")
+        return MissingFallbackSensorRepairFlow(entry_id if isinstance(entry_id, str) else "")
+    # update_first_seen_unreadable is information only, and an id this version does not know (a repair left
+    # by another HAGHS version) must still be confirmable: confirming acknowledges it and removes the repair.
+    return ConfirmRepairFlow()

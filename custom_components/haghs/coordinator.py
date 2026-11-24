@@ -12,7 +12,7 @@ import shutil
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -92,6 +92,9 @@ from .const import (
     ZOMBIE_REASONS,
     IssueIds,
 )
+
+if TYPE_CHECKING:  # type only; not imported at runtime (minimum Home Assistant 2024.10)
+    from homeassistant.core import EventStateChangedData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -298,8 +301,8 @@ def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]
         child = dev_reg.async_get(item) if isinstance(item, str) else item
         if child is not None:
             children.append(child)
-    parents = {d.via_device_id for d in devices + children if getattr(d, "via_device_id", None)}
-    parents |= {c.parent_device_id for c in children if getattr(c, "parent_device_id", None)}
+    parents = {vid for d in devices + children if (vid := getattr(d, "via_device_id", None))}
+    parents |= {pid for c in children if (pid := getattr(c, "parent_device_id", None))}
     return parents
 
 
@@ -478,7 +481,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return lambda: None
 
         @callback
-        def _changed(_event: Event) -> None:
+        def _changed(_event: Event[EventStateChangedData]) -> None:
             self.hass.async_create_task(self.async_request_refresh())
 
         return async_track_state_change_event(self.hass, [self._conditional_entity], _changed)
@@ -929,7 +932,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The average of the measured components: CPU and RAM when measured, I/O when PSI provides it, Disk
         # always. With everything measured that is (CPU + RAM + I/O + Disk) / 4, without I/O / 3.
         # Power penalty is applied as a flat deduction (not averaged)
-        components = [score_cpu] if cpu_measured else []
+        components: list[float] = [score_cpu] if cpu_measured else []
         components += [score_ram] if ram_measured else []
         components += [score_io] if psi.io is not None else []
         components.append(score_disk)

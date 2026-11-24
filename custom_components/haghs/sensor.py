@@ -24,7 +24,9 @@ async def async_setup_entry(
     async_add_entities([HaghsSensor(coordinator, entry)])
 
 
-class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
+# HA declares available, native_value and extra_state_attributes as cached properties through its metaclass;
+# overriding them with @property is the documented integration pattern, so pyright's override check is a false alarm.
+class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):  # pyright: ignore[reportIncompatibleVariableOverride]
     """Representation of the HAGHS Sensor."""
 
     # Capped lists and per-entity maps stay out of recorder history: together they can exceed
@@ -61,14 +63,14 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity):
         self._attr_native_unit_of_measurement = "%"
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> int | None:  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return the current health score."""
         if self.coordinator.data is None:
             return None
         return self.coordinator.data["global_score"]
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return detailed score breakdown as attributes."""
         if self.coordinator.data is None:
             return None
