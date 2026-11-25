@@ -10,7 +10,7 @@
 - **Setup & Configuration:** YAML configurations for integrations are deprecated. All configuration and options must be handled exclusively through a UI-based `ConfigFlow` and `OptionsFlow`.
 - **Data Fetching:** Always use the `DataUpdateCoordinator` for regular updates. No isolated `time.sleep()` or custom loops.
 - **Localization (I18n):** Never hardcode user-facing text or error messages in Python code. Use `strings.json`, mirrored in `translations/en.json`; `translations/de.json` and `translations/pt-BR.json` must contain every key (enforced by the translation tests, see `CONTRIBUTING.md`).
-- **Compatibility:** HAGHS must run on the minimum Home Assistant version in `hacs.json` (currently 2024.10.0) and keep Python syntax compatible with `target-version` in `pyproject.toml` (py312). Use newer Home Assistant APIs only with a fallback for older versions, and act on Home Assistant deprecations before their removal release (example: #214).
+- **Compatibility:** HAGHS must run on the minimum Home Assistant version in `hacs.json` (currently 2026.6.0) and keep Python syntax compatible with `target-version` in `pyproject.toml` (py312). Use newer Home Assistant APIs only with a fallback for older versions, and act on Home Assistant deprecations before their removal release (example: #214).
 
 ## 3. Safety & Stability
 - **Safety Net:** All sub-calculations must use the safety-net pattern (`_safe_calc` with timeout). A failing pillar must never crash the sensor. The coordinator itself must never raise.
