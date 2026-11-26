@@ -141,7 +141,7 @@ async def test_repair_submit_writes_the_sensors_and_the_repair_goes(hass: HomeAs
     flow.hass = hass
     with (
         patch(_PSI_SYNC_PATH, return_value=PSI["absent"]),
-        patch(_PSI_ASYNC_PATH, lambda _self: _async(PSI["absent"])),
+        patch(_PSI_ASYNC_PATH, return_value=PSI["absent"]),
         patch_disk(),
     ):
         done = await flow.async_step_confirm(dict(monitor))
@@ -156,10 +156,6 @@ async def test_repair_submit_writes_the_sensors_and_the_repair_goes(hass: HomeAs
         "sensors",
         False,
     )
-
-
-async def _async(value):
-    return value
 
 
 async def test_a_disabled_system_monitor_entity_is_not_suggested(hass: HomeAssistant) -> None:

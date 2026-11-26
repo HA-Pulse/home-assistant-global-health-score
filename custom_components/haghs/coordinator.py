@@ -94,7 +94,7 @@ from .const import (
     IssueIds,
 )
 
-if TYPE_CHECKING:  # type only; not imported at runtime (minimum Home Assistant 2024.10)
+if TYPE_CHECKING:  # type only; not needed at runtime
     from homeassistant.core import EventStateChangedData
 
 _LOGGER = logging.getLogger(__name__)
