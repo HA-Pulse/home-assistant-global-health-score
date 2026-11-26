@@ -299,12 +299,29 @@ def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]
     never read on children.
     """
     parents = {vid for d in devices if (vid := getattr(d, "via_device_id", None))}
-    for item in getattr(dev_reg, "child_devices", ()) or ():
-        # Like ``devices`` in older versions, a collection may yield ids: resolve them.
-        child = dev_reg.async_get(item) if isinstance(item, str) else item
-        if child is not None and (pid := getattr(child, "parent_device_id", None)):
-            parents.add(pid)
+    parents |= {
+        pid for c in _child_device_entries(dev_reg) if (pid := getattr(c, "parent_device_id", None))
+    }
     return parents
+
+
+def _child_device_entries(dev_reg: dr.DeviceRegistry) -> list[Any]:
+    """Child devices (HA 2026.11+, ``dev_reg.child_devices``); an empty list on older versions.
+
+    Like ``devices`` in older versions, the collection may yield ids: they are resolved here.
+    """
+    children = []
+    for item in getattr(dev_reg, "child_devices", ()) or ():
+        child = dev_reg.async_get(item) if isinstance(item, str) else item
+        if child is not None:
+            children.append(child)
+    return children
+
+
+def _parent_of(dev_reg: dr.DeviceRegistry, device: Any) -> Any:
+    """The parent device of a child device (#219), ``None`` for a main device or older HA versions."""
+    parent_id = getattr(device, "parent_device_id", None)
+    return dev_reg.async_get(parent_id) if parent_id else None
 
 
 def _is_composite(device: dr.DeviceEntry) -> bool:
@@ -505,7 +522,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
              takes precedence over the other checks.
           2. Glob patterns on entity_id (no registry lookup required)
           3. Any of the configured ignore labels on the entity's registry entry
-          4. Any of the configured ignore labels on the entity's device
+          4. Any of the configured ignore labels on the entity's device, or on
+             that device's parent when it is a child device (#219)
           5. Any of the configured ignore labels on the effective entity area
 
         Note: ``hidden_by`` is intentionally not treated as ignore. Hidden
@@ -539,6 +557,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if device_entry:
                 device_labels = device_entry.labels or set()
                 if any(label in device_labels for label in self.ignore_labels):
+                    return True
+                # A label on the parent covers its child devices too (#219).
+                parent = _parent_of(dev_reg, device_entry)
+                if parent is not None and any(
+                    label in (parent.labels or set()) for label in self.ignore_labels
+                ):
                     return True
 
         # Use HA's own inheritance rules where available. Older supported
@@ -1521,7 +1545,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         config entries is loaded (a failing or loading integration may not
         have created its entities yet). Devices with an ignore label on the
         device or on its area are skipped; entity-id patterns cannot apply
-        because there is no entity. Startup is deferred like the zombie check,
+        because there is no entity. Child devices (HA 2026.11+) are checked by
+        the same facts; a child of a disabled parent is skipped, and ignore
+        labels on the parent or on the child's effective area (its own, else
+        the parent's) apply (#219). Startup is deferred like the zombie check,
         plus one zombie grace period after the boot. Informational only.
 
         Returns (empty_list_capped, empty_count) with device display names, and
@@ -1548,26 +1575,61 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or _is_composite(device)
             ):
                 continue
-            entry_ids = _device_config_entry_ids(device)
-            if not entry_ids:
-                continue
-            entries = [self.hass.config_entries.async_get_entry(entry_id) for entry_id in entry_ids]
-            if any(
-                entry is None or entry.state is not ConfigEntryState.LOADED for entry in entries
+            if self._has_no_entity_and_counts(
+                device, ent_reg, area_reg, ignore, set(device.labels or ()), device.area_id
+            ):
+                found.append((device.name_by_user or device.name or device.id, device.id))
+
+        # Child devices (HA 2026.11+, #219): the same facts, read without the fields a child
+        # does not have (``entry_type``, ``via_device_id``, composite markers; see #214). A
+        # child of a disabled parent is skipped; the parent's labels and area count for it.
+        effective_area = getattr(dr, "async_get_effective_area_id", None)
+        for child in _child_device_entries(dev_reg):
+            parent = _parent_of(dev_reg, child)
+            if child.disabled_by is not None or (
+                parent is not None and parent.disabled_by is not None
             ):
                 continue
-            if er.async_entries_for_device(ent_reg, device.id, include_disabled_entities=True):
-                continue
-            if ignore:
-                if ignore & set(device.labels or ()):
-                    continue
-                area = area_reg.async_get_area(device.area_id) if device.area_id else None
-                if area is not None and ignore & set(area.labels or ()):
-                    continue
-            found.append((device.name_by_user or device.name or device.id, device.id))
+            labels = set(child.labels or ()) | set(parent.labels if parent is not None else ())
+            if effective_area is not None:
+                area_id = effective_area(self.hass, child)
+            else:
+                area_id = child.area_id or (parent.area_id if parent is not None else None)
+            if self._has_no_entity_and_counts(child, ent_reg, area_reg, ignore, labels, area_id):
+                found.append((child.name_by_user or child.name or child.id, child.id))
 
         found.sort()
         return _DeviceList(found[:EMPTY_DEVICE_LIST_CAP], len(found))
+
+    def _has_no_entity_and_counts(
+        self,
+        device: Any,
+        ent_reg: er.EntityRegistry,
+        area_reg: ar.AreaRegistry,
+        ignore: set[str],
+        labels: set[str],
+        area_id: str | None,
+    ) -> bool:
+        """Empty-device facts shared by main and child devices (#93, #219).
+
+        Every config entry exists and is loaded, the device has no entity (disabled ones
+        included) and neither ``labels`` nor the labels of ``area_id`` carry an ignore label.
+        """
+        entry_ids = _device_config_entry_ids(device)
+        if not entry_ids:
+            return False
+        entries = [self.hass.config_entries.async_get_entry(entry_id) for entry_id in entry_ids]
+        if any(entry is None or entry.state is not ConfigEntryState.LOADED for entry in entries):
+            return False
+        if er.async_entries_for_device(ent_reg, device.id, include_disabled_entities=True):
+            return False
+        if ignore:
+            if ignore & labels:
+                return False
+            area = area_reg.async_get_area(area_id) if area_id else None
+            if area is not None and ignore & set(area.labels or ()):
+                return False
+        return True
 
     def _unhealthy_entries(self) -> Iterator[ConfigEntry]:
         """Yield the config entries in an unhealthy state that are not ignored."""

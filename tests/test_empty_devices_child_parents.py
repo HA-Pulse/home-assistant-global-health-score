@@ -86,7 +86,7 @@ async def test_parent_with_a_child_without_entities_is_not_empty(hass) -> None:
     parent = _device(hass, owner, "hub")
     _child(hass, owner, parent.id, "hub port")
 
-    assert _empty(hass) == ([], 0)
+    assert _empty(hass) == (["hub port"], 1)  # the empty child is reported, its parent never (#219)
 
 
 class _ChildWithoutVia:
