@@ -43,11 +43,12 @@ from .const import (
 from .coordinator import HaghsDataUpdateCoordinator
 
 
-def _schema_with_psi(psi_available: bool) -> vol.Schema:
-    """Build the flow schema.
+def _flow_schema() -> vol.Schema:
+    """Build the flow schema; it is the same with and without PSI.
 
     CPU/RAM are optional with and without PSI (#123): without PSI an empty field is not measured and is left out
-    of the hardware pillar; the setup never blocks on it. ``psi_available`` decides only the suggestion.
+    of the hardware pillar; the setup never blocks on it. Whether System Monitor's sensors are suggested for the
+    empty fields (only without PSI) is decided by the flow step that shows the form.
     """
     schema = {
         vol.Optional(sensor): selector for sensor, selector in FALLBACK_SENSORS_SCHEMA.items()
@@ -225,7 +226,7 @@ class HaghsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=_normalize_optional(user_input),
             )
         psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
-        schema = _schema_with_psi(psi.available)
+        schema = _flow_schema()
 
         ignore_label_id = _ensure_default_label(self.hass)
         suggested: dict[str, Any] = {} if psi.available else system_monitor_suggestion(self.hass)
@@ -294,7 +295,7 @@ class HaghsOptionsFlowHandler(config_entries.OptionsFlow):
         ]
         psi = await self.hass.async_add_executor_job(HaghsDataUpdateCoordinator._read_psi_sync)
         schema = (
-            _schema_with_psi(psi.available)
+            _flow_schema()
             .extend(_EXTRA_OPTIONS_SCHEMA)
             .extend(
                 {

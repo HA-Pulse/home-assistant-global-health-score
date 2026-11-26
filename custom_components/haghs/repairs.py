@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from .config_flow import FALLBACK_SENSORS_SCHEMA, system_monitor_suggestion
 from .const import IssueIds
 
-if TYPE_CHECKING:  # type only; not imported at runtime (minimum Home Assistant 2024.10)
+if TYPE_CHECKING:  # type only; not needed at runtime
     from homeassistant.components.repairs import RepairsFlowResult
 
 
