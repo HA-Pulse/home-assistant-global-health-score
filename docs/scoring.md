@@ -50,7 +50,7 @@ Evaluates the physical constraints of the host machine using real system metrics
 
 **PSI-aware recommendations:** The advisor text is split into PSI and classic variants for CPU and RAM. On PSI-equipped systems you see "PSI CPU stall time is impacting score (12.5%)" (the actual blocking time); on fallback systems "CPU utilization is impacting score (65.0%)" (the busy-ness). The metric source is always explicit so you know whether you are looking at stalls or load.
 
-**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English. Translations: English (built in), Brazilian Portuguese, German.
+**Translatable recommendations:** The advisor texts are translatable. English is built in as the fallback; a `translations/<language>.json` file can override any template, and missing keys automatically fall back to English. Translations: English (built in), Brazilian Portuguese, German, Japanese.
 
 **Power supply detection (Raspberry Pi):** HAGHS auto-detects `binary_sensor.rpi_power_status` when available and applies a flat **20-point** hardware penalty while under-voltage is reported.
 
