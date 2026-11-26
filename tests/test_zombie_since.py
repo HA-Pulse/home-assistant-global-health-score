@@ -19,7 +19,7 @@ from custom_components.haghs.const import (
     ZOMBIE_LIST_CAP,
 )
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import make_coordinator, patch_disk, patch_psi
+from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
 
 # Complete results of the same scenarios on dev before this change (22d6d2b), pinned:
 # score, every existing attribute and every rec_* flag must stay exactly as they were.
@@ -311,7 +311,7 @@ async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, 
     assert (result["empty_device_count"], result["empty_devices"]) == (0, [])
     assert result["rec_empty_devices"] is False
     assert result["conditional_ignore_active"] is False
-    by_name = {device.name: device.id for device in dr.async_get(hass).devices}
+    by_name = {device.name: device.id for device in device_entries(dr.async_get(hass))}
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
     assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)

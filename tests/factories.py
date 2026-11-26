@@ -7,12 +7,14 @@ file to keep merges between parallel branches cheap.
 
 from __future__ import annotations
 
+import inspect
 from collections import namedtuple
 from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant.common import MockConfigEntry
 
@@ -83,3 +85,32 @@ def patch_disk(
         return DiskUsage(total=total, used=total - free, free=free, percent=percent)
 
     return patch.object(coordinator_module.psutil, "disk_usage", _fake_disk_usage)
+
+
+# Home Assistant before 2026.11 (the minimum-version CI job, #237): iterating ``devices`` yields ids, ``via_device_id``
+# is not a keyword of ``async_get_or_create`` and child devices do not exist yet.
+HAS_CHILD_DEVICES = hasattr(dr.DeviceRegistry, "async_get_or_create_child")
+
+
+def device_entries(dev_reg: dr.DeviceRegistry) -> list[Any]:
+    """All device entries, whether the registry iterates entries or ids."""
+    entries = (
+        dev_reg.async_get(item) if isinstance(item, str) else item for item in dev_reg.devices
+    )
+    return [entry for entry in entries if entry is not None]
+
+
+_HAS_VIA_DEVICE_ID = (
+    "via_device_id" in inspect.signature(dr.DeviceRegistry.async_get_or_create).parameters
+)
+
+
+def via(parent: dr.DeviceEntry) -> dict[str, Any]:
+    """Keyword arguments that link a new device to ``parent`` on every supported Home Assistant version.
+
+    Newer Home Assistant takes ``via_device_id`` (``via_device`` is deprecated there); older versions only know
+    ``via_device`` with an identifier of the parent.
+    """
+    if _HAS_VIA_DEVICE_ID:
+        return {"via_device_id": parent.id}
+    return {"via_device": next(iter(parent.identifiers))}

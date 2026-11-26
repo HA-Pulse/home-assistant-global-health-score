@@ -24,7 +24,7 @@ from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import CONF_IGNORE_LABELS, DOMAIN
 from custom_components.haghs.coordinator import _HardwareResult
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import make_coordinator
+from tests.factories import make_coordinator, via
 
 CAP = 100  # EMPTY_DEVICE_LIST_CAP, same as DEAD_DEVICE_LIST_CAP
 
@@ -86,7 +86,7 @@ async def test_device_without_entity_is_reported(hass) -> None:
 
 async def test_hub_service_and_disabled_devices_are_not_reported(hass) -> None:
     hub = _device(hass, "hub")
-    child = _device(hass, "child", via_device_id=hub.id)
+    child = _device(hass, "child", **via(hub))
     _entity(hass, child.id, "child_power")
     assert child.via_device_id == hub.id
     _device(hass, "cloud", entry_type=dr.DeviceEntryType.SERVICE)

@@ -8,10 +8,11 @@ import logging
 import math
 import os
 import re
+import shutil
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -33,6 +34,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.recorder import get_instance as get_recorder_instance
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -61,6 +63,7 @@ from .const import (
     DATA_BOOT_TIME,
     DATA_UPDATE_FIRST_SEEN,
     DATA_UPDATE_FIRST_SEEN_LOADED,
+    DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED,
     DATA_UPDATE_FIRST_SEEN_STORE,
     DATA_UPDATE_SEEN_VERSION,
     DEAD_DEVICE_LIST_CAP,
@@ -82,6 +85,7 @@ from .const import (
     STALE_PENALTY_CAP,
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
+    UPDATE_FIRST_SEEN_NO_BACKUP_KEY,
     UPDATE_FIRST_SEEN_STORE_KEY,
     UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
@@ -89,6 +93,9 @@ from .const import (
     ZOMBIE_REASONS,
     IssueIds,
 )
+
+if TYPE_CHECKING:  # type only; not needed at runtime
+    from homeassistant.core import EventStateChangedData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -287,16 +294,16 @@ def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]
     """Ids of devices other devices hang off: ``via_device_id`` targets and parents of child devices.
 
     Child devices (HA 2026.9+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
-    versions have no such collection, then only ``via_device_id`` counts, as before.
+    versions have no such collection, then only ``via_device_id`` counts, as before. A child device has
+    no ``via_device_id``: HA logs a deprecation warning when an integration reads it (#214), so it is
+    never read on children.
     """
-    children = []
+    parents = {vid for d in devices if (vid := getattr(d, "via_device_id", None))}
     for item in getattr(dev_reg, "child_devices", ()) or ():
         # Like ``devices`` in older versions, a collection may yield ids: resolve them.
         child = dev_reg.async_get(item) if isinstance(item, str) else item
-        if child is not None:
-            children.append(child)
-    parents = {d.via_device_id for d in devices + children if getattr(d, "via_device_id", None)}
-    parents |= {c.parent_device_id for c in children if getattr(c, "parent_device_id", None)}
+        if child is not None and (pid := getattr(child, "parent_device_id", None)):
+            parents.add(pid)
     return parents
 
 
@@ -475,7 +482,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return lambda: None
 
         @callback
-        def _changed(_event: Event) -> None:
+        def _changed(_event: Event[EventStateChangedData]) -> None:
             self.hass.async_create_task(self.async_request_refresh())
 
         return async_track_state_change_event(self.hass, [self._conditional_entity], _changed)
@@ -926,7 +933,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The average of the measured components: CPU and RAM when measured, I/O when PSI provides it, Disk
         # always. With everything measured that is (CPU + RAM + I/O + Disk) / 4, without I/O / 3.
         # Power penalty is applied as a flat deduction (not averaged)
-        components = [score_cpu] if cpu_measured else []
+        components: list[float] = [score_cpu] if cpu_measured else []
         components += [score_ram] if ram_measured else []
         components += [score_io] if psi.io is not None else []
         components.append(score_disk)
@@ -1680,10 +1687,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read the store once and merge it into the shared first-seen dicts."""
         try:
             stored = await self._first_seen_store.async_load()
-        except Exception:
-            _LOGGER.debug(
-                "HAGHS: Stored update first-seen times unreadable; starting now", exc_info=True
-            )
+        except Exception as err:
+            # Any store failure (I/O, a store from a newer HAGHS, a broken
+            # envelope) must not break the update cycle (#103). It must not stay
+            # silent either: copy the file before anything can overwrite it,
+            # warn once (this runs once per Home Assistant run) and raise a repair.
+            await self._async_report_unreadable_first_seen_store(err)
             return
         if stored is None:
             return
@@ -1710,6 +1719,50 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug(
                 "HAGHS: Skipped invalid stored update first-seen data (%s entries)", skipped
             )
+
+    async def _async_report_unreadable_first_seen_store(self, err: Exception) -> None:
+        """Keep a copy of an unreadable store, warn once and raise a HAGHS repair.
+
+        Without a copy, saving stays paused for this run so the unreadable file
+        is never overwritten. HAGHS's own repairs do not count in the score.
+        """
+        store_path = self._first_seen_store.path
+        backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+        try:
+            await self.hass.async_add_executor_job(shutil.copy2, store_path, backup)
+        except OSError as copy_err:
+            self.hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED] = True
+            # One traceback shows both: the copy error, with the load error as its context.
+            if copy_err.__context__ is None:
+                copy_err.__context__ = err
+            _LOGGER.warning(
+                "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
+                " pending updates start a new 7-day window and saving is paused for this run (%s)",
+                copy_err,
+                store_path,
+                exc_info=copy_err,
+            )
+            translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
+            placeholders = {"store_path": store_path}
+        else:
+            _LOGGER.warning(
+                "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
+                " 7-day window; copy kept at %s",
+                backup,
+                exc_info=err,
+            )
+            translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
+            placeholders = {"backup_path": backup}
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            IssueIds.UPDATE_FIRST_SEEN_UNREADABLE,
+            is_fixable=True,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+        )
 
     def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
         """The first-seen times as stored (ISO 8601, UTC) with their offered version."""
@@ -1787,7 +1840,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             del self._update_first_seen[stale_id]
             self._update_seen_version.pop(stale_id, None)
             changed = True
-        if changed:
+        if changed and not self.hass.data[DOMAIN].get(DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED):
             self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 
         p_core_lag = 0
@@ -1868,15 +1921,16 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
 
     def _read_recorder_info(self) -> _RecorderInfo:
-        """Read recorder configuration from hass.data.
+        """Read recorder configuration through Home Assistant's recorder helper (#236).
 
         Safe access — returns empty _RecorderInfo if recorder is not loaded
         or not available (e.g. external database without recorder component).
         """
         try:
-            recorder = self.hass.data.get("recorder_instance")
-            if recorder is None:
-                _LOGGER.debug("HAGHS: Recorder instance not found in hass.data")
+            try:
+                recorder = get_recorder_instance(self.hass)
+            except KeyError:
+                _LOGGER.debug("HAGHS: Recorder not set up; config audit without recorder data")
                 return _RecorderInfo()
 
             keep_days = getattr(recorder, "keep_days", None)

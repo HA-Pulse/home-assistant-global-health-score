@@ -216,7 +216,7 @@ No. All data collection is strictly local. No outbound network traffic is ever i
 
 > **Short version.** A summary of every release is in [docs/changelog.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md).
 
-Every change in detail: [v2.4.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.4.0_CHANGELOG.md) (active changelog) and [v2.3_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.3_CHANGELOG.md) (all changes up to v2.3.0).
+Every change in detail: [v2.5.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.5.0_CHANGELOG.md) (active changelog), [v2.4.0_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.4.0_CHANGELOG.md) and [v2.3_CHANGELOG.md](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/v2.3_CHANGELOG.md) (all changes up to v2.3.0).
 
 [All release summaries →](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md)
 

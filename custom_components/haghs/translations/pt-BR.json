@@ -72,6 +72,28 @@
           }
         }
       }
+    },
+    "update_first_seen_unreadable": {
+      "title": "O HAGHS não conseguiu ler os horários de atualização salvos",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Confirmar",
+            "description": "O HAGHS não conseguiu ler quando viu suas atualizações pendentes pela primeira vez. Essas atualizações agora contam a partir deste momento e não reduzem a pontuação por até 7 dias. O arquivo ilegível foi guardado como cópia: {backup_path}. Você pode restaurá-lo de um backup, se quiser. Envie para confirmar esta mensagem."
+          }
+        }
+      }
+    },
+    "update_first_seen_unreadable_no_backup": {
+      "title": "O HAGHS não conseguiu ler os horários de atualização salvos",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Confirmar",
+            "description": "O HAGHS não conseguiu ler quando viu suas atualizações pendentes pela primeira vez e não conseguiu guardar uma cópia do arquivo ({store_path}). Essas atualizações agora contam a partir deste momento e não reduzem a pontuação por até 7 dias. O HAGHS não sobrescreve o arquivo enquanto não conseguir guardar uma cópia. Verifique o arquivo e o log e depois envie para confirmar esta mensagem."
+          }
+        }
+      }
     }
   },
   "options": {

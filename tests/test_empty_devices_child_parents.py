@@ -19,7 +19,7 @@ from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs.const import DOMAIN
-from tests.factories import make_coordinator
+from tests.factories import HAS_CHILD_DEVICES, device_entries, make_coordinator, via
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +69,7 @@ def _empty(hass: HomeAssistant):
     return coord._calc_empty_devices()
 
 
+@pytest.mark.skipif(not HAS_CHILD_DEVICES, reason="child devices need Home Assistant 2026.11")
 async def test_parent_whose_entities_sit_on_child_devices_is_not_empty(hass) -> None:
     owner = _owner(hass)
     parent = _device(hass, owner, "dishwasher")
@@ -79,6 +80,7 @@ async def test_parent_whose_entities_sit_on_child_devices_is_not_empty(hass) -> 
     assert _empty(hass) == (["leftover"], 1)
 
 
+@pytest.mark.skipif(not HAS_CHILD_DEVICES, reason="child devices need Home Assistant 2026.11")
 async def test_parent_with_a_child_without_entities_is_not_empty(hass) -> None:
     owner = _owner(hass)
     parent = _device(hass, owner, "hub")
@@ -87,16 +89,26 @@ async def test_parent_with_a_child_without_entities_is_not_empty(hass) -> None:
     assert _empty(hass) == ([], 0)
 
 
-async def test_via_device_of_a_child_marks_its_target_as_parent(hass) -> None:
+class _ChildWithoutVia:
+    """A child device as HA 2026.11 has it: ``via_device_id`` is not a field and reading it warns (#214)."""
+
+    def __init__(self, parent_device_id: str) -> None:
+        self.parent_device_id = parent_device_id
+
+    @property
+    def via_device_id(self):
+        raise AssertionError("via_device_id read on a child device")
+
+
+async def test_via_device_of_a_child_is_never_read(hass) -> None:
     owner = _owner(hass)
-    bridge = _device(hass, owner, "bridge")
+    _device(hass, owner, "bridge")
     lamp = _device(hass, owner, "lamp")
     _entity(hass, lamp.id, "lamp_light")
-    child = SimpleNamespace(parent_device_id=lamp.id, via_device_id=bridge.id)
+    child = _ChildWithoutVia(parent_device_id=lamp.id)
 
     assert coordinator_module._parent_device_ids(SimpleNamespace(child_devices=[child]), []) == {
-        bridge.id,
-        lamp.id,
+        lamp.id
     }
     real = coordinator_module._parent_device_ids
     with patch.object(
@@ -104,8 +116,8 @@ async def test_via_device_of_a_child_marks_its_target_as_parent(hass) -> None:
         "_parent_device_ids",
         lambda dev_reg, devices: real(SimpleNamespace(child_devices=[child]), devices),
     ):
-        assert _empty(hass) == ([], 0)
-    assert _empty(hass) == (["bridge"], 1)  # without the child the bridge has no entity of its own
+        assert _empty(hass) == (["bridge"], 1)
+    assert _empty(hass) == (["bridge"], 1)  # the bridge has no entity of its own either way
 
 
 @pytest.mark.parametrize(
@@ -151,7 +163,7 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
     """HA 2024.10 shape: no ``child_devices`` collection, device entries without composite fields."""
     owner = _owner(hass)
     hub = _device(hass, owner, "hub")
-    member = _device(hass, owner, "member", via_device_id=hub.id)
+    member = _device(hass, owner, "member", **via(hub))
     _entity(hass, member.id, "member_power")
     _device(hass, owner, "leftover")
     fields = (
@@ -172,7 +184,7 @@ async def test_ha_without_child_devices_behaves_as_before(hass) -> None:
             config_entries={owner.entry_id},
         )
 
-    old_registry = SimpleNamespace(devices=[old(d) for d in dr.async_get(hass).devices])
+    old_registry = SimpleNamespace(devices=[old(d) for d in device_entries(dr.async_get(hass))])
     assert not hasattr(old_registry, "child_devices")
     assert coordinator_module._parent_device_ids(old_registry, old_registry.devices) == {hub.id}
     assert not any(coordinator_module._is_composite(d) for d in old_registry.devices)

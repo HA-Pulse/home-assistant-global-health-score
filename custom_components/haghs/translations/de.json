@@ -72,6 +72,28 @@
           }
         }
       }
+    },
+    "update_first_seen_unreadable": {
+      "title": "HAGHS konnte seine gespeicherten Update-Zeiten nicht lesen",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Bestätigen",
+            "description": "HAGHS konnte nicht lesen, wann es deine ausstehenden Updates zuerst gesehen hat. Diese Updates zählen jetzt ab diesem Moment und senken den Score bis zu 7 Tage lang nicht. Die unlesbare Datei wurde als Kopie aufbewahrt: {backup_path}. Du kannst sie bei Bedarf aus einem Backup wiederherstellen. Sende ab, um diese Meldung zu bestätigen."
+          }
+        }
+      }
+    },
+    "update_first_seen_unreadable_no_backup": {
+      "title": "HAGHS konnte seine gespeicherten Update-Zeiten nicht lesen",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Bestätigen",
+            "description": "HAGHS konnte nicht lesen, wann es deine ausstehenden Updates zuerst gesehen hat, und konnte keine Kopie der Datei anlegen ({store_path}). Diese Updates zählen jetzt ab diesem Moment und senken den Score bis zu 7 Tage lang nicht. HAGHS überschreibt die Datei nicht, solange es keine Kopie anlegen kann. Prüfe die Datei und das Log und sende dann ab, um diese Meldung zu bestätigen."
+          }
+        }
+      }
     }
   },
   "options": {

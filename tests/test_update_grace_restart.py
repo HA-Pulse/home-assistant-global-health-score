@@ -149,7 +149,7 @@ async def test_invalid_stored_data_starts_now_with_one_debug(
     assert len([r for r in caplog.records if "stored update first-seen" in r.getMessage()]) == 1
 
 
-async def test_unreadable_store_starts_now_with_one_debug(hass, caplog, monkeypatch) -> None:
+async def test_unreadable_store_starts_now_with_one_warning(hass, caplog, monkeypatch) -> None:
     hass.states.async_set("update.esphome", "on")
     coordinator = make_coordinator(hass)
 
@@ -160,10 +160,13 @@ async def test_unreadable_store_starts_now_with_one_debug(hass, caplog, monkeypa
     caplog.set_level(logging.DEBUG, logger="custom_components.haghs.coordinator")
     await coordinator._async_load_update_first_seen()
     assert coordinator._calc_updates()[1] == 0
-    assert (
-        len([r for r in caplog.records if "update first-seen times unreadable" in r.getMessage()])
-        == 1
-    )
+    records = [r for r in caplog.records if "update first-seen times unreadable" in r.getMessage()]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    assert records[0].exc_info is not None
+    # No store file here, so the copy fails: the WARNING carries that reason, the load error as its context.
+    assert isinstance(records[0].exc_info[1], FileNotFoundError)
+    assert isinstance(records[0].exc_info[1].__context__, ValueError)
 
 
 async def test_the_update_cycle_loads_the_store(hass, hass_storage) -> None:
