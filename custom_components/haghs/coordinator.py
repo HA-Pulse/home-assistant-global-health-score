@@ -294,16 +294,16 @@ def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]
     """Ids of devices other devices hang off: ``via_device_id`` targets and parents of child devices.
 
     Child devices (HA 2026.9+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
-    versions have no such collection, then only ``via_device_id`` counts, as before.
+    versions have no such collection, then only ``via_device_id`` counts, as before. A child device has
+    no ``via_device_id``: HA logs a deprecation warning when an integration reads it (#214), so it is
+    never read on children.
     """
-    children = []
+    parents = {vid for d in devices if (vid := getattr(d, "via_device_id", None))}
     for item in getattr(dev_reg, "child_devices", ()) or ():
         # Like ``devices`` in older versions, a collection may yield ids: resolve them.
         child = dev_reg.async_get(item) if isinstance(item, str) else item
-        if child is not None:
-            children.append(child)
-    parents = {vid for d in devices + children if (vid := getattr(d, "via_device_id", None))}
-    parents |= {pid for c in children if (pid := getattr(c, "parent_device_id", None))}
+        if child is not None and (pid := getattr(child, "parent_device_id", None)):
+            parents.add(pid)
     return parents
 
 

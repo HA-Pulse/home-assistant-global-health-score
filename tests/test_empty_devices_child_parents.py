@@ -89,16 +89,26 @@ async def test_parent_with_a_child_without_entities_is_not_empty(hass) -> None:
     assert _empty(hass) == ([], 0)
 
 
-async def test_via_device_of_a_child_marks_its_target_as_parent(hass) -> None:
+class _ChildWithoutVia:
+    """A child device as HA 2026.11 has it: ``via_device_id`` is not a field and reading it warns (#214)."""
+
+    def __init__(self, parent_device_id: str) -> None:
+        self.parent_device_id = parent_device_id
+
+    @property
+    def via_device_id(self):
+        raise AssertionError("via_device_id read on a child device")
+
+
+async def test_via_device_of_a_child_is_never_read(hass) -> None:
     owner = _owner(hass)
-    bridge = _device(hass, owner, "bridge")
+    _device(hass, owner, "bridge")
     lamp = _device(hass, owner, "lamp")
     _entity(hass, lamp.id, "lamp_light")
-    child = SimpleNamespace(parent_device_id=lamp.id, via_device_id=bridge.id)
+    child = _ChildWithoutVia(parent_device_id=lamp.id)
 
     assert coordinator_module._parent_device_ids(SimpleNamespace(child_devices=[child]), []) == {
-        bridge.id,
-        lamp.id,
+        lamp.id
     }
     real = coordinator_module._parent_device_ids
     with patch.object(
@@ -106,8 +116,8 @@ async def test_via_device_of_a_child_marks_its_target_as_parent(hass) -> None:
         "_parent_device_ids",
         lambda dev_reg, devices: real(SimpleNamespace(child_devices=[child]), devices),
     ):
-        assert _empty(hass) == ([], 0)
-    assert _empty(hass) == (["bridge"], 1)  # without the child the bridge has no entity of its own
+        assert _empty(hass) == (["bridge"], 1)
+    assert _empty(hass) == (["bridge"], 1)  # the bridge has no entity of its own either way
 
 
 @pytest.mark.parametrize(
