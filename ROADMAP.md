@@ -201,6 +201,11 @@ show the live state between releases.
   is the one CI checks; older Home Assistant installations stay on HAGHS 2.4.2.
 - **psutil declared in the manifest (#238)**: the dependency is visible, with a
   lower bound only, so Home Assistant's own psutil version never changes.
+- **Japanese translation (#224)**: the setup, options, repairs and
+  recommendation texts are available in Japanese.
+- **Long-term statistics for the score (#248)**: the score sensor has
+  `state_class: measurement`, so Home Assistant keeps its statistics beyond the
+  recorder history.
 
 ### v3.0
 

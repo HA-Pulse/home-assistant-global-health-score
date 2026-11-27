@@ -321,7 +321,7 @@ def _device_config_entry_ids(device: dr.DeviceEntry) -> set[str]:
 def _parent_device_ids(dev_reg: dr.DeviceRegistry, devices: list[dr.DeviceEntry]) -> set[str]:
     """Ids of devices other devices hang off: ``via_device_id`` targets and parents of child devices.
 
-    Child devices (HA 2026.9+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
+    Child devices (HA 2026.11+) live in ``dev_reg.child_devices`` with ``parent_device_id``; older
     versions have no such collection, then only ``via_device_id`` counts, as before. A child device has
     no ``via_device_id``: HA logs a deprecation warning when an integration reads it (#214), so it is
     never read on children.

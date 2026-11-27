@@ -29,7 +29,7 @@ An empty device has no entity at all, often a leftover after removing or re-pair
 {% endfor %}
 ```
 
-To remove one, open its device page and use **⋮ > Delete**. This option only appears when the integration supports removing devices; otherwise remove the device in the integration itself (for example exclude or remove it there, or delete the integration entry it belongs to). To keep a device and stop the report, give the device (or its area) the `haghs_ignore` label; on a parent device the label also covers its child devices. Empty devices never cost points.
+To remove one, open its device page and use **⋮ > Delete**. This option only appears when the integration supports removing devices; otherwise remove the device in the integration itself (for example exclude or remove it there, or delete the integration entry it belongs to). To keep a device and stop the report, give the device (or its area) the `haghs_ignore` label; on a parent device the label also covers its child devices, and a label on the parent's area covers a child device that has no area of its own. Empty devices never cost points.
 
 ## Why is my score so low?
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
@@ -62,7 +62,7 @@ Entities that just became `unavailable` or `unknown` are ignored for **5 minutes
 A cap at 99 means a zombie, an open repair or an overdue watched entity is reported; the Config-Audit bonus can never lift it to 100. A restart itself does not create zombies: HAGHS uses `max(last_changed, boot_time)` as the floor for the grace window, so states restored from the recorder still get the full grace window, and zombie detection waits for `EVENT_HOMEASSISTANT_STARTED` before its first run.
 
 ## Do I need to remove and re-add HAGHS after an update?
-No. Config entries of every older version (1.x, 2.x, 3.0–3.3) are migrated to the current layout automatically on the next restart, also for users who saw the *"Migration handler not found"* warning on v2.2.x (#75).
+No. Config entries of every older version (1.x, 2.x, 3.0–3.4) are migrated to the current layout automatically on the next restart, also for users who saw the *"Migration handler not found"* warning on v2.2.x (#75).
 
 ## Why did my score change after an update?
 The [release summaries](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/changelog.md) list the behavior changes per release; v2.3.0 and v2.4.0 include upgrade notes. The recommendations and `rec_*` flags show which factors cost points right now.
