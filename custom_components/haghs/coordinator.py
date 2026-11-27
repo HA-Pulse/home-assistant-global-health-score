@@ -1954,8 +1954,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if core_present and next_state is not None:
             if next_state.state == STATE_UNKNOWN:
                 core_status = "not_configured"  # HA's schedule is "never"
-            elif last_success is None:
-                core_status = "unknown"  # unavailable, or no successful automatic backup yet
+            elif last_success is None or as_time(next_state) is None:
+                # Unavailable, or no successful automatic backup yet: never a deduction from a
+                # sensor that cannot say whether a schedule is set (Deniz, 2026-11-11).
+                core_status = "unknown"
             elif age_hours is not None and age_hours > BACKUP_MAX_AGE_HOURS:
                 core_status = "stale"
             else:

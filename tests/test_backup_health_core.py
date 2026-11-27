@@ -111,6 +111,7 @@ async def test_no_schedule_is_a_recommendation_without_deduction(hass) -> None:
         ("unknown", 21),  # scheduled, no successful automatic backup yet
         ("unavailable", 21),  # integration not loaded
         ("unavailable", "unavailable"),
+        (-240, "unavailable"),  # an old success but the schedule sensor unavailable: no deduction
         ("2026-11-01T00:00:00", 21),  # a time without time zone is not trusted
         (72, 21),  # a time in the future (clock moved back) is not trusted
     ],
@@ -119,7 +120,10 @@ async def test_unknown_is_a_recommendation_without_deduction(hass, success, next
     _core(hass, success=success, next_run=next_run)
     result = _backup(hass)
     assert _summary(result) == (0, "core", "unknown", True)
-    assert (result.last_success, result.age_hours) == (None, None)
+    if isinstance(success, int) and success < 0:  # a real past success is still shown
+        assert (result.age_hours, result.last_success is not None) == (-success, True)
+    else:
+        assert (result.last_success, result.age_hours) == (None, None)
 
 
 async def test_the_age_is_never_negative(hass) -> None:
@@ -145,6 +149,31 @@ async def test_an_ignore_label_on_a_backup_sensor_switches_the_check_off(hass, i
     assert label.label_id != label.name
     _core(hass, success=-480, next_run=23)
     er.async_get(hass).async_update_entity(ENTITY_IDS[ignored], labels={label.label_id})
+    result = _backup(hass, options={"ignore_labels": [label.label_id]})
+    assert _summary(result) == (0, "none", "no_source", False)
+
+
+async def test_an_ignore_label_on_the_backup_device_switches_the_check_off(hass) -> None:
+    from homeassistant.helpers import device_registry as dr
+    from pytest_homeassistant.common import MockConfigEntry
+
+    label = lr.async_get(hass).async_create("Backed up elsewhere")
+    owner = MockConfigEntry(domain="backup", data={})
+    owner.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("backup", "backup_manager")}, name="Backup"
+    )
+    _core(hass, success=-480, next_run=23)
+    registry = er.async_get(hass)
+    for entity_id in ENTITY_IDS.values():
+        registry.async_update_entity(entity_id, device_id=device.id)
+    assert _summary(_backup(hass, options={"ignore_labels": [label.label_id]})) == (
+        30,
+        "core",
+        "stale",
+        False,
+    )
+    dr.async_get(hass).async_update_device(device.id, labels={label.label_id})
     result = _backup(hass, options={"ignore_labels": [label.label_id]})
     assert _summary(result) == (0, "none", "no_source", False)
 
