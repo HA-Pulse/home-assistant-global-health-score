@@ -106,3 +106,22 @@ async def test_failing_unreadable_store_repair_keeps_the_cycle(hass, caplog, mon
     assert coordinator.last_update_success is True
     assert "global_score" in coordinator.data
     assert len(_warnings(caplog, UNREADABLE_MESSAGE)) == 1
+
+
+async def test_a_new_failure_after_a_quiet_cycle_warns_again(hass, caplog) -> None:
+    """A streak ends when there is nothing to sync; the next failure is a new streak with a WARNING."""
+    coordinator = make_coordinator(hass)
+    with patch_psi(cpu=1.0, memory=1.0, io=1.0), patch_disk():  # measured: no repair
+        await coordinator.async_refresh()
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+    failing = patch.object(
+        coordinator_module.ir, "async_create_issue", side_effect=RuntimeError("registry down")
+    )
+    with patch_psi(), patch_disk(), failing:  # unmeasured: the create fails
+        await coordinator.async_refresh()
+    with patch_psi(cpu=1.0, memory=1.0, io=1.0), patch_disk():  # measured again: nothing to sync
+        await coordinator.async_refresh()
+    with patch_psi(), patch_disk(), failing:  # unmeasured again: a new failure
+        await coordinator.async_refresh()
+    assert coordinator.last_update_success is True
+    assert len(_warnings(caplog, SYNC_MESSAGE)) == 2

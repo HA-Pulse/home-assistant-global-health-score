@@ -13,17 +13,21 @@ from homeassistant.helpers import (
 from homeassistant.helpers import (
     label_registry as lr,
 )
+from homeassistant.helpers.storage import Store
 
 from .const import (
     _CONFIG_VERSION,
     CONF_IGNORE_LABEL,
     CONF_IGNORE_LABELS,
     DOMAIN,
+    UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
+    UPDATE_FIRST_SEEN_STORE_VERSION,
     IssueIds,
     VersionInformation,
     entry_issue_id,
+    entry_store_key,
 )
-from .coordinator import HaghsDataUpdateCoordinator
+from .coordinator import HaghsDataUpdateCoordinator, async_report_unreadable_first_seen_store
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,7 +80,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
       <= (3, 3): convert the single CONF_IGNORE_LABEL into the new
                  CONF_IGNORE_LABELS list (one-element list when the legacy
                  key holds a value, removed entirely when empty).
-      (3, 4):    current version, no further data shape changes.
+      <= (3, 4): copy the update first-seen times HAGHS 2.4 kept for every
+                 entry into this entry's own store (#217), so running 7-day
+                 windows go on. Entries created later never read the old store.
+      (3, 5):    current version.
     """
     entry_version = VersionInformation(major=entry.version, minor=entry.minor_version)
 
@@ -102,6 +109,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _migrate_label_to_labels(data)
         _migrate_label_to_labels(options)
 
+    per_entry_state_version = VersionInformation(major=3, minor=4)
+    if entry_version <= per_entry_state_version:
+        await _async_copy_shared_first_seen(hass, entry)
+
     hass.config_entries.async_update_entry(
         entry,
         data=data,
@@ -112,6 +123,38 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.info("HAGHS migrated to version %s", _CONFIG_VERSION)
     return True
+
+
+async def _async_copy_shared_first_seen(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Give an existing entry its own copy of the first-seen store HAGHS 2.4 shared (#217).
+
+    The old file is only read, never changed. An unreadable old file is reported like an
+    unreadable own store (warning, a kept copy, the entry's repair); the migration never fails.
+    """
+    own: Store[Any] = Store(hass, UPDATE_FIRST_SEEN_STORE_VERSION, entry_store_key(entry.entry_id))
+    try:
+        if await own.async_load() is not None:
+            return
+    except Exception:
+        return  # an own store exists but is unreadable: the coordinator reports it on its first load
+    shared: Store[Any] = Store(
+        hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_LEGACY_STORE_KEY
+    )
+    try:
+        data = await shared.async_load()
+    except Exception as err:
+        await async_report_unreadable_first_seen_store(hass, entry.entry_id, shared.path, err)
+        return
+    if data is None:
+        return
+    try:
+        await own.async_save(data)
+    except Exception:
+        _LOGGER.warning(
+            "HAGHS: Could not copy the stored update first-seen times for this entry; pending"
+            " updates start a new 7-day window",
+            exc_info=True,
+        )
 
 
 def _migrate_label_to_labels(config: dict[str, Any]) -> bool:

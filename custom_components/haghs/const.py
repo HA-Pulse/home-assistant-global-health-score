@@ -93,7 +93,7 @@ DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
 # The same timestamps in .storage, so the grace window survives Home Assistant
 # restarts (doc audit v2.4.0b4): restarting at least weekly used to restart it.
 # One store per HAGHS config entry (#217): "<key>.<entry_id>". The shared store of
-# HAGHS 2.4 is only read as the starting record of an entry without its own store.
+# HAGHS 2.4 is copied once, when an existing entry migrates to config version 3.5.
 UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
 UPDATE_FIRST_SEEN_LEGACY_STORE_KEY = UPDATE_FIRST_SEEN_STORE_KEY
 UPDATE_FIRST_SEEN_STORE_VERSION = 1
@@ -280,4 +280,4 @@ def entry_store_key(entry_id: str) -> str:
 # Current config entry version. Bumped whenever entry.data/options need
 # migration. Keep this in const.py so both config_flow and the migration
 # logic in __init__.py reference the same source of truth.
-_CONFIG_VERSION = VersionInformation(major=3, minor=4)
+_CONFIG_VERSION = VersionInformation(major=3, minor=5)

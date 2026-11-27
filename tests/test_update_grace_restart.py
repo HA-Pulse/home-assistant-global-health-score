@@ -17,7 +17,6 @@ from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.haghs.const import (
     DOMAIN,
-    UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
     entry_store_key,
 )
 from tests.factories import make_coordinator
@@ -335,23 +334,20 @@ async def test_an_ignored_update_without_a_state_leaves_the_store(hass, hass_sto
     assert entry.entity_id not in coordinator._update_first_seen
 
 
-async def test_two_config_entries_share_one_load(hass, hass_storage) -> None:
-    """No coordinator computes before its stored times are merged (several config entries, #217).
-
-    Both entries start from the shared store of HAGHS 2.4 (the upgrade case); each keeps its own record.
-    """
+async def test_two_config_entries_each_load_before_computing(hass, hass_storage) -> None:
+    """No coordinator computes before its own stored times are merged (several config entries, #217)."""
     import asyncio
 
     eight_days = (dt_util.utcnow() - timedelta(days=8)).isoformat()
-    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = {
-        **_stored({"update.esphome": eight_days}),
-        "key": UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
-    }
+    two_days = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    other_key = entry_store_key("haghs_other_entry")
+    hass_storage[KEY] = _stored({"update.esphome": eight_days})
+    hass_storage[other_key] = {**_stored({"update.esphome": two_days}), "key": other_key}
     hass.states.async_set("update.esphome", "on")
-    first, second = make_coordinator(hass, entry_id=ENTRY), make_coordinator(hass)
+    first = make_coordinator(hass, entry_id=ENTRY)
+    second = make_coordinator(hass, entry_id="haghs_other_entry")
     await asyncio.gather(first.async_refresh(), second.async_refresh())
     assert first.data["rec_updates_pending"] is True
-    assert second.data["rec_updates_pending"] is True
+    assert second.data["rec_updates_pending"] is False
     assert first._update_first_seen["update.esphome"] == dt_util.parse_datetime(eight_days)
-    assert second._update_first_seen["update.esphome"] == dt_util.parse_datetime(eight_days)
-    assert first._update_first_seen is not second._update_first_seen
+    assert second._update_first_seen["update.esphome"] == dt_util.parse_datetime(two_days)

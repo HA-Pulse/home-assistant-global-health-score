@@ -85,7 +85,6 @@ from .const import (
     STALE_PENALTY_CAP,
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
-    UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
     UPDATE_FIRST_SEEN_NO_BACKUP_KEY,
     UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
@@ -327,6 +326,62 @@ def _parent_of(dev_reg: dr.DeviceRegistry, device: Any) -> Any:
     """The parent device of a child device (#219), ``None`` for a main device or older HA versions."""
     parent_id = getattr(device, "parent_device_id", None)
     return dev_reg.async_get(parent_id) if parent_id else None
+
+
+async def async_report_unreadable_first_seen_store(
+    hass: HomeAssistant, entry_id: str, store_path: str, err: Exception
+) -> bool:
+    """Keep a copy of an unreadable first-seen store, warn once and raise the entry's repair.
+
+    Returns whether a copy was kept; without one the caller must never overwrite the file.
+    HAGHS's own repairs do not count in the score, and a failing repair never stops the caller
+    (#217).
+    """
+    backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+    try:
+        await hass.async_add_executor_job(shutil.copy2, store_path, backup)
+    except OSError as copy_err:
+        # One traceback shows both: the copy error, with the load error as its context.
+        if copy_err.__context__ is None:
+            copy_err.__context__ = err
+        _LOGGER.warning(
+            "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
+            " pending updates start a new 7-day window and saving is paused for this run (%s)",
+            copy_err,
+            store_path,
+            exc_info=copy_err,
+        )
+        kept = False
+        translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
+        placeholders = {"store_path": store_path}
+    else:
+        _LOGGER.warning(
+            "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
+            " 7-day window; copy kept at %s",
+            backup,
+            exc_info=err,
+        )
+        kept = True
+        translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
+        placeholders = {"backup_path": backup}
+    try:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, entry_id),
+            is_fixable=True,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+        )
+    except Exception:
+        # The repair is a notice only: its failure must not stop the update cycle (#217).
+        _LOGGER.warning(
+            "HAGHS: Could not raise the repair for the unreadable update first-seen times",
+            exc_info=True,
+        )
+    return kept
 
 
 def _is_composite(device: dr.DeviceEntry) -> bool:
@@ -1764,13 +1819,6 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # warn once (this runs once per Home Assistant run) and raise a repair.
             await self._async_report_unreadable_first_seen_store(err)
             return
-        from_legacy = stored is None
-        if from_legacy:
-            # No own store yet (first start after the update to per-entry state,
-            # #217): the shared store of HAGHS 2.4 is the starting record, so
-            # running grace windows go on. It is only read, never changed; the
-            # entry saves its own copy right away.
-            stored = await self._async_load_legacy_first_seen()
         if stored is None:
             return
         now = dt_util.utcnow()
@@ -1796,71 +1844,15 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug(
                 "HAGHS: Skipped invalid stored update first-seen data (%s entries)", skipped
             )
-        if from_legacy:
-            self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
-
-    async def _async_load_legacy_first_seen(self) -> Any:
-        """The shared first-seen store of HAGHS 2.4, or ``None`` when it is missing or unreadable."""
-        legacy: Store[dict[str, dict[str, str | None]]] = Store(
-            self.hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_LEGACY_STORE_KEY
-        )
-        try:
-            return await legacy.async_load()
-        except Exception:
-            _LOGGER.debug("HAGHS: Old shared update first-seen store unreadable", exc_info=True)
-            return None
 
     async def _async_report_unreadable_first_seen_store(self, err: Exception) -> None:
-        """Keep a copy of an unreadable store, warn once and raise a HAGHS repair.
-
-        Without a copy, saving stays paused for this run so the unreadable file
-        is never overwritten. HAGHS's own repairs do not count in the score.
-        """
-        store_path = self._first_seen_store.path
-        backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
-        try:
-            await self.hass.async_add_executor_job(shutil.copy2, store_path, backup)
-        except OSError as copy_err:
+        """Report the entry's unreadable store; without a copy, saving stays paused for this run."""
+        kept = await async_report_unreadable_first_seen_store(
+            self.hass, self._entry_id, self._first_seen_store.path, err
+        )
+        if not kept:
             self.hass.data[DOMAIN].setdefault(DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED, set()).add(
                 self._entry_id
-            )
-            # One traceback shows both: the copy error, with the load error as its context.
-            if copy_err.__context__ is None:
-                copy_err.__context__ = err
-            _LOGGER.warning(
-                "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
-                " pending updates start a new 7-day window and saving is paused for this run (%s)",
-                copy_err,
-                store_path,
-                exc_info=copy_err,
-            )
-            translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
-            placeholders = {"store_path": store_path}
-        else:
-            _LOGGER.warning(
-                "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
-                " 7-day window; copy kept at %s",
-                backup,
-                exc_info=err,
-            )
-            translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
-            placeholders = {"backup_path": backup}
-        try:
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, self._entry_id),
-                is_fixable=True,
-                is_persistent=True,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=translation_key,
-                translation_placeholders=placeholders,
-            )
-        except Exception:
-            # The repair is a notice only: its failure must not stop the update cycle (#217).
-            _LOGGER.warning(
-                "HAGHS: Could not raise the repair for the unreadable update first-seen times",
-                exc_info=True,
             )
 
     def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
@@ -2233,6 +2225,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         missing = self._cpu_ram_unmeasured(hw)
         if missing == self._cpu_ram_issue:
+            # Nothing to sync: a failure streak is over, so the next failure warns again.
+            self._failed_informational.discard(REPAIR_SYNC)
             return
         issue_id = entry_issue_id(IssueIds.FALLBACK_MISSING, self._entry_id)
         try:

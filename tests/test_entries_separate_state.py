@@ -6,6 +6,7 @@ entry's repair, and an ignore label in one entry restarted the 7-day update grac
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
@@ -49,13 +50,24 @@ def _fallback(hass: HomeAssistant, entry_id: str) -> ir.IssueEntry | None:
     )
 
 
-def _legacy_store(seen: dict[str, str]) -> dict[str, Any]:
+def _store(key: str, seen: dict[str, str]) -> dict[str, Any]:
     return {
         "version": 1,
         "minor_version": 1,
-        "key": UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
+        "key": key,
         "data": {entity_id: {"since": since, "version": None} for entity_id, since in seen.items()},
     }
+
+
+def _legacy_store(seen: dict[str, str]) -> dict[str, Any]:
+    return _store(UPDATE_FIRST_SEEN_LEGACY_STORE_KEY, seen)
+
+
+def _entry_at_3_4(hass: HomeAssistant) -> MockConfigEntry:
+    """An entry as HAGHS 2.4 left it (config version 3.4)."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options={}, version=3, minor_version=4)
+    entry.add_to_hass(hass)
+    return entry
 
 
 async def test_one_entry_never_deletes_the_repair_of_another(hass) -> None:
@@ -142,11 +154,14 @@ async def test_an_ignore_label_in_one_entry_keeps_the_grace_of_the_other(
     er.async_get(hass).async_update_entity(entry.entity_id, labels={label.label_id})
     hass.states.async_set(entry.entity_id, "on", {"friendly_name": "Router firmware"})
     eight_days = (dt_util.utcnow() - timedelta(days=UPDATE_GRACE_DAYS + 1)).isoformat()
-    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({entry.entity_id: eight_days})
-    legacy_before = dict(hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY])
+    for entry_id in ("counts", "ignores"):  # both entries saw the update 8 days ago
+        key = entry_store_key(entry_id)
+        hass_storage[key] = _store(key, {entry.entity_id: eight_days})
 
-    counts = make_coordinator(hass)
-    ignores = make_coordinator(hass, options={CONF_IGNORE_LABELS: [label.label_id]})
+    counts = make_coordinator(hass, entry_id="counts")
+    ignores = make_coordinator(
+        hass, entry_id="ignores", options={CONF_IGNORE_LABELS: [label.label_id]}
+    )
     with patch_psi(cpu=1.0, memory=1.0, io=1.0), patch_disk():
         await counts.async_refresh()
         await ignores.async_refresh()  # prunes the update from its own record only
@@ -160,23 +175,74 @@ async def test_an_ignore_label_in_one_entry_keeps_the_grace_of_the_other(
     await hass.async_block_till_done()
     assert set(hass_storage[entry_store_key(counts._entry_id)]["data"]) == {entry.entity_id}
     assert hass_storage[entry_store_key(ignores._entry_id)]["data"] == {}
-    assert hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] == legacy_before
 
 
-async def test_an_own_store_wins_over_the_old_shared_one(hass, hass_storage) -> None:
+async def test_migration_copies_the_shared_store_once_and_leaves_it_untouched(
+    hass, hass_storage
+) -> None:
+    seen = (dt_util.utcnow() - timedelta(days=5)).isoformat()
+    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({"update.router": seen})
+    shared_before = dict(hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY])
+    entry = _entry_at_3_4(hass)
+
+    assert await haghs_module.async_migrate_entry(hass, entry) is True
+    await hass.async_block_till_done()
+    assert (entry.version, entry.minor_version) == (3, 5)
+    assert hass_storage[entry_store_key(entry.entry_id)]["data"] == shared_before["data"]
+    assert hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] == shared_before
+
+    coordinator = make_coordinator(hass, entry_id=entry.entry_id)
+    await coordinator._async_load_update_first_seen()
+    assert coordinator._update_first_seen == {"update.router": dt_util.parse_datetime(seen)}
+
+
+async def test_migration_keeps_an_existing_own_store(hass, hass_storage) -> None:
     seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
     hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({"update.legacy": seen})
-    hass_storage[entry_store_key("own_entry")] = {
-        **_legacy_store({"update.own": seen}),
-        "key": entry_store_key("own_entry"),
-    }
-    own = make_coordinator(hass, entry_id="own_entry")
-    await own._async_load_update_first_seen()
-    assert set(own._update_first_seen) == {"update.own"}
+    entry = _entry_at_3_4(hass)
+    key = entry_store_key(entry.entry_id)
+    hass_storage[key] = _store(key, {"update.own": seen})
 
-    upgraded = make_coordinator(hass)
-    await upgraded._async_load_update_first_seen()
-    assert set(upgraded._update_first_seen) == {"update.legacy"}
+    assert await haghs_module.async_migrate_entry(hass, entry) is True
+    await hass.async_block_till_done()
+    assert set(hass_storage[key]["data"]) == {"update.own"}
+
+
+async def test_a_new_entry_never_reads_the_shared_store(hass, hass_storage) -> None:
+    """An entry created after the update starts empty, even if the HAGHS 2.4 file is still there."""
+    months_ago = (dt_util.utcnow() - timedelta(days=90)).isoformat()
+    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({"update.router": months_ago})
+    new = make_coordinator(hass)
+    await new._async_load_update_first_seen()
+    assert new._update_first_seen == {}
+
+
+async def test_an_unreadable_shared_store_is_reported_and_the_migration_goes_on(
+    hass, hass_storage, caplog
+) -> None:
+    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = {
+        "version": 9,
+        "minor_version": 1,
+        "key": UPDATE_FIRST_SEEN_LEGACY_STORE_KEY,
+        "data": {},
+    }
+    entry = _entry_at_3_4(hass)
+    caplog.set_level(logging.WARNING, logger="custom_components.haghs.coordinator")
+
+    assert await haghs_module.async_migrate_entry(hass, entry) is True
+    assert (entry.version, entry.minor_version) == (3, 5)
+    warnings = [r for r in caplog.records if "update first-seen times unreadable" in r.getMessage()]
+    assert len(warnings) == 1
+    assert warnings[0].exc_info is not None
+    repair = ir.async_get(hass).async_get_issue(
+        DOMAIN, entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, entry.entry_id)
+    )
+    assert repair is not None
+    assert repair.translation_key in (
+        "update_first_seen_unreadable",
+        "update_first_seen_unreadable_no_backup",
+    )
+    assert entry_store_key(entry.entry_id) not in hass_storage
 
 
 async def test_setup_drops_the_old_shared_repair_and_removal_only_the_entrys_own(hass) -> None:
