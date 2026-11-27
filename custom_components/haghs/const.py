@@ -136,7 +136,10 @@ REC_BACKUP_STALE = "\U0001f6a8 Security: Stale backup detected!"
 REC_BACKUP_NO_SCHEDULE = (
     "\U0001f4be Backups: No automatic backup schedule is set up in Home Assistant."
 )
-REC_BACKUP_UNKNOWN = "\U0001f4be Backups: No successful automatic backup is known yet."
+REC_BACKUP_UNKNOWN = (
+    "\U0001f4be Backups: Home Assistant reports no successful automatic backup "
+    "(none yet, or the backup sensors are unavailable)."
+)
 REC_UPDATES_PENDING = "\U0001f4e6 Maintenance: {count} update(s) pending."
 REC_ZOMBIES = (
     "\U0001f9df Hygiene: {count} zombie(s) detected. "
@@ -264,11 +267,10 @@ BACKUP_PENALTY = 30
 BACKUP_ADDON_ENTITY = "binary_sensor.backups_stale"
 BACKUP_PLATFORM = "backup"
 BACKUP_LAST_SUCCESS_KEY = "last_successful_automatic_backup"
-BACKUP_LAST_ATTEMPT_KEY = "last_attempted_automatic_backup"
 BACKUP_NEXT_KEY = "next_scheduled_automatic_backup"
-# A scheduled automatic backup older than 8 days is stale once a run was missed since
-# (Deniz, 2026-11-11: with 7 days a weekly backup would flap). The public sensors carry
-# no schedule interval.
+# While a schedule is set, an automatic backup older than 8 days is stale (Deniz,
+# 2026-11-11: with 7 days a weekly backup would flap). The public sensors carry no
+# schedule interval.
 BACKUP_MAX_AGE_HOURS = 8 * 24
 # The backup sensors may still be loading right after a start: no recommendation then.
 BACKUP_STARTUP_GRACE_MINUTES = 15

@@ -14,7 +14,7 @@ from tests.test_cards_v14_rendering import _attributes, _render
 
 LINES = {
     "not_configured": "💾 No automatic backup schedule",
-    "unknown": "💾 No successful automatic backup known yet",
+    "unknown": "💾 No successful automatic backup reported",
 }
 
 

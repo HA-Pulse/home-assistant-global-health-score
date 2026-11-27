@@ -8,7 +8,7 @@
     "rec_all_clear": "✅ System optimiert",
     "rec_backup_stale": "🚨 Sicherheit: Veraltetes Backup erkannt!",
     "rec_backup_no_schedule": "💾 Backups: In Home Assistant ist kein Zeitplan für automatische Backups eingerichtet.",
-    "rec_backup_unknown": "💾 Backups: Noch kein erfolgreiches automatisches Backup bekannt.",
+    "rec_backup_unknown": "💾 Backups: Home Assistant meldet kein erfolgreiches automatisches Backup (noch keins, oder die Backup-Sensoren sind nicht verfügbar).",
     "rec_config_audit": "🔧 Config-Audit: {missing} Bonuspunkt(e) nicht erreicht (Recorder bewahrt mehr als 10 Tage auf / kein Entitätsfilter).",
     "rec_core_lag": "👴 Veraltet: Die Core-Version ist ≥3 Monate alt.",
     "rec_cpu_load_classic": "⚡ Optimierung: Die CPU-Auslastung wirkt sich auf den Score aus ({cpu_pct:.1f}%).",

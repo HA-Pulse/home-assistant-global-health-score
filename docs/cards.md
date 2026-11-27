@@ -41,7 +41,7 @@ Configuration: [docs/cards/pro.yaml](https://github.com/HA-Pulse/home-assistant-
 | Advisor recommendations (CPU, RAM, I/O, ...) | Inline | Dedicated card |
 | Pending updates (by name) | Count + link | Full list + deep-link |
 | Stale backup | Status line + link | Status line + link |
-| No automatic backup schedule, or no successful automatic backup known yet | Status line + link | Status line + link |
+| No automatic backup schedule, or no successful automatic backup reported | Status line + link | Status line + link |
 | Zombie details | Count by reason + link | Grouped by domain, reason and "for" per entity, breakdown by reason and integration |
 | Stale reporting (watched and passive) | Advisor line (watched only) | Watched list with a link per entity, passive list expandable |
 | Repairs & unhealthy integrations | Count + link | Count + list + deep-link per integration |

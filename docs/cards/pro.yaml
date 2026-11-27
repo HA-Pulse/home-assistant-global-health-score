@@ -87,7 +87,7 @@ cards:
       {% else %} ✅ All updates installed {% endif %}
 
       {% if backup_stale %}<br>🚨 Backup is stale, [→ Open Backups]({{ _bak }}){% endif %}
-      {% if backup_unset %}<br>💾 {{ 'No automatic backup schedule' if state_attr(e, 'backup_status') == 'not_configured' else 'No successful automatic backup known yet' }}, [→ Open Backups]({{ _bak }}){% endif %}
+      {% if backup_unset %}<br>💾 {{ 'No automatic backup schedule' if state_attr(e, 'backup_status') == 'not_configured' else 'No successful automatic backup reported' }}, [→ Open Backups]({{ _bak }}){% endif %}
 
       <hr>
 

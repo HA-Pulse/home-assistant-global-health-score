@@ -43,7 +43,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     BACKUP_ADDON_ENTITY,
-    BACKUP_LAST_ATTEMPT_KEY,
     BACKUP_LAST_SUCCESS_KEY,
     BACKUP_MAX_AGE_HOURS,
     BACKUP_NEXT_KEY,
@@ -1906,15 +1905,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Backup Health from the add-on and the built-in backup integration (#218).
 
         The add-on's ``binary_sensor.backups_stale`` counts while it is ``on`` or ``off``.
-        The built-in integration's three sensors (last success, last attempt, next run)
-        are found in the entity registry by platform and unique id; the check runs only
-        when all three are readable, so disabling or ignoring any of them (ignore label or
-        pattern) switches it off. An automatic backup is stale when the last successful
-        one is older than 8 days (Deniz, 2026-11-11) and a run was missed since: a later
-        attempt failed, or the next scheduled run is more than a day overdue. No schedule,
-        or no successful automatic backup known: a recommendation only, no deduction, not
-        in the first 15 minutes after a start. Stale from either source costs the points
-        once.
+        The built-in integration's sensors (last success, next scheduled run) are found in
+        the entity registry by platform and unique id; the check runs only when both are
+        readable, so disabling or ignoring either (ignore label or pattern) switches it
+        off. While a schedule is set, an automatic backup is stale when the last
+        successful one is older than 8 days (Deniz, 2026-11-11; the public sensors carry
+        no schedule interval). No schedule, or no successful automatic backup known: a
+        recommendation only, no deduction, not in the first 15 minutes after a start.
+        Stale from either source costs the points once.
         """
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
@@ -1940,9 +1938,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         addon_stale = addon_present and addon is not None and addon.state == STATE_ON
 
         success_state = core(BACKUP_LAST_SUCCESS_KEY)
-        attempt_state = core(BACKUP_LAST_ATTEMPT_KEY)
         next_state = core(BACKUP_NEXT_KEY)
-        core_present = None not in (success_state, attempt_state, next_state)
+        core_present = success_state is not None and next_state is not None
         last_success = as_time(success_state) if core_present else None
         if last_success is not None and last_success > now + timedelta(minutes=5):
             last_success = None  # a time in the future (clock moved back) is not trusted
@@ -1953,14 +1950,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 core_status = "not_configured"  # HA's schedule is "never"
             elif last_success is None:
                 core_status = "unknown"  # unavailable, or no successful automatic backup yet
+            elif (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600:
+                core_status = "stale"
             else:
-                last_attempt = as_time(attempt_state)
-                next_run = as_time(next_state)
-                missed = (last_attempt is not None and last_attempt > last_success) or (
-                    next_run is not None and now - next_run > timedelta(days=1)
-                )
-                too_old = (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600
-                core_status = "stale" if too_old and missed else "ok"
+                core_status = "ok"
 
         source = {
             (True, True): "both",

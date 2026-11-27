@@ -121,7 +121,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_max_age_hours": (
         "int/null",
-        "Age above which a scheduled automatic backup counts as stale once a run was missed since (192 hours, 8 days); `null` without the built-in integration's sensors",
+        "Age above which an automatic backup counts as stale while a schedule is set (192 hours, 8 days); `null` without the built-in integration's sensors",
     ),
     "db_size_mb": (
         "float",
@@ -195,7 +195,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     "rec_power_unstable": ("bool", "RPi under-voltage detected"),
     "rec_backup_stale": (
         "bool",
-        "`binary_sensor.backups_stale` is on, or the last successful automatic backup is older than `backup_max_age_hours` and a run was missed since (`backup_status` is `stale`)",
+        "`binary_sensor.backups_stale` is on, or a schedule is set and the last successful automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`)",
     ),
     "rec_updates_pending": (
         "bool",

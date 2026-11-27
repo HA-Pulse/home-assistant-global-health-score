@@ -8,7 +8,7 @@
     "rec_all_clear": "✅ システムは最適な状態です",
     "rec_backup_stale": "🚨 セキュリティ：古いバックアップを検出しました！",
     "rec_backup_no_schedule": "💾 バックアップ：Home Assistant に自動バックアップのスケジュールが設定されていません。",
-    "rec_backup_unknown": "💾 バックアップ：成功した自動バックアップはまだありません。",
+    "rec_backup_unknown": "💾 バックアップ：Home Assistant は成功した自動バックアップを報告していません（まだないか、バックアップのセンサーが利用できません）。",
     "rec_config_audit": "🔧 設定監査：ボーナス {missing} ポイントを獲得できていません（レコーダーの保持期間が 10 日を超えている／エンティティフィルターがない）。",
     "rec_core_lag": "👴 旧バージョン：Core のバージョンが 3 か月以上前のものです。",
     "rec_cpu_load_classic": "⚡ 最適化：CPU 使用率がスコアに影響しています（{cpu_pct:.1f}%）。",
