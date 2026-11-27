@@ -1,6 +1,6 @@
 """Empty devices never report a parent of child devices or a composite device (HAGHS-20261103-001).
 
-HA 2026.9+ keeps child devices in ``dev_reg.child_devices``; a parent whose entities sit on its
+HA 2026.11+ keeps child devices in ``dev_reg.child_devices``; a parent whose entities sit on its
 children has no entity of its own. One report fewer rather than a wrong one.
 """
 
