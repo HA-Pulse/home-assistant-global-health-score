@@ -268,6 +268,8 @@ BACKUP_NEXT_KEY = "next_scheduled_automatic_backup"
 # A scheduled automatic backup older than 8 days is stale (Deniz, 2026-11-11: with 7
 # days a weekly backup would flap). The public sensors carry no schedule interval.
 BACKUP_MAX_AGE_HOURS = 8 * 24
+# The backup sensors may still be loading right after a start: no recommendation then.
+BACKUP_STARTUP_GRACE_MINUTES = 15
 
 
 @dataclass(frozen=True, slots=True, order=True)

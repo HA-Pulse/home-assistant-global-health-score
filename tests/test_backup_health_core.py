@@ -3,7 +3,8 @@
 The built-in integration's sensors are found in the entity registry by platform ``backup`` and their unique ids,
 so translated or renamed entity ids still work. A scheduled automatic backup is stale when the last successful one
 is older than 8 days. No schedule, no successful automatic backup known, or unavailable sensors: a recommendation
-only (not in the first zombie grace period after a start). Stale from either source costs 30 points once.
+only (not in the first 15 minutes after a start). Stale from either source costs 30 points once. Disabled or
+ignored backup sensors are not read.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from datetime import timedelta
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 
 from custom_components.haghs.const import (
@@ -97,7 +99,7 @@ async def test_no_schedule_is_a_recommendation_without_deduction(hass) -> None:
     [
         ("unknown", 21),  # scheduled, no successful automatic backup yet
         ("unavailable", 21),  # integration not loaded
-        (-10, "unavailable"),
+        ("unavailable", "unavailable"),  # both still loading or failed
         ("2026-11-01T00:00:00", 21),  # a time without time zone is not trusted
     ],
 )
@@ -108,16 +110,61 @@ async def test_unknown_is_a_recommendation_without_deduction(hass, success, next
     assert (result.last_success is None) is (not isinstance(success, int))
 
 
-async def test_no_recommendation_in_the_grace_period_after_a_start(hass) -> None:
+async def test_no_recommendation_in_the_first_15_minutes_after_a_start(hass) -> None:
     _core(hass, success="unavailable", next_run="unknown")
-    assert _summary(_backup(hass, boot_age_minutes=1)) == (0, "core", "not_configured", False)
-    assert _summary(_backup(hass, boot_age_minutes=120)) == (0, "core", "not_configured", True)
+    assert _summary(_backup(hass, boot_age_minutes=14)) == (0, "core", "not_configured", False)
+    assert _summary(_backup(hass, boot_age_minutes=16)) == (0, "core", "not_configured", True)
 
 
-@pytest.mark.parametrize(("success", "next_run"), [(None, 21), (-10, None)])
-async def test_a_disabled_backup_sensor_is_not_read(hass, success, next_run) -> None:
-    _core(hass, success=success, next_run=next_run)
+async def test_both_backup_sensors_disabled_means_no_source(hass) -> None:
+    _core(hass, success=None, next_run=None)
     assert _summary(_backup(hass)) == (0, "none", "no_source", False)
+
+
+@pytest.mark.parametrize(
+    ("success", "next_run", "expected"),
+    [
+        (None, 21, (0, "core", "unknown", True)),  # last-success sensor disabled: not checked, hint
+        (-10, None, (0, "core", "ok", False)),  # next-run sensor disabled: the age still counts
+        (
+            -10,
+            "unavailable",
+            (0, "core", "ok", False),
+        ),  # schedule sensor unavailable: the age counts
+        (-480, None, (30, "core", "stale", False)),
+    ],
+)
+async def test_one_disabled_backup_sensor(hass, success, next_run, expected) -> None:
+    _core(hass, success=success, next_run=next_run)
+    assert _summary(_backup(hass)) == expected
+
+
+@pytest.mark.parametrize("target", ["entities", "one"])
+async def test_an_ignore_label_switches_the_check_off(hass, target) -> None:
+    label = lr.async_get(hass).async_create("Backed up elsewhere")
+    assert label.label_id != label.name
+    _core(hass, success="unknown", next_run="unknown")
+    registry = er.async_get(hass)
+    ignored = (
+        list(ENTITY_IDS.values())
+        if target == "entities"
+        else [ENTITY_IDS["next_scheduled_automatic_backup"]]
+    )
+    for entity_id in ignored:
+        registry.async_update_entity(entity_id, labels={label.label_id})
+    coordinator = make_coordinator(hass, options={"ignore_labels": [label.label_id]})
+    result = coordinator._calc_backup()
+    if target == "entities":
+        assert _summary(result) == (0, "none", "no_source", False)
+    else:  # only the schedule sensor ignored: the last-success sensor is still read
+        assert _summary(result) == (0, "core", "unknown", True)
+
+
+async def test_a_last_success_in_the_future_is_not_trusted(hass) -> None:
+    _core(hass, success=72, next_run=24)
+    result = _backup(hass)
+    assert _summary(result) == (0, "core", "unknown", True)
+    assert (result.last_success, result.age_hours) == (None, None)
 
 
 @pytest.mark.parametrize(
@@ -135,11 +182,20 @@ async def test_both_sources_cost_the_points_once(hass, addon, success, expected)
     assert _summary(_backup(hass)) == expected
 
 
-@pytest.mark.parametrize("addon", ["off", "unavailable"])
-async def test_the_addon_covers_an_instance_without_automatic_backups(hass, addon) -> None:
+@pytest.mark.parametrize(
+    ("addon", "expected"),
+    [
+        ("off", (0, "both", "ok", False)),  # a working add-on covers it
+        ("unavailable", (0, "core", "not_configured", True)),  # a broken add-on checks nothing
+        ("unknown", (0, "core", "not_configured", True)),
+    ],
+)
+async def test_the_addon_covers_an_instance_without_automatic_backups(
+    hass, addon, expected
+) -> None:
     hass.states.async_set(BACKUP_ADDON_ENTITY, addon)
     _core(hass, success="unknown", next_run="unknown")
-    assert _summary(_backup(hass)) == (0, "both", "ok", False)
+    assert _summary(_backup(hass)) == expected
 
 
 @pytest.mark.parametrize(
@@ -147,7 +203,7 @@ async def test_the_addon_covers_an_instance_without_automatic_backups(hass, addo
     [
         ("on", (30, "addon", "stale", False)),
         ("off", (0, "addon", "ok", False)),
-        ("unavailable", (0, "addon", "ok", False)),
+        ("unavailable", (0, "none", "no_source", False)),
         (None, (0, "none", "no_source", False)),
     ],
 )

@@ -18,6 +18,7 @@ import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
+    STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
@@ -47,6 +48,7 @@ from .const import (
     BACKUP_NEXT_KEY,
     BACKUP_PENALTY,
     BACKUP_PLATFORM,
+    BACKUP_STARTUP_GRACE_MINUTES,
     CONF_BATTERY_GRACE_MINUTES,
     CONF_CONDITIONAL_IGNORE_ENTITY,
     CONF_CONDITIONAL_IGNORE_LABELS,
@@ -1902,34 +1904,40 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         The add-on's ``binary_sensor.backups_stale`` counts as before. The built-in
         integration's sensors are found in the entity registry by platform and unique
-        id. A scheduled automatic backup is stale when the last successful one is older
-        than 8 days (Deniz, 2026-11-11; the public sensors carry no schedule interval).
-        No schedule, or no successful automatic backup known: a recommendation only, no
-        deduction. Stale from either source costs the points once. Disabled sensors (no
-        state) do not count, and during the first zombie grace period after a start no
-        recommendation is shown (the backup sensors may not be loaded yet).
+        id; disabled or ignored ones (ignore label on the sensor, its device or area) are
+        not read, which is also the way to switch the check off. An automatic backup is
+        stale when the last successful one is older than 8 days (Deniz, 2026-11-11; the
+        public sensors carry no schedule interval). No schedule, or no successful
+        automatic backup known: a recommendation only, no deduction, and not in the first
+        minutes after a start. Stale from either source costs the points once.
         """
         addon = self.hass.states.get(BACKUP_ADDON_ENTITY)
-        addon_present = addon is not None
+        addon_present = addon is not None and addon.state in (STATE_ON, STATE_OFF)
         addon_stale = addon is not None and addon.state == STATE_ON
 
         ent_reg = er.async_get(self.hass)
+        now = dt_util.utcnow()
 
         def core(key: str) -> State | None:
             entity_id = ent_reg.async_get_entity_id("sensor", BACKUP_PLATFORM, key)
-            return self.hass.states.get(entity_id) if entity_id is not None else None
+            if entity_id is None or self._is_ignored(entity_id, ent_reg.async_get(entity_id)):
+                return None
+            return self.hass.states.get(entity_id)
 
         def as_time(state: State | None) -> datetime | None:
             if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 return None
             value = dt_util.parse_datetime(state.state)
-            return value if value is not None and value.tzinfo is not None else None
+            if value is None or value.tzinfo is None:
+                return None
+            return value
 
         success_state = core(BACKUP_LAST_SUCCESS_KEY)
         next_state = core(BACKUP_NEXT_KEY)
-        core_present = success_state is not None and next_state is not None
-        last_success = as_time(success_state) if core_present else None
-        now = dt_util.utcnow()
+        core_present = success_state is not None or next_state is not None
+        last_success = as_time(success_state)
+        if last_success is not None and last_success > now + timedelta(minutes=5):
+            last_success = None  # a time in the future (clock moved back) is not trusted
 
         source = {
             (True, True): "both",
@@ -1938,10 +1946,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             (False, False): "none",
         }[(addon_present, core_present)]
         core_status: str | None = None
-        if core_present and next_state is not None:
-            if next_state.state == STATE_UNKNOWN:
+        if core_present:
+            if next_state is not None and next_state.state == STATE_UNKNOWN:
                 core_status = "not_configured"  # HA's schedule is "never"
-            elif as_time(next_state) is None or last_success is None:
+            elif last_success is None:
                 core_status = "unknown"  # unavailable, or no successful automatic backup yet
             elif (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600:
                 core_status = "stale"
@@ -1951,10 +1959,10 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if addon_stale or core_status == "stale":
             status = "stale"
         elif core_status == "ok" or addon_present:
-            status = "ok"  # the add-on covers an instance without automatic backups
+            status = "ok"  # a working add-on covers an instance without automatic backups
         else:
             status = core_status or "no_source"
-        booting = (now - self._boot_time).total_seconds() < self._zombie_grace_seconds
+        starting = (now - self._boot_time).total_seconds() < BACKUP_STARTUP_GRACE_MINUTES * 60
         return _BackupResult(
             p_backup=BACKUP_PENALTY if status == "stale" else 0,
             source=source,
@@ -1965,8 +1973,8 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if last_success is not None
                 else None
             ),
-            max_age_hours=BACKUP_MAX_AGE_HOURS if core_status is not None else None,
-            unverified=status in ("not_configured", "unknown") and not booting,
+            max_age_hours=BACKUP_MAX_AGE_HOURS if core_present else None,
+            unverified=status in ("not_configured", "unknown") and not starting,
         )
 
     def _calc_updates(

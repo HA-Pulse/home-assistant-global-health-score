@@ -109,7 +109,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_status": (
         "string",
-        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source`; `not_configured` and `unknown` only add a recommendation, no deduction",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or the backup sensors are disabled or carry an ignore label); `not_configured` and `unknown` only add a recommendation, no deduction",
     ),
     "backup_last_success": (
         "str/null",
@@ -238,7 +238,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "rec_backup_unverified": (
         "bool",
-        "Backups cannot be checked: no automatic backup schedule, or no successful automatic backup known (`backup_status` is `not_configured` or `unknown`), and the add-on is not present; recommendation only, no deduction; not set in the first zombie grace period after a start",
+        "Backups cannot be checked: no automatic backup schedule, or no successful automatic backup known (`backup_status` is `not_configured` or `unknown`), and no working add-on; recommendation only, no deduction; not set in the first 15 minutes after a start",
     ),
 }
 

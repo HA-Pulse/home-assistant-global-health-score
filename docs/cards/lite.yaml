@@ -63,7 +63,7 @@ cards:
 
       {% if backup_stale %} 🚨 Backup is stale, [Open Backups]({{ _bak }}) {% endif %}
 
-      {% if backup_unset %} 💾 Backups are not checked: no automatic backup schedule or no successful backup yet, [Set up backups]({{ _bak }}) {% endif %}
+      {% if backup_unset %} 💾 {{ 'No automatic backup schedule' if state_attr(e, 'backup_status') == 'not_configured' else 'No successful automatic backup known yet' }}, [Open Backups]({{ _bak }}) {% endif %}
 
       {# Hide recommendation lines already shown as a status line with a link above. #}
       {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨', '💾')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
