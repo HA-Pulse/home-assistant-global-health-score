@@ -47,6 +47,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity): 
             "integration_unhealthy_entries",
             "empty_devices",
             "empty_device_ids",
+            "backup_last_success",
+            "backup_age_hours",
         }
     )
 
@@ -102,6 +104,11 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity): 
             "empty_device_count": data["empty_device_count"],
             "empty_devices": data["empty_devices"],
             "empty_device_ids": data["empty_device_ids"],
+            "backup_source": data["backup_source"],
+            "backup_status": data["backup_status"],
+            "backup_last_success": data["backup_last_success"],
+            "backup_age_hours": data["backup_age_hours"],
+            "backup_max_age_hours": data["backup_max_age_hours"],
             "db_size_mb": data["db_size_mb"],
             "psi_available": data["psi_available"],
             "cpu_ram_source": data["cpu_ram_source"],

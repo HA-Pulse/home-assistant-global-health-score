@@ -19,14 +19,20 @@ from custom_components.haghs.const import (
     ZOMBIE_LIST_CAP,
 )
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
+from tests.factories import (
+    BACKUP_WITHOUT_SOURCE,
+    device_entries,
+    make_coordinator,
+    patch_disk,
+    patch_psi,
+)
 
 # Complete results of the same scenarios on dev before this change (22d6d2b), pinned:
 # score, every existing attribute and every rec_* flag must stay exactly as they were.
 # 0 extra zombies: 3 zombies; 105 extra: 108 zombies, the list capped at ZOMBIE_LIST_CAP.
 # Keys added after #154-c by later plans (#154-d, #134, #93, conditional ignore labels); they have
 # their own pinned tests.
-ADDED_LATER = {
+ADDED_LATER = set(BACKUP_WITHOUT_SOURCE) | {
     "zombie_count_per_reason",
     "zombie_reasons",
     "integration_unhealthy_entries",
@@ -315,6 +321,7 @@ async def test_score_and_existing_attributes_are_unchanged(hass: HomeAssistant, 
     assert result["dead_device_ids"] == [by_name[name] for name in result["dead_devices"]]
     assert result["empty_device_ids"] == []
     assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == ("psi", False)
+    assert {key: result[key] for key in BACKUP_WITHOUT_SOURCE} == BACKUP_WITHOUT_SOURCE
     added = {"zombie_since"} | ADDED_LATER
     assert {key: value for key, value in result.items() if key not in added} == DEV_RESULTS[extra]
 

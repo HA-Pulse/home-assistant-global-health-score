@@ -7,6 +7,8 @@
     "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": "✅ System optimized",
     "rec_backup_stale": "🚨 Security: Stale backup detected!",
+    "rec_backup_no_schedule": "💾 Backups: No automatic backup schedule is set up in Home Assistant.",
+    "rec_backup_unknown": "💾 Backups: Home Assistant reports no successful automatic backup (none yet, or the backup sensors are unavailable).",
     "rec_config_audit": "🔧 Config-Audit: {missing} bonus point(s) not earned (recorder keeps more than 10 days / no entity filter).",
     "rec_core_lag": "👴 Legacy: Core version is ≥3 months old.",
     "rec_cpu_load_classic": "⚡ Optimization: CPU utilization is impacting score ({cpu_pct:.1f}%).",

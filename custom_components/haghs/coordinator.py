@@ -18,6 +18,7 @@ import psutil
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
+    STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
@@ -41,6 +42,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    BACKUP_ADDON_ENTITY,
+    BACKUP_LAST_SUCCESS_KEY,
+    BACKUP_MAX_AGE_HOURS,
+    BACKUP_NEXT_KEY,
+    BACKUP_PENALTY,
+    BACKUP_PLATFORM,
+    BACKUP_STARTUP_GRACE_MINUTES,
     CONF_BATTERY_GRACE_MINUTES,
     CONF_CONDITIONAL_IGNORE_ENTITY,
     CONF_CONDITIONAL_IGNORE_LABELS,
@@ -232,6 +240,7 @@ class _ApplicationResult:
     pending_updates: list[str] = field(default_factory=list)
     config_bonus: int = 0
     p_backup: int = 0
+    backup: _BackupResult = field(default_factory=lambda: _BackupResult())
     p_core_lag: int = 0
     p_zombie: int = 0
     integration_unhealthy_count: int = 0
@@ -245,6 +254,21 @@ class _ApplicationResult:
     empty_device_count: int = 0
     empty_device_list: list[str] = field(default_factory=list)
     empty_device_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _BackupResult:
+    """Backup Health (#218): penalty, where the signal comes from and why."""
+
+    p_backup: int = 0
+    source: str = "none"  # addon / core / both / none
+    # ok / stale / not_configured / unknown / no_source; "unavailable" only in the neutral
+    # fallback of a failed application calculation
+    status: str = "unavailable"
+    last_success: str | None = None  # ISO 8601, built-in integration only
+    age_hours: int | None = None
+    max_age_hours: int | None = None
+    unverified: bool = False  # no schedule, or no successful automatic backup known
 
 
 class _DeviceList(tuple):
@@ -745,6 +769,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_count": app.empty_device_count,
             "empty_devices": app.empty_device_list,
             "empty_device_ids": app.empty_device_ids,
+            "backup_source": app.backup.source,
+            "backup_status": app.backup.status,
+            "backup_last_success": app.backup.last_success,
+            "backup_age_hours": app.backup.age_hours,
+            "backup_max_age_hours": app.backup.max_age_hours,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "cpu_ram_source": hw.cpu_ram_source,
@@ -832,6 +861,11 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "empty_device_count": app.empty_device_count,
             "empty_devices": app.empty_device_list,
             "empty_device_ids": app.empty_device_ids,
+            "backup_source": app.backup.source,
+            "backup_status": app.backup.status,
+            "backup_last_success": app.backup.last_success,
+            "backup_age_hours": app.backup.age_hours,
+            "backup_max_age_hours": app.backup.max_age_hours,
             "db_size_mb": round(app.db_mb, 1),
             "psi_available": hw.psi_available,
             "cpu_ram_source": hw.cpu_ram_source,
@@ -1192,8 +1226,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # C. MAINTENANCE — DB size auto-detected (blocking I/O → executor)
         db_mb, p_db, db_limit_mb = await self._async_calc_maintenance()
 
-        # D. UPDATES
-        p_backup, update_count, p_updates, p_core_lag, pending_updates = self._calc_updates()
+        # D. UPDATES and BACKUP HEALTH (#218)
+        backup = self._calc_backup()
+        p_backup, update_count, p_updates, p_core_lag, pending_updates = self._calc_updates(backup)
 
         # E. CONFIG AUDIT — bonus for good recorder configuration
         config_bonus = self._calc_config_audit()
@@ -1252,6 +1287,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pending_updates=pending_updates,
             config_bonus=config_bonus,
             p_backup=p_backup,
+            backup=backup,
             p_core_lag=p_core_lag,
             p_zombie=p_zombie,
             integration_unhealthy_count=integration_unhealthy_count,
@@ -1865,8 +1901,98 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for entity_id, seen in self._update_first_seen.items()
         }
 
-    def _calc_updates(self) -> tuple[int, int, int, int, list[str]]:
-        """Calculate backup, update and core-lag penalties.
+    def _calc_backup(self) -> _BackupResult:
+        """Backup Health from the add-on and the built-in backup integration (#218).
+
+        The add-on's ``binary_sensor.backups_stale`` counts while it is ``on`` or ``off``.
+        The built-in integration's sensors (last success, next scheduled run) are found in
+        the entity registry by platform and unique id; the check runs only when both are
+        readable, so disabling or ignoring either (ignore label or pattern) switches it
+        off. While a schedule is set, an automatic backup is stale when the last
+        successful one is older than 8 days (Deniz, 2026-11-11; the public sensors carry
+        no schedule interval). No schedule, or no successful automatic backup known: a
+        recommendation only, no deduction, not in the first 15 minutes after a start.
+        Stale from either source costs the points once.
+        """
+        ent_reg = er.async_get(self.hass)
+        now = dt_util.utcnow()
+
+        def read(entity_id: str | None) -> State | None:
+            if entity_id is None or self._is_ignored(entity_id, ent_reg.async_get(entity_id)):
+                return None
+            return self.hass.states.get(entity_id)
+
+        def as_time(state: State | None) -> datetime | None:
+            if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                return None
+            value = dt_util.parse_datetime(state.state)
+            if value is None or value.tzinfo is None:
+                return None
+            return value
+
+        def core(key: str) -> State | None:
+            return read(ent_reg.async_get_entity_id("sensor", BACKUP_PLATFORM, key))
+
+        addon = read(BACKUP_ADDON_ENTITY)
+        addon_present = addon is not None and addon.state in (STATE_ON, STATE_OFF)
+        addon_stale = addon_present and addon is not None and addon.state == STATE_ON
+
+        success_state = core(BACKUP_LAST_SUCCESS_KEY)
+        next_state = core(BACKUP_NEXT_KEY)
+        core_present = success_state is not None and next_state is not None
+        last_success = as_time(success_state) if core_present else None
+        if last_success is not None and last_success > now + timedelta(minutes=5):
+            last_success = None  # a time in the future (clock moved back) is not trusted
+        # Whole hours, the same value as the attribute, so stale means age_hours > max_age_hours.
+        age_hours = (
+            max(0, int((now - last_success).total_seconds() // 3600))
+            if last_success is not None
+            else None
+        )
+
+        core_status: str | None = None
+        if core_present and next_state is not None:
+            if next_state.state == STATE_UNKNOWN:
+                core_status = "not_configured"  # HA's schedule is "never"
+            elif last_success is None or as_time(next_state) is None:
+                # Unavailable, or no successful automatic backup yet: never a deduction from a
+                # sensor that cannot say whether a schedule is set (Deniz, 2026-11-11).
+                core_status = "unknown"
+            elif age_hours is not None and age_hours > BACKUP_MAX_AGE_HOURS:
+                core_status = "stale"
+            else:
+                core_status = "ok"
+
+        source = {
+            (True, True): "both",
+            (True, False): "addon",
+            (False, True): "core",
+            (False, False): "none",
+        }[(addon_present, core_present)]
+        if addon_stale or core_status == "stale":
+            status = "stale"
+        elif core_status == "ok" or addon_present:
+            status = "ok"  # a working add-on covers an instance without automatic backups
+        else:
+            status = core_status or "no_source"
+        starting = (now - self._boot_time).total_seconds() < BACKUP_STARTUP_GRACE_MINUTES * 60
+        return _BackupResult(
+            p_backup=BACKUP_PENALTY if status == "stale" else 0,
+            source=source,
+            status=status,
+            last_success=last_success.isoformat() if last_success is not None else None,
+            age_hours=age_hours,
+            max_age_hours=BACKUP_MAX_AGE_HOURS if core_present else None,
+            unverified=status in ("not_configured", "unknown") and not starting,
+        )
+
+    def _calc_updates(
+        self, backup: _BackupResult | None = None
+    ) -> tuple[int, int, int, int, list[str]]:
+        """Calculate update and core-lag penalties; the backup penalty comes from ``backup``.
+
+        ``backup`` is this cycle's ``_calc_backup()`` result (computed once per cycle);
+        without it the backup check runs here.
 
         Returns (p_backup, update_count, p_updates, p_core_lag, pending_updates).
         Update entities with the ignore label or matching an ignore pattern
@@ -1874,8 +2000,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         pending_updates immediately but only contribute to update_count after
         UPDATE_GRACE_DAYS (#26). Core lag threshold: >= 3 months behind.
         """
-        backup_state = self.hass.states.get("binary_sensor.backups_stale")
-        p_backup = 30 if (backup_state and backup_state.state == "on") else 0
+        p_backup = (backup if backup is not None else self._calc_backup()).p_backup
 
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
@@ -2145,6 +2270,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             advice.append(self._rec("rec_power_unstable"))
         if app.p_backup > 0:
             advice.append(self._rec("rec_backup_stale"))
+        if app.backup.unverified:
+            advice.append(
+                self._rec(
+                    "rec_backup_no_schedule"
+                    if app.backup.status == "not_configured"
+                    else "rec_backup_unknown"
+                )
+            )
         if app.update_count > 0:
             advice.append(self._rec("rec_updates_pending").format(count=app.update_count))
         if app.p_zombie > 0:
@@ -2212,6 +2345,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "rec_pillar_fallback": bool(getattr(self, "_pillar_fallbacks", set())),
             "rec_update_failed": False,
             "rec_cpu_ram_unmeasured": self._cpu_ram_unmeasured(hw),
+            "rec_backup_unverified": app.backup.unverified,
         }
 
     def _sync_cpu_ram_issue(self, hw: _HardwareResult) -> None:

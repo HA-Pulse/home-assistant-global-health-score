@@ -133,6 +133,13 @@ REC_DB_OVER_LIMIT = (
     "\U0001f5c4\ufe0f Database: DB ({db_gb:.1f} GB) exceeds dynamic limit ({limit_gb:.1f} GB)."
 )
 REC_BACKUP_STALE = "\U0001f6a8 Security: Stale backup detected!"
+REC_BACKUP_NO_SCHEDULE = (
+    "\U0001f4be Backups: No automatic backup schedule is set up in Home Assistant."
+)
+REC_BACKUP_UNKNOWN = (
+    "\U0001f4be Backups: Home Assistant reports no successful automatic backup "
+    "(none yet, or the backup sensors are unavailable)."
+)
 REC_UPDATES_PENDING = "\U0001f4e6 Maintenance: {count} update(s) pending."
 REC_ZOMBIES = (
     "\U0001f9df Hygiene: {count} zombie(s) detected. "
@@ -179,6 +186,8 @@ REC_TEMPLATES: dict[str, str] = {
     "rec_update_failed": "⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.",
     "rec_all_clear": REC_ALL_CLEAR,
     "rec_backup_stale": REC_BACKUP_STALE,
+    "rec_backup_no_schedule": REC_BACKUP_NO_SCHEDULE,
+    "rec_backup_unknown": REC_BACKUP_UNKNOWN,
     "rec_config_audit": REC_CONFIG_AUDIT,
     "rec_core_lag": REC_CORE_LAG,
     "rec_cpu_load_classic": REC_CPU_LOAD_CLASSIC,
@@ -246,7 +255,25 @@ REC_FLAG_KEYS: tuple[str, ...] = (
     "rec_pillar_fallback",
     "rec_update_failed",
     "rec_cpu_ram_unmeasured",
+    "rec_backup_unverified",
 )
+
+# ---------------------------------------------------------------------------
+# Backup Health (#218): the Google Drive Backup add-on's stale sensor, and the
+# built-in backup integration's sensors, found in the entity registry by their
+# unique ids (the entity ids are translated and can be renamed).
+# ---------------------------------------------------------------------------
+BACKUP_PENALTY = 30
+BACKUP_ADDON_ENTITY = "binary_sensor.backups_stale"
+BACKUP_PLATFORM = "backup"
+BACKUP_LAST_SUCCESS_KEY = "last_successful_automatic_backup"
+BACKUP_NEXT_KEY = "next_scheduled_automatic_backup"
+# While a schedule is set, an automatic backup older than 8 days is stale (Deniz,
+# 2026-11-11: with 7 days a weekly backup would flap). The public sensors carry no
+# schedule interval.
+BACKUP_MAX_AGE_HOURS = 8 * 24
+# The backup sensors may still be loading right after a start: no recommendation then.
+BACKUP_STARTUP_GRACE_MINUTES = 15
 
 
 @dataclass(frozen=True, slots=True, order=True)

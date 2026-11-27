@@ -30,6 +30,18 @@ GB = 1024**3
 DiskUsage = namedtuple("DiskUsage", ["total", "used", "free", "percent"])
 
 
+# Backup Health keys (#218) on an instance without the add-on and without the built-in backup integration:
+# no source, no deduction, no recommendation. Tests that pin the full attribute set add exactly these.
+BACKUP_WITHOUT_SOURCE: dict[str, Any] = {
+    "backup_source": "none",
+    "backup_status": "no_source",
+    "backup_last_success": None,
+    "backup_age_hours": None,
+    "backup_max_age_hours": None,
+    "rec_backup_unverified": False,
+}
+
+
 def make_coordinator(
     hass: HomeAssistant,
     *,

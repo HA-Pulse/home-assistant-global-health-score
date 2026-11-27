@@ -37,6 +37,11 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `empty_device_count` | int | Number of devices without any entity (disabled entities included), not disabled, not a service, no other device linked through them (hubs), no child devices, not a composite device, every config entry loaded; child devices (HA 2026.11+) included; informational, no score impact |
 | `empty_devices` | list | Names of those devices, sorted, capped at 100; current only, excluded from recorder history (`empty_device_count` stays in the history) |
 | `empty_device_ids` | list | Device ids of the listed empty devices, same 100 entries and order as `empty_devices` (for links to each device page); current only, excluded from recorder history |
+| `backup_source` | string | Where Backup Health comes from: `addon` (`binary_sensor.backups_stale` of the Google Drive Backup add-on), `core` (the automatic backups of Home Assistant's built-in backup integration, found in the entity registry), `both` or `none` |
+| `backup_status` | string | `ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, the backup sensors are unavailable, or the last success lies in the future after a clock change) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback; the 15-minute start delay of the recommendation does not change this status |
+| `backup_last_success` | str/null | Time of the last successful automatic backup of the built-in integration (ISO 8601), `null` without one; current only, excluded from recorder history |
+| `backup_age_hours` | int/null | Hours since `backup_last_success`, `null` without one; current only, excluded from recorder history |
+| `backup_max_age_hours` | int/null | Age above which an automatic backup counts as stale while a schedule is set (192 hours, 8 days); `null` without the built-in integration's sensors |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `cpu_ram_source` | str/null | Where CPU and RAM come from: `psi`, `sensors` (both measured, at least one by a selected sensor), `partial` (one not measured), `none` (neither measured; no PSI and no sensor selected). Not measured values are left out of the hardware score. `null` while the hardware pillar has no measurement (first failed update, hardware fallback). |
@@ -59,7 +64,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_disk_low` | bool | Disk free space is below the storage-type threshold |
 | `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
 | `rec_power_unstable` | bool | RPi under-voltage detected |
-| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on |
+| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on, or a schedule is set and the last successful automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`) |
 | `rec_updates_pending` | bool | At least one non-ignored update entity has had the same offered version pending for 7 days as seen by HAGHS (also across restarts) |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 months behind the latest release |
@@ -72,6 +77,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_pillar_fallback` | bool | At least one pillar calculation failed or timed out during the current refresh attempt |
 | `rec_update_failed` | bool | The current update attempt failed outside a guarded pillar calculation |
 | `rec_cpu_ram_unmeasured` | bool | No PSI and no sensor selected for CPU and/or RAM: the value is not measured and left out of the hardware score (`cpu_ram_source` is `partial` or `none`) |
+| `rec_backup_unverified` | bool | Backups cannot be checked: no automatic backup schedule, or no successful automatic backup known (`backup_status` is `not_configured` or `unknown`), and no working add-on; recommendation only, no deduction; not set in the first 15 minutes after a start |
 <!-- END GENERATED: attributes -->
 
 **Calculation failures:** Neutral fallback values are not successful measurements. If a pillar fails or times out, `pillar_fallbacks` names the affected pillar and `recommendations` includes a warning instead of an all-clear message. Both dashboard examples display that recommendation. If the outer update cycle fails, `update_cycle_failed` is set and the existing numeric result is retained, or neutral values are returned on the first update. A successful refresh clears the failure indicators. Failure indicators do not change the score.
@@ -102,5 +108,6 @@ Each `rec_*` flag adds one line to `recommendations` while it is set; with no fl
 | `rec_pillar_fallback` | `⚠️ Calculation: {pillars} failed or timed out; neutral fallback values are not measurements.` |
 | `rec_update_failed` | `⚠️ Calculation: The update cycle failed; previous results or neutral initial values are shown.` |
 | `rec_cpu_ram_unmeasured` | `📊 Hardware: CPU and/or RAM are not measured (no PSI, no sensor selected); the hardware score uses the other components.` |
+| `rec_backup_unverified` | `💾 Backups: No automatic backup schedule is set up in Home Assistant.`<br>`💾 Backups: Home Assistant reports no successful automatic backup (none yet, or the backup sensors are unavailable).` |
 | (none set) | `✅ System optimized` |
 <!-- END GENERATED: recommendations -->

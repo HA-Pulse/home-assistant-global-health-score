@@ -12,7 +12,7 @@ from pathlib import Path
 
 from homeassistant.util import dt as dt_util
 
-from tests.factories import make_coordinator, patch_disk, patch_psi
+from tests.factories import BACKUP_WITHOUT_SOURCE, make_coordinator, patch_disk, patch_psi
 
 PINNED = json.loads((Path(__file__).parent / "data" / "update_grace_dev.json").read_text())
 
@@ -27,4 +27,6 @@ async def test_cycle_without_restart_matches_dev(hass, freezer) -> None:
     with patch_psi(cpu=1.0, memory=1.0, io=1.0), patch_disk():
         await coordinator.async_refresh()
     result = json.loads(json.dumps(coordinator.data, default=str, sort_keys=True))
+    # Backup Health keys added later (#218): exact values, everything else equals the dev capture.
+    assert {key: result.pop(key) for key in BACKUP_WITHOUT_SOURCE} == BACKUP_WITHOUT_SOURCE
     assert result == PINNED
