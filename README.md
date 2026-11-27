@@ -96,7 +96,7 @@ Measures "maintenance debt". Every missing point prints a recommendation line an
 | Repairs | −5 each, at most −10, caps at 99 | Open repairs of other integrations; Home Assistant's "Ignore" takes one out. |
 | Watched entities | −5 each, at most −10, caps at 99 | Opt-in: entities labelled directly with a stale watch label that have not reported for longer than the stale threshold (default 24 h). |
 | Database | −10, or −30 | Above `1000 MB + 2.5 MB × entities`, or above 2.5 times that limit. |
-| Backup | −30 | Stale backup: `binary_sensor.backups_stale` of the Google Drive Backup add-on is on. Without the add-on no backup check. |
+| Backup | −30 | Stale backup: a scheduled automatic backup older than 8 days, or the Google Drive Backup add-on's `binary_sensor.backups_stale` on; 30 points once. |
 | Config audit | up to +10 | Recorder keeps at most 10 days (+5); user-set entity filter (+5). |
 | Dead and empty devices | none | Informational: devices whose monitored entities are all unavailable, or that have no entity. |
 
