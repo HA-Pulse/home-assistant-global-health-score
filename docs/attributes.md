@@ -4,6 +4,8 @@
 
 Every attribute of `sensor.system_ha_global_health_score` with type and meaning. The README lists only the most used ones.
 
+The state is the score in % with `state_class: measurement`, so Home Assistant keeps long-term statistics (mean, minimum, maximum) for it, from the update to HAGHS 2.5 on. You can show them in a statistics graph card beyond the recorder history.
+
 ## Sensor Attributes
 
 HAGHS exposes the following attributes for use in dashboard cards, automations, and templates:
