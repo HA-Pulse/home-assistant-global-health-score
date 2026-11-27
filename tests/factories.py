@@ -38,7 +38,7 @@ BACKUP_WITHOUT_SOURCE: dict[str, Any] = {
     "backup_last_success": None,
     "backup_age_hours": None,
     "backup_max_age_hours": None,
-    "rec_backup_not_configured": False,
+    "rec_backup_unverified": False,
 }
 
 

@@ -109,7 +109,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_status": (
         "string",
-        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet) or `no_source`; `not_configured` and `unknown` only add a recommendation, no deduction",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source`; `not_configured` and `unknown` only add a recommendation, no deduction",
     ),
     "backup_last_success": (
         "str/null",
@@ -121,7 +121,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_max_age_hours": (
         "int/null",
-        "Age at which a scheduled automatic backup counts as stale: its schedule interval (next run minus last attempt, 24 to 168 hours) plus 26 hours, at most 192; `null` without a schedule",
+        "Age at which a scheduled automatic backup counts as stale (192 hours, 8 days); `null` without the built-in integration's sensors",
     ),
     "db_size_mb": (
         "float",
@@ -195,7 +195,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     "rec_power_unstable": ("bool", "RPi under-voltage detected"),
     "rec_backup_stale": (
         "bool",
-        "`binary_sensor.backups_stale` is on, or the last successful automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`)",
+        "`binary_sensor.backups_stale` is on, or the last scheduled automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`)",
     ),
     "rec_updates_pending": (
         "bool",
@@ -236,9 +236,9 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
         "bool",
         "No PSI and no sensor selected for CPU and/or RAM: the value is not measured and left out of the hardware score (`cpu_ram_source` is `partial` or `none`)",
     ),
-    "rec_backup_not_configured": (
+    "rec_backup_unverified": (
         "bool",
-        "The built-in backup integration knows no successful automatic backup (`backup_status` is `not_configured` or `unknown`) and the add-on is not present; recommendation only, no deduction",
+        "Backups cannot be checked: no automatic backup schedule, or no successful automatic backup known (`backup_status` is `not_configured` or `unknown`), and the add-on is not present; recommendation only, no deduction; not set in the first zombie grace period after a start",
     ),
 }
 
@@ -264,6 +264,6 @@ RECOMMENDATION_TEXTS: dict[str, tuple[str, ...]] = {
     "rec_pillar_fallback": ("rec_pillar_fallback",),
     "rec_update_failed": ("rec_update_failed",),
     "rec_cpu_ram_unmeasured": ("rec_cpu_ram_unmeasured",),
-    "rec_backup_not_configured": ("rec_backup_not_configured",),
+    "rec_backup_unverified": ("rec_backup_no_schedule", "rec_backup_unknown"),
 }
 ALL_CLEAR_TEXT = "rec_all_clear"

@@ -78,7 +78,7 @@ cards:
       state_attr(e, 'psi_available') | default(false, true) %} {% set cpu_ram =
       state_attr(e, 'cpu_ram_source') %} {% set
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
-      {% set backup_unset = state_attr(e, 'rec_backup_not_configured') | default(false, true) %}
+      {% set backup_unset = state_attr(e, 'rec_backup_unverified') | default(false, true) %}
       {% set _upd = '/config/updates' %} {% set _bak = '/config/backup' %}
 
       {% if updates | length > 0 %}{{ updates | length }} update(s) pending:
@@ -87,7 +87,7 @@ cards:
       {% else %} ✅ All updates installed {% endif %}
 
       {% if backup_stale %}<br>🚨 Backup is stale, [→ Open Backups]({{ _bak }}){% endif %}
-      {% if backup_unset %}<br>💾 No successful automatic backup known, [→ Set up backups]({{ _bak }}){% endif %}
+      {% if backup_unset %}<br>💾 Backups are not checked: no automatic backup schedule or no successful backup yet, [→ Set up backups]({{ _bak }}){% endif %}
 
       <hr>
 

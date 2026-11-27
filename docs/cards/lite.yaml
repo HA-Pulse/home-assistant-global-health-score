@@ -36,7 +36,7 @@ cards:
       'pillar_fallbacks') | default([], true) %} {% set cycle_failed =
       state_attr(e, 'update_cycle_failed') | default(false, true) %} {% set
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
-      {% set backup_unset = state_attr(e, 'rec_backup_not_configured') | default(false, true) %}
+      {% set backup_unset = state_attr(e, 'rec_backup_unverified') | default(false, true) %}
       {% set reason_labels = {'config_entry_missing': 'config entry missing',
       'integration_not_loaded': 'integration not loaded', 'not_provided': 'not
       provided', 'unavailable': 'unavailable'} %}
@@ -63,7 +63,7 @@ cards:
 
       {% if backup_stale %} 🚨 Backup is stale, [Open Backups]({{ _bak }}) {% endif %}
 
-      {% if backup_unset %} 💾 No successful automatic backup known, [Set up backups]({{ _bak }}) {% endif %}
+      {% if backup_unset %} 💾 Backups are not checked: no automatic backup schedule or no successful backup yet, [Set up backups]({{ _bak }}) {% endif %}
 
       {# Hide recommendation lines already shown as a status line with a link above. #}
       {% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨', '💾')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}

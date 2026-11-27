@@ -9,10 +9,10 @@ import yaml
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from custom_components.haghs.const import DOMAIN, REC_BACKUP_NOT_CONFIGURED
+from custom_components.haghs.const import DOMAIN, REC_BACKUP_NO_SCHEDULE
 from tests.test_cards_v14_rendering import _attributes, _render
 
-LINE = "💾 No successful automatic backup known"
+LINE = "💾 Backups are not checked"
 
 
 @pytest.fixture
@@ -41,14 +41,12 @@ async def test_not_configured_line_links_the_backup_settings_once(
     name,
 ) -> None:
     attrs, _ = await _attributes(hass)
-    attrs.update(rec_backup_not_configured=True, recommendations=REC_BACKUP_NOT_CONFIGURED)
+    attrs.update(rec_backup_unverified=True, recommendations=REC_BACKUP_NO_SCHEDULE)
     rendered = _render(hass, cards[name], attrs)
     assert rendered.count(LINE) == 1
     line = next(line for line in rendered.splitlines() if LINE in line)
     assert "/config/backup" in line
-    assert (
-        "set up automatic backups in Home Assistant" not in rendered
-    )  # the advisor line is hidden
+    assert "No automatic backup schedule is set up" not in rendered  # the advisor line is hidden
 
 
 @pytest.mark.parametrize("name", ["Lite", "Pro"])
@@ -58,7 +56,7 @@ async def test_no_line_without_the_flag_or_on_an_older_attribute_set(
     name,
 ) -> None:
     attrs, _ = await _attributes(hass)
-    attrs["rec_backup_not_configured"] = False
+    attrs["rec_backup_unverified"] = False
     assert LINE not in _render(hass, cards[name], attrs)
-    attrs.pop("rec_backup_not_configured")
+    attrs.pop("rec_backup_unverified")
     assert LINE not in _render(hass, cards[name], attrs)
