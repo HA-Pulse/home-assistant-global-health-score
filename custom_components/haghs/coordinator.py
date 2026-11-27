@@ -43,6 +43,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     BACKUP_ADDON_ENTITY,
+    BACKUP_LAST_ATTEMPT_KEY,
     BACKUP_LAST_SUCCESS_KEY,
     BACKUP_MAX_AGE_HOURS,
     BACKUP_NEXT_KEY,
@@ -262,7 +263,9 @@ class _BackupResult:
 
     p_backup: int = 0
     source: str = "none"  # addon / core / both / none
-    status: str = "no_source"  # ok / stale / not_configured / unknown / no_source
+    # ok / stale / not_configured / unknown / no_source; "unavailable" only in the neutral
+    # fallback of a failed application calculation
+    status: str = "unavailable"
     last_success: str | None = None  # ISO 8601, built-in integration only
     age_hours: int | None = None
     max_age_hours: int | None = None
@@ -1902,24 +1905,21 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _calc_backup(self) -> _BackupResult:
         """Backup Health from the add-on and the built-in backup integration (#218).
 
-        The add-on's ``binary_sensor.backups_stale`` counts as before. The built-in
-        integration's sensors are found in the entity registry by platform and unique
-        id; disabled or ignored ones (ignore label on the sensor, its device or area) are
-        not read, which is also the way to switch the check off. An automatic backup is
-        stale when the last successful one is older than 8 days (Deniz, 2026-11-11; the
-        public sensors carry no schedule interval). No schedule, or no successful
-        automatic backup known: a recommendation only, no deduction, and not in the first
-        minutes after a start. Stale from either source costs the points once.
+        The add-on's ``binary_sensor.backups_stale`` counts while it is ``on`` or ``off``.
+        The built-in integration's three sensors (last success, last attempt, next run)
+        are found in the entity registry by platform and unique id; the check runs only
+        when all three are readable, so disabling or ignoring any of them (ignore label or
+        pattern) switches it off. An automatic backup is stale when the last successful
+        one is older than 8 days (Deniz, 2026-11-11) and a run was missed since: a later
+        attempt failed, or the next scheduled run is more than a day overdue. No schedule,
+        or no successful automatic backup known: a recommendation only, no deduction, not
+        in the first 15 minutes after a start. Stale from either source costs the points
+        once.
         """
-        addon = self.hass.states.get(BACKUP_ADDON_ENTITY)
-        addon_present = addon is not None and addon.state in (STATE_ON, STATE_OFF)
-        addon_stale = addon is not None and addon.state == STATE_ON
-
         ent_reg = er.async_get(self.hass)
         now = dt_util.utcnow()
 
-        def core(key: str) -> State | None:
-            entity_id = ent_reg.async_get_entity_id("sensor", BACKUP_PLATFORM, key)
+        def read(entity_id: str | None) -> State | None:
             if entity_id is None or self._is_ignored(entity_id, ent_reg.async_get(entity_id)):
                 return None
             return self.hass.states.get(entity_id)
@@ -1932,12 +1932,35 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return None
             return value
 
+        def core(key: str) -> State | None:
+            return read(ent_reg.async_get_entity_id("sensor", BACKUP_PLATFORM, key))
+
+        addon = read(BACKUP_ADDON_ENTITY)
+        addon_present = addon is not None and addon.state in (STATE_ON, STATE_OFF)
+        addon_stale = addon_present and addon is not None and addon.state == STATE_ON
+
         success_state = core(BACKUP_LAST_SUCCESS_KEY)
+        attempt_state = core(BACKUP_LAST_ATTEMPT_KEY)
         next_state = core(BACKUP_NEXT_KEY)
-        core_present = success_state is not None or next_state is not None
-        last_success = as_time(success_state)
+        core_present = None not in (success_state, attempt_state, next_state)
+        last_success = as_time(success_state) if core_present else None
         if last_success is not None and last_success > now + timedelta(minutes=5):
             last_success = None  # a time in the future (clock moved back) is not trusted
+
+        core_status: str | None = None
+        if core_present and next_state is not None:
+            if next_state.state == STATE_UNKNOWN:
+                core_status = "not_configured"  # HA's schedule is "never"
+            elif last_success is None:
+                core_status = "unknown"  # unavailable, or no successful automatic backup yet
+            else:
+                last_attempt = as_time(attempt_state)
+                next_run = as_time(next_state)
+                missed = (last_attempt is not None and last_attempt > last_success) or (
+                    next_run is not None and now - next_run > timedelta(days=1)
+                )
+                too_old = (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600
+                core_status = "stale" if too_old and missed else "ok"
 
         source = {
             (True, True): "both",
@@ -1945,17 +1968,6 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             (False, True): "core",
             (False, False): "none",
         }[(addon_present, core_present)]
-        core_status: str | None = None
-        if core_present:
-            if next_state is not None and next_state.state == STATE_UNKNOWN:
-                core_status = "not_configured"  # HA's schedule is "never"
-            elif last_success is None:
-                core_status = "unknown"  # unavailable, or no successful automatic backup yet
-            elif (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600:
-                core_status = "stale"
-            else:
-                core_status = "ok"
-
         if addon_stale or core_status == "stale":
             status = "stale"
         elif core_status == "ok" or addon_present:
@@ -1969,7 +1981,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             status=status,
             last_success=last_success.isoformat() if last_success is not None else None,
             age_hours=(
-                int((now - last_success).total_seconds() // 3600)
+                max(0, int((now - last_success).total_seconds() // 3600))
                 if last_success is not None
                 else None
             ),

@@ -38,10 +38,10 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `empty_devices` | list | Names of those devices, sorted, capped at 100; current only, excluded from recorder history (`empty_device_count` stays in the history) |
 | `empty_device_ids` | list | Device ids of the listed empty devices, same 100 entries and order as `empty_devices` (for links to each device page); current only, excluded from recorder history |
 | `backup_source` | string | Where Backup Health comes from: `addon` (`binary_sensor.backups_stale` of the Google Drive Backup add-on), `core` (the automatic backups of Home Assistant's built-in backup integration, found in the entity registry), `both` or `none` |
-| `backup_status` | string | `ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or the backup sensors are disabled or carry an ignore label); `not_configured` and `unknown` only add a recommendation, no deduction |
+| `backup_status` | string | `ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback |
 | `backup_last_success` | str/null | Time of the last successful automatic backup of the built-in integration (ISO 8601), `null` without one; current only, excluded from recorder history |
 | `backup_age_hours` | int/null | Hours since `backup_last_success`, `null` without one; current only, excluded from recorder history |
-| `backup_max_age_hours` | int/null | Age at which a scheduled automatic backup counts as stale (192 hours, 8 days); `null` without the built-in integration's sensors |
+| `backup_max_age_hours` | int/null | Age above which a scheduled automatic backup counts as stale once a run was missed since (192 hours, 8 days); `null` without the built-in integration's sensors |
 | `db_size_mb` | float | Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured) |
 | `psi_available` | bool | `True` when PSI provides both CPU and memory data. I/O PSI is read independently and may still be present when this is `False`. Disk is always read via `psutil`, never PSI. |
 | `cpu_ram_source` | str/null | Where CPU and RAM come from: `psi`, `sensors` (both measured, at least one by a selected sensor), `partial` (one not measured), `none` (neither measured; no PSI and no sensor selected). Not measured values are left out of the hardware score. `null` while the hardware pillar has no measurement (first failed update, hardware fallback). |
@@ -64,7 +64,7 @@ HAGHS exposes the following attributes for use in dashboard cards, automations, 
 | `rec_disk_low` | bool | Disk free space is below the storage-type threshold |
 | `rec_db_over_limit` | bool | Database size exceeds the dynamic limit |
 | `rec_power_unstable` | bool | RPi under-voltage detected |
-| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on, or the last scheduled automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`) |
+| `rec_backup_stale` | bool | `binary_sensor.backups_stale` is on, or the last successful automatic backup is older than `backup_max_age_hours` and a run was missed since (`backup_status` is `stale`) |
 | `rec_updates_pending` | bool | At least one non-ignored update entity has had the same offered version pending for 7 days as seen by HAGHS (also across restarts) |
 | `rec_zombie` | bool | At least one zombie entity is reported |
 | `rec_core_lag` | bool | HA Core is ≥ 3 months behind the latest release |

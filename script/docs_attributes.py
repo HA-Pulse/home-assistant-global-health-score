@@ -109,7 +109,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_status": (
         "string",
-        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or the backup sensors are disabled or carry an ignore label); `not_configured` and `unknown` only add a recommendation, no deduction",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback",
     ),
     "backup_last_success": (
         "str/null",
@@ -121,7 +121,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_max_age_hours": (
         "int/null",
-        "Age at which a scheduled automatic backup counts as stale (192 hours, 8 days); `null` without the built-in integration's sensors",
+        "Age above which a scheduled automatic backup counts as stale once a run was missed since (192 hours, 8 days); `null` without the built-in integration's sensors",
     ),
     "db_size_mb": (
         "float",
@@ -195,7 +195,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     "rec_power_unstable": ("bool", "RPi under-voltage detected"),
     "rec_backup_stale": (
         "bool",
-        "`binary_sensor.backups_stale` is on, or the last scheduled automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`)",
+        "`binary_sensor.backups_stale` is on, or the last successful automatic backup is older than `backup_max_age_hours` and a run was missed since (`backup_status` is `stale`)",
     ),
     "rec_updates_pending": (
         "bool",
