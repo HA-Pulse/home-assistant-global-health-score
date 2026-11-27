@@ -1,7 +1,7 @@
 """The score sensor has state_class "measurement", so Home Assistant keeps long-term statistics for it.
 
 Only the state class is added: the state value, the unit and every HAGHS attribute stay as they were
-(the exact attribute pins live in tests/test_recorder_attribute_size.py).
+(pinned against the dev capture of tests/test_recorder_attribute_size.py).
 """
 
 from __future__ import annotations
@@ -11,13 +11,15 @@ from homeassistant.components.recorder.statistics import async_list_statistic_id
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant.common import MockEntityPlatform
 from pytest_homeassistant.components.recorder.common import async_wait_recording_done
 
 from custom_components.haghs.const import DOMAIN
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import make_coordinator, patch_disk, patch_psi
+from tests import test_recorder_attribute_size as attribute_size
+from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
 
 HA_META = {"friendly_name", "icon", "unit_of_measurement", "state_class"}
 
@@ -81,3 +83,40 @@ async def test_score_sensor_is_listed_for_long_term_statistics(
     ours = [item for item in listed if item["statistic_id"] == sensor.entity_id]
     assert len(ours) == 1
     assert ours[0]["statistics_unit_of_measurement"] == "%"
+
+
+async def test_state_attributes_match_the_dev_pins_plus_state_class(
+    recorder_mock, hass: HomeAssistant, freezer
+) -> None:
+    """Pinned: every HAGHS attribute in the state equals the dev capture; only HA's meta attributes come on top."""
+    freezer.move_to(attribute_size.FROZEN)
+    sensor, entry = await attribute_size._worst_case(hass, length=80)
+    await MockEntityPlatform(hass, domain="sensor", platform_name=DOMAIN).async_add_entities(
+        [sensor]
+    )
+    sensor.async_write_ha_state()
+    state = hass.states.get(sensor.entity_id)
+    by_name = {device.name: device.id for device in device_entries(dr.async_get(hass))}
+    expected = {  # the same expectation as test_recorder_attribute_size.test_current_attributes_are_unchanged
+        **attribute_size.DEV_ATTRIBUTES,
+        "integration_unhealthy_entries": [],
+        "empty_device_count": 0,
+        "empty_devices": [],
+        "rec_empty_devices": False,
+        "conditional_ignore_active": False,
+        "dead_device_ids": [
+            by_name[name] for name in attribute_size.DEV_ATTRIBUTES["dead_devices"]
+        ],
+        "empty_device_ids": [],
+        "cpu_ram_source": "psi",
+        "rec_cpu_ram_unmeasured": False,
+    }
+    assert {key: value for key, value in state.attributes.items() if key not in HA_META} == expected
+    assert {key: state.attributes[key] for key in HA_META} == {
+        "friendly_name": state.attributes["friendly_name"],
+        "icon": "mdi:shield-check",
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+    }
+    object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)
+    await sensor.coordinator.async_shutdown()
