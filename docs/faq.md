@@ -29,7 +29,7 @@ An empty device has no entity at all, often a leftover after removing or re-pair
 {% endfor %}
 ```
 
-To remove one, open its device page and use **⋮ > Delete**. This option only appears when the integration supports removing devices; otherwise remove the device in the integration itself (for example exclude or remove it there, or delete the integration entry it belongs to). To keep a device and stop the report, give the device (or its area) the `haghs_ignore` label; on a parent device the label also covers its child devices. Empty devices never cost points.
+To remove one, open its device page and use **⋮ > Delete**. This option only appears when the integration supports removing devices; otherwise remove the device in the integration itself (for example exclude or remove it there, or delete the integration entry it belongs to). To keep a device and stop the report, give the device (or its area) the `haghs_ignore` label; on a parent device the label also covers its child devices, and a label on the parent's area covers a child device that has no area of its own. Empty devices never cost points.
 
 ## Why is my score so low?
 Check the Advisor recommendations in the dashboard card. They tell you exactly where penalties come from (e.g., "5 update(s) pending", "Stale backup detected").
