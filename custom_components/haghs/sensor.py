@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -61,6 +61,8 @@ class HaghsSensor(CoordinatorEntity[HaghsDataUpdateCoordinator], SensorEntity): 
         self._attr_unique_id = f"{entry.entry_id}_score"
         self._attr_icon = "mdi:shield-check"
         self._attr_native_unit_of_measurement = "%"
+        # Long-term statistics (mean, min, max) beyond the recorder history.
+        self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def native_value(self) -> int | None:  # pyright: ignore[reportIncompatibleVariableOverride]
