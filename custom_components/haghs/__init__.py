@@ -136,7 +136,12 @@ async def _async_copy_shared_first_seen(hass: HomeAssistant, entry: ConfigEntry)
         if await own.async_load() is not None:
             return
     except Exception:
-        return  # an own store exists but is unreadable: the coordinator reports it on its first load
+        # An own store exists but is unreadable: never copy over it. The coordinator reads it
+        # again on its first load and reports it (warning, kept copy, the entry's repair).
+        _LOGGER.debug(
+            "HAGHS: Own update first-seen store unreadable, nothing copied", exc_info=True
+        )
+        return
     shared: Store[Any] = Store(
         hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_LEGACY_STORE_KEY
     )

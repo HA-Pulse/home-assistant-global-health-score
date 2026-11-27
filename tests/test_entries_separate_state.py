@@ -296,3 +296,40 @@ async def test_setup_drops_the_old_shared_repair_and_removal_only_the_entrys_own
         entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, "keep_me"),
     }
     await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_migration_never_copies_over_an_unreadable_own_store(
+    hass, hass_storage, caplog
+) -> None:
+    """The coordinator reports the unreadable own store; the migration only skips the copy."""
+    seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({"update.legacy": seen})
+    entry = _entry_at_3_4(hass)
+    key = entry_store_key(entry.entry_id)
+    unreadable = {"version": 9, "minor_version": 1, "key": key, "data": {}}
+    hass_storage[key] = dict(unreadable)
+    caplog.set_level(logging.DEBUG, logger="custom_components.haghs")
+
+    assert await haghs_module.async_migrate_entry(hass, entry) is True
+    await hass.async_block_till_done()
+    assert (entry.version, entry.minor_version) == (3, 5)
+    assert hass_storage[key] == unreadable
+    assert [r.levelno for r in caplog.records if "nothing copied" in r.getMessage()] == [
+        logging.DEBUG
+    ]
+
+
+async def test_a_failed_copy_warns_and_the_migration_goes_on(hass, hass_storage, caplog) -> None:
+    """Writing .storage failed: one WARNING with traceback; the entry still loads (accepted case, plan r4)."""
+    seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    hass_storage[UPDATE_FIRST_SEEN_LEGACY_STORE_KEY] = _legacy_store({"update.legacy": seen})
+    entry = _entry_at_3_4(hass)
+    caplog.set_level(logging.WARNING, logger="custom_components.haghs")
+
+    with patch("homeassistant.helpers.storage.Store.async_save", side_effect=OSError("disk full")):
+        assert await haghs_module.async_migrate_entry(hass, entry) is True
+    assert (entry.version, entry.minor_version) == (3, 5)
+    warnings = [r for r in caplog.records if "Could not copy the stored update" in r.getMessage()]
+    assert len(warnings) == 1
+    assert warnings[0].exc_info is not None
+    assert entry_store_key(entry.entry_id) not in hass_storage
