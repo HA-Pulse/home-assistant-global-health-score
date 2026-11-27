@@ -19,7 +19,13 @@ from pytest_homeassistant.components.recorder.common import async_wait_recording
 from custom_components.haghs.const import DOMAIN
 from custom_components.haghs.sensor import HaghsSensor
 from tests import test_recorder_attribute_size as attribute_size
-from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
+from tests.factories import (
+    BACKUP_WITHOUT_SOURCE,
+    device_entries,
+    make_coordinator,
+    patch_disk,
+    patch_psi,
+)
 
 HA_META = {"friendly_name", "icon", "unit_of_measurement", "state_class"}
 
@@ -110,6 +116,7 @@ async def test_state_attributes_match_the_dev_pins_plus_state_class(
         "empty_device_ids": [],
         "cpu_ram_source": "psi",
         "rec_cpu_ram_unmeasured": False,
+        **BACKUP_WITHOUT_SOURCE,
     }
     assert {key: value for key, value in state.attributes.items() if key not in HA_META} == expected
     assert {key: state.attributes[key] for key in HA_META} == {

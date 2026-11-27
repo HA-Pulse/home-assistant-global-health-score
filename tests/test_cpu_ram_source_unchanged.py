@@ -14,13 +14,13 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.haghs.const import CONF_CPU_SENSOR, CONF_RAM_SENSOR, CONF_STORAGE_TYPE
-from tests.factories import GB, make_coordinator, patch_disk, patch_psi
+from tests.factories import BACKUP_WITHOUT_SOURCE, GB, make_coordinator, patch_disk, patch_psi
 
 FROZEN = "2026-11-01T08:00:00+00:00"
 PINS = json.loads(
     (Path(__file__).parent / "data" / "cpu_ram_source_dev.json").read_text(encoding="utf-8")
 )
-NEW_KEYS = {"cpu_ram_source", "rec_cpu_ram_unmeasured"}
+NEW_KEYS = {"cpu_ram_source", "rec_cpu_ram_unmeasured"} | set(BACKUP_WITHOUT_SOURCE)
 
 # name -> (PSI values, configured sensors with their states)
 SCENARIOS = {
@@ -54,3 +54,4 @@ async def test_score_and_every_attribute_unchanged(hass: HomeAssistant, freezer,
     assert {key: value for key, value in result.items() if key not in NEW_KEYS} == PINS[name]
     expected = "psi" if name.startswith("psi") else "sensors"
     assert (result["cpu_ram_source"], result["rec_cpu_ram_unmeasured"]) == (expected, False)
+    assert {key: result[key] for key in BACKUP_WITHOUT_SOURCE} == BACKUP_WITHOUT_SOURCE

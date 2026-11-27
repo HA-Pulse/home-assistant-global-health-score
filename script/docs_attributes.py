@@ -103,6 +103,26 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
         "list",
         "Device ids of the listed empty devices, same ${EMPTY_DEVICE_LIST_CAP} entries and order as `empty_devices` (for links to each device page); $unrecorded",
     ),
+    "backup_source": (
+        "string",
+        "Where Backup Health comes from: `addon` (`binary_sensor.backups_stale` of the Google Drive Backup add-on), `core` (the automatic backups of Home Assistant's built-in backup integration, found in the entity registry), `both` or `none`",
+    ),
+    "backup_status": (
+        "string",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet) or `no_source`; `not_configured` and `unknown` only add a recommendation, no deduction",
+    ),
+    "backup_last_success": (
+        "str/null",
+        "Time of the last successful automatic backup of the built-in integration (ISO 8601), `null` without one; $unrecorded",
+    ),
+    "backup_age_hours": (
+        "int/null",
+        "Hours since `backup_last_success`, `null` without one; $unrecorded",
+    ),
+    "backup_max_age_hours": (
+        "int/null",
+        "Age at which a scheduled automatic backup counts as stale: its schedule interval (next run minus last attempt, 24 to 168 hours) plus 26 hours, at most 192; `null` without a schedule",
+    ),
     "db_size_mb": (
         "float",
         "Current database size in MB (auto-detected for SQLite, or from external DB sensor if configured)",
@@ -173,7 +193,10 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     "rec_disk_low": ("bool", "Disk free space is below the storage-type threshold"),
     "rec_db_over_limit": ("bool", "Database size exceeds the dynamic limit"),
     "rec_power_unstable": ("bool", "RPi under-voltage detected"),
-    "rec_backup_stale": ("bool", "`binary_sensor.backups_stale` is on"),
+    "rec_backup_stale": (
+        "bool",
+        "`binary_sensor.backups_stale` is on, or the last successful automatic backup is older than `backup_max_age_hours` (`backup_status` is `stale`)",
+    ),
     "rec_updates_pending": (
         "bool",
         "At least one non-ignored update entity has had the same offered version pending for ${UPDATE_GRACE_DAYS} days as seen by HAGHS (also across restarts)",
@@ -213,6 +236,10 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
         "bool",
         "No PSI and no sensor selected for CPU and/or RAM: the value is not measured and left out of the hardware score (`cpu_ram_source` is `partial` or `none`)",
     ),
+    "rec_backup_not_configured": (
+        "bool",
+        "The built-in backup integration knows no successful automatic backup (`backup_status` is `not_configured` or `unknown`) and the add-on is not present; recommendation only, no deduction",
+    ),
 }
 
 # Recommendation flag: the `common` keys of strings.json whose template the coordinator renders for it.
@@ -237,5 +264,6 @@ RECOMMENDATION_TEXTS: dict[str, tuple[str, ...]] = {
     "rec_pillar_fallback": ("rec_pillar_fallback",),
     "rec_update_failed": ("rec_update_failed",),
     "rec_cpu_ram_unmeasured": ("rec_cpu_ram_unmeasured",),
+    "rec_backup_not_configured": ("rec_backup_not_configured",),
 }
 ALL_CLEAR_TEXT = "rec_all_clear"

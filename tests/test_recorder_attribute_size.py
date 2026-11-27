@@ -26,7 +26,13 @@ from pytest_homeassistant.components.recorder.common import (
 
 from custom_components.haghs.const import DOMAIN
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
+from tests.factories import (
+    BACKUP_WITHOUT_SOURCE,
+    device_entries,
+    make_coordinator,
+    patch_disk,
+    patch_psi,
+)
 
 FROZEN = "2026-10-24T12:00:00+00:00"  # clock of the dev capture
 LISTS = {"zombie_entities", "unregistered_entities", "dead_devices", "repairs", "pending_updates"}
@@ -190,5 +196,6 @@ async def test_current_attributes_are_unchanged(hass: HomeAssistant, freezer) ->
         "empty_device_ids": [],
         "cpu_ram_source": "psi",
         "rec_cpu_ram_unmeasured": False,
+        **BACKUP_WITHOUT_SOURCE,
     }
     object.__setattr__(entry, "state", ConfigEntryState.NOT_LOADED)

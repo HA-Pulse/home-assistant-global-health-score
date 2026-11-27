@@ -43,7 +43,7 @@ cards:
     content: >
       {% set e = 'sensor.system_ha_global_health_score' %} {% set rec = state_attr(e, 'recommendations') | default('', true) %}
 
-      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
+      {% if states(e) in ['unavailable', 'unknown'] %} ⚠️ Health Advisor sensor is offline ({{ states(e) }}). {% else %}{# Hide recommendation lines that another card already shows with a deep link. #}{% set ns_rec = namespace(kept=[]) %}{% for line in (rec.splitlines() if rec is string else []) %}{% set s = line.strip() %}{% if s and not s.startswith(('📦', '🧟', '🔌', '🗂️', '🛠️', '🧩', '🚨', '💾')) %}{% set ns_rec.kept = ns_rec.kept + [s] %}{% endif %}{% endfor %}
 
       {% if rec is string and '✅' in rec %} ✅ System healthy. No recommendations.
       {% elif ns_rec.kept %} {{ ns_rec.kept | join('\n') }}
@@ -78,6 +78,7 @@ cards:
       state_attr(e, 'psi_available') | default(false, true) %} {% set cpu_ram =
       state_attr(e, 'cpu_ram_source') %} {% set
       backup_stale = state_attr(e, 'rec_backup_stale') | default(false, true) %}
+      {% set backup_unset = state_attr(e, 'rec_backup_not_configured') | default(false, true) %}
       {% set _upd = '/config/updates' %} {% set _bak = '/config/backup' %}
 
       {% if updates | length > 0 %}{{ updates | length }} update(s) pending:
@@ -86,6 +87,7 @@ cards:
       {% else %} ✅ All updates installed {% endif %}
 
       {% if backup_stale %}<br>🚨 Backup is stale, [→ Open Backups]({{ _bak }}){% endif %}
+      {% if backup_unset %}<br>💾 No successful automatic backup known, [→ Set up backups]({{ _bak }}){% endif %}
 
       <hr>
 

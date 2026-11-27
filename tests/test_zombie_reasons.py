@@ -23,12 +23,18 @@ from custom_components.haghs.const import (
     ZOMBIE_REASONS,
 )
 from custom_components.haghs.sensor import HaghsSensor
-from tests.factories import device_entries, make_coordinator, patch_disk, patch_psi
+from tests.factories import (
+    BACKUP_WITHOUT_SOURCE,
+    device_entries,
+    make_coordinator,
+    patch_disk,
+    patch_psi,
+)
 
 NEW_KEYS = {"zombie_count_per_reason", "zombie_reasons"}
 # Added after #154-d by later plans (#134, #93, conditional ignore labels, #123 CPU/RAM source);
 # compared exactly below.
-ADDED_LATER = {
+ADDED_LATER = set(BACKUP_WITHOUT_SOURCE) | {
     "integration_unhealthy_entries",
     "empty_device_count",
     "empty_devices",
@@ -166,6 +172,7 @@ async def test_score_and_existing_attributes_are_unchanged(
     assert set(result) == set(DEV_RESULTS[extra]) | NEW_KEYS | ADDED_LATER
     added = NEW_KEYS | ADDED_LATER
     assert {key: value for key, value in result.items() if key not in added} == _expected(extra)
+    assert {key: result[key] for key in BACKUP_WITHOUT_SOURCE} == BACKUP_WITHOUT_SOURCE
     # The SETUP_ERROR and SETUP_RETRY entries; NOT_LOADED and LOADED entries are not counted.
     assert result["integration_unhealthy_entries"] == ["brokenint: brokenint", "retryint: retryint"]
     assert (result["empty_device_count"], result["empty_devices"]) == (0, [])
