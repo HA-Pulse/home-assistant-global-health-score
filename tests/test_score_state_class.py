@@ -28,6 +28,14 @@ def auto_enable_custom_integrations() -> None:
     return
 
 
+@pytest.fixture
+async def added_sensor(recorder_mock, hass: HomeAssistant):
+    """The score sensor added through an entity platform; cleaned up even when a test fails."""
+    sensor = await _added_sensor(hass)
+    yield sensor
+    await _remove(hass, sensor)
+
+
 async def _added_sensor(hass: HomeAssistant) -> HaghsSensor:
     coordinator = make_coordinator(hass)
     with patch_psi(cpu=1.0, memory=1.0, io=1.0), patch_disk():
@@ -48,8 +56,8 @@ async def _remove(hass: HomeAssistant, sensor: HaghsSensor) -> None:
     await sensor.coordinator.async_shutdown()
 
 
-async def test_score_sensor_has_state_class_measurement(recorder_mock, hass: HomeAssistant) -> None:
-    sensor = await _added_sensor(hass)
+async def test_score_sensor_has_state_class_measurement(added_sensor, hass: HomeAssistant) -> None:
+    sensor = added_sensor
     state = hass.states.get(sensor.entity_id)
 
     assert sensor.state_class is SensorStateClass.MEASUREMENT
@@ -60,18 +68,16 @@ async def test_score_sensor_has_state_class_measurement(recorder_mock, hass: Hom
     assert extra
     assert set(state.attributes) - set(extra) == HA_META
     assert {key: state.attributes[key] for key in extra} == extra
-    await _remove(hass, sensor)
 
 
 async def test_score_sensor_is_listed_for_long_term_statistics(
-    recorder_mock, hass: HomeAssistant
+    added_sensor, hass: HomeAssistant
 ) -> None:
+    sensor = added_sensor
     assert await async_setup_component(hass, "sensor", {})
-    sensor = await _added_sensor(hass)
     await async_wait_recording_done(hass)
 
     listed = await async_list_statistic_ids(hass, statistic_type="mean")
     ours = [item for item in listed if item["statistic_id"] == sensor.entity_id]
     assert len(ours) == 1
     assert ours[0]["statistics_unit_of_measurement"] == "%"
-    await _remove(hass, sensor)
