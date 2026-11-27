@@ -93,7 +93,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "empty_device_count": (
         "int",
-        "Number of devices without any entity (disabled entities included), not disabled, not a service, not a hub (no other device linked through it), not the parent of child devices, not a composite device, every config entry loaded; child devices themselves (HA 2026.11+) are counted unless they or their parent are disabled, a config entry is missing or not loaded, or an ignore label applies (child, parent, effective area); informational, no score impact",
+        "Number of devices without any entity (disabled entities included), not disabled, not a service, not a hub (no other device linked through it), not the parent of child devices, not a composite device, every config entry loaded; child devices themselves (HA 2026.11+) are counted unless they or their parent are disabled, they have no config entry or one is missing or not loaded, or an ignore label applies (child, parent, effective area); informational, no score impact",
     ),
     "empty_devices": (
         "list",
