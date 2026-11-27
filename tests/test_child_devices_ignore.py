@@ -129,13 +129,16 @@ async def test_label_on_parent_excludes_zombie_on_child(hass) -> None:
     _other_parent, other_child = _strip(hass, owner, "office strip")
     counted = _sensor(hass, other_child.id, "office_socket_switch")
 
+    for index in range(96):  # 100 sensors in total: 2 % zombies cost 14 points, 1 % costs 7
+        hass.states.async_set(f"sensor.healthy_{index}", "1")
+
     coord = _coordinator(hass, [label])
-    zombies, _p, count, *_ = coord._calc_zombies()
-    assert (sorted(zombies), count) == (sorted([zombie, counted]), 2)
+    zombies, p_zombie, count, *_ = coord._calc_zombies()
+    assert (sorted(zombies), count, p_zombie) == (sorted([zombie, counted]), 2, 14)
 
     reg.async_update_device(parent.id, labels={label})
-    zombies, _p, count, *_ = coord._calc_zombies()
-    assert (zombies, count) == ([counted], 1)
+    zombies, p_zombie, count, *_ = coord._calc_zombies()
+    assert (zombies, count, p_zombie) == ([counted], 1, 7)
 
 
 @needs_children
@@ -185,3 +188,68 @@ async def test_main_device_without_parent_link_is_ignored_as_before(hass) -> Non
         )
     assert coordinator_module._parent_of(registry, own) is None
     assert coordinator_module._child_device_entries(SimpleNamespace(devices=[])) == []
+
+
+async def test_empty_devices_on_main_device_registry_shape_as_before(hass) -> None:
+    """Older HA shape (no ``child_devices``, no ``parent_device_id``): the same report as before #219.
+
+    A hub with a member only through ``via_device_id`` stays unreported, a labeled empty device too;
+    the unlabeled empty device is the only one reported, exactly as on dev before the change.
+    """
+    owner = _owner(hass)
+    label = _label(hass, "Keep")
+    reg = dr.async_get(hass)
+    hub = reg.async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test_child", "hub")}, name="hub"
+    )
+    member = reg.async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test_child", "member")}, name="member"
+    )
+    _sensor(hass, member.id, "member_power", dead=False)
+    leftover = reg.async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test_child", "leftover")}, name="leftover"
+    )
+    kept = reg.async_get_or_create(
+        config_entry_id=owner.entry_id, identifiers={("test_child", "kept")}, name="kept"
+    )
+
+    def old(device, **changes):
+        fields = dict(
+            id=device.id,
+            name=device.name,
+            name_by_user=None,
+            disabled_by=None,
+            entry_type=None,
+            via_device_id=None,
+            labels=set(),
+            area_id=None,
+            config_entries={owner.entry_id},
+        )
+        fields.update(changes)
+        return SimpleNamespace(**fields)
+
+    devices = [
+        old(hub),
+        old(member, via_device_id=hub.id),
+        old(leftover),
+        old(kept, labels={label}),
+    ]
+    old_registry = SimpleNamespace(devices=devices, async_get={d.id: d for d in devices}.get)
+    assert not hasattr(old_registry, "child_devices")
+    assert not any(hasattr(d, "parent_device_id") for d in devices)
+
+    class _OldDeviceRegistryModule:
+        """``dr`` as the coordinator sees it: the old registry, every other name from the real module."""
+
+        def __getattr__(self, name):
+            return getattr(dr, name)
+
+        @staticmethod
+        def async_get(_hass):
+            return old_registry
+
+    coord = _coordinator(hass, [label])
+    with patch.object(coordinator_module, "dr", _OldDeviceRegistryModule()):
+        result = coord._calc_empty_devices()
+    assert result == (["leftover"], 1)
+    assert coordinator_module._device_ids(result) == [leftover.id]
