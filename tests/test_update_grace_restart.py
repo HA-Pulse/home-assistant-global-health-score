@@ -15,10 +15,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant.common import async_fire_time_changed
 
-from custom_components.haghs.const import DOMAIN
+from custom_components.haghs.const import (
+    DOMAIN,
+    entry_store_key,
+)
 from tests.factories import make_coordinator
 
-KEY = "haghs.update_first_seen"
+# One HAGHS entry across the simulated restarts, like a real restart keeps it; its own store (#217).
+ENTRY = "haghs_restart_entry"
+KEY = entry_store_key(ENTRY)
 
 
 def _restart(hass: HomeAssistant) -> None:
@@ -40,7 +45,7 @@ def _stored(seen, *, raw: bool = False) -> dict:
 
 async def _update_count(hass: HomeAssistant) -> int:
     """Number of updates past the grace after one full update cycle (one pending update in these tests)."""
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     return int(coordinator.data["rec_updates_pending"])
 
@@ -62,9 +67,9 @@ async def test_window_is_kept_across_a_restart(
     freezer.tick(timedelta(days=4))
     _restart(hass)
     assert await _update_count(hass) == 1  # day 8 after first seen, two restarts in between
-    assert hass.data[DOMAIN]["_update_first_seen"]["update.esphome"] == dt_util.parse_datetime(
-        first
-    )
+    assert hass.data[DOMAIN]["_update_first_seen"][ENTRY][
+        "update.esphome"
+    ] == dt_util.parse_datetime(first)
 
 
 async def test_without_the_store_a_restart_starts_a_new_window(hass, hass_storage) -> None:
@@ -98,7 +103,7 @@ async def test_nothing_is_written_without_a_change(hass, hass_storage, freezer) 
     seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
     hass_storage[KEY] = _stored({"update.esphome": seen})
     hass.states.async_set("update.esphome", "on")
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator._async_load_update_first_seen()
     hass_storage.pop(KEY)  # a write would put it back
     coordinator._calc_updates()
@@ -114,7 +119,7 @@ async def test_known_entries_of_this_run_win_and_load_happens_once(hass, hass_st
         {"update.esphome": (dt_util.utcnow() - timedelta(days=8)).isoformat()}
     )
     hass.states.async_set("update.esphome", "on")
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     now = dt_util.utcnow()
     coordinator._update_first_seen["update.esphome"] = now
     await coordinator._async_load_update_first_seen()
@@ -144,14 +149,14 @@ async def test_invalid_stored_data_starts_now_with_one_debug(
     hass.states.async_set("update.esphome", "on")
     caplog.set_level(logging.DEBUG, logger="custom_components.haghs.coordinator")
     assert await _update_count(hass) == 0
-    seen = hass.data[DOMAIN]["_update_first_seen"]["update.esphome"]
+    seen = hass.data[DOMAIN]["_update_first_seen"][ENTRY]["update.esphome"]
     assert dt_util.utcnow() - seen < timedelta(minutes=1)
     assert len([r for r in caplog.records if "stored update first-seen" in r.getMessage()]) == 1
 
 
 async def test_unreadable_store_starts_now_with_one_warning(hass, caplog, monkeypatch) -> None:
     hass.states.async_set("update.esphome", "on")
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
 
     async def broken() -> None:
         raise ValueError("broken json")
@@ -174,7 +179,7 @@ async def test_the_update_cycle_loads_the_store(hass, hass_storage) -> None:
         {"update.esphome": (dt_util.utcnow() - timedelta(days=8)).isoformat()}
     )
     hass.states.async_set("update.esphome", "on", {"friendly_name": "ESPHome"})
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     assert coordinator.data["rec_updates_pending"] is True
     assert coordinator.data["pending_updates"] == ["ESPHome"]
@@ -185,7 +190,7 @@ async def test_a_newer_offered_version_starts_a_new_window(hass, hass_storage) -
     hass_storage[KEY] = _stored({"update.esphome": {"since": eight_days, "version": "2026.10.0"}})
     hass.states.async_set("update.esphome", "on", {"latest_version": "2026.11.0"})
     assert await _update_count(hass) == 0
-    assert hass.data[DOMAIN]["_update_seen_version"]["update.esphome"] == "2026.11.0"
+    assert hass.data[DOMAIN]["_update_seen_version"][ENTRY]["update.esphome"] == "2026.11.0"
 
 
 async def test_the_same_offered_version_keeps_its_window_across_a_restart(
@@ -241,7 +246,7 @@ async def test_an_update_entity_that_appears_after_the_first_refresh_keeps_its_w
     assert set(hass_storage.get(KEY, _stored({}))["data"]) <= {"update.esphome", "update.router"}
     hass.states.async_set("update.esphome", "on")
     hass.states.async_set("update.router", "on")
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     assert coordinator._calc_updates()[1] == 2  # both keep their eight days
 
 
@@ -251,7 +256,7 @@ async def test_an_installed_update_is_pruned_but_a_vanished_unregistered_one_too
     seen = (dt_util.utcnow() - timedelta(days=2)).isoformat()
     hass_storage[KEY] = _stored({"update.done": seen, "update.gone": seen})
     hass.states.async_set("update.done", "off")
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     assert set(coordinator._update_first_seen) == set()
 
@@ -263,10 +268,10 @@ async def test_first_start_after_updating_haghs_sets_now_for_every_pending_updat
     hass_storage.pop(KEY, None)
     for name in ("esphome", "router", "core"):
         hass.states.async_set(f"update.{name}", "on", {"latest_version": "1.0"})
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     assert coordinator.data["rec_updates_pending"] is False
-    seen = hass.data[DOMAIN]["_update_first_seen"]
+    seen = hass.data[DOMAIN]["_update_first_seen"][ENTRY]
     assert set(seen) == {"update.esphome", "update.router", "update.core"}
     assert all(dt_util.utcnow() - value < timedelta(minutes=1) for value in seen.values())
 
@@ -281,7 +286,7 @@ async def test_an_entity_removed_from_the_registry_leaves_the_store(hass, hass_s
     hass_storage[KEY] = _stored(
         {entry.entity_id: (dt_util.utcnow() - timedelta(days=3)).isoformat()}
     )
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     assert (
         entry.entity_id in coordinator._update_first_seen
@@ -304,7 +309,7 @@ async def test_a_disabled_update_entity_leaves_the_store(hass, hass_storage) -> 
     hass_storage[KEY] = _stored(
         {entry.entity_id: (dt_util.utcnow() - timedelta(days=3)).isoformat()}
     )
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     await coordinator.async_refresh()
     assert entry.entity_id not in coordinator._update_first_seen
 
@@ -329,17 +334,20 @@ async def test_an_ignored_update_without_a_state_leaves_the_store(hass, hass_sto
     assert entry.entity_id not in coordinator._update_first_seen
 
 
-async def test_two_config_entries_share_one_load(hass, hass_storage) -> None:
-    """The second coordinator must not compute before the stored times are merged (several config entries)."""
+async def test_two_config_entries_each_load_before_computing(hass, hass_storage) -> None:
+    """No coordinator computes before its own stored times are merged (several config entries, #217)."""
     import asyncio
 
     eight_days = (dt_util.utcnow() - timedelta(days=8)).isoformat()
+    two_days = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    other_key = entry_store_key("haghs_other_entry")
     hass_storage[KEY] = _stored({"update.esphome": eight_days})
+    hass_storage[other_key] = {**_stored({"update.esphome": two_days}), "key": other_key}
     hass.states.async_set("update.esphome", "on")
-    first, second = make_coordinator(hass), make_coordinator(hass)
+    first = make_coordinator(hass, entry_id=ENTRY)
+    second = make_coordinator(hass, entry_id="haghs_other_entry")
     await asyncio.gather(first.async_refresh(), second.async_refresh())
     assert first.data["rec_updates_pending"] is True
-    assert second.data["rec_updates_pending"] is True
-    assert hass.data[DOMAIN]["_update_first_seen"]["update.esphome"] == dt_util.parse_datetime(
-        eight_days
-    )
+    assert second.data["rec_updates_pending"] is False
+    assert first._update_first_seen["update.esphome"] == dt_util.parse_datetime(eight_days)
+    assert second._update_first_seen["update.esphome"] == dt_util.parse_datetime(two_days)

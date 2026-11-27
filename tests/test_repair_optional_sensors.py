@@ -8,7 +8,13 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from custom_components.haghs.const import CONF_CPU_SENSOR, CONF_RAM_SENSOR, DOMAIN, IssueIds
+from custom_components.haghs.const import (
+    CONF_CPU_SENSOR,
+    CONF_RAM_SENSOR,
+    DOMAIN,
+    IssueIds,
+    entry_issue_id,
+)
 from custom_components.haghs.coordinator import _PsiData
 from custom_components.haghs.repairs import MissingFallbackSensorRepairFlow
 from tests.factories import patch_disk
@@ -49,12 +55,22 @@ async def test_only_the_missing_ram_sensor_is_submitted(hass: HomeAssistant) -> 
     monitor = _system_monitor(hass)
     hass.states.async_set(monitor[CONF_RAM_SENSOR], "40")
     entry = await _update(hass, CPU_ONLY)
-    assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)
+        )
+        is not None
+    )
     done = await _submit(hass, entry, {CONF_RAM_SENSOR: monitor[CONF_RAM_SENSOR]})
     assert done["type"] == "create_entry"
     assert entry.options[CONF_RAM_SENSOR] == monitor[CONF_RAM_SENSOR]
     assert entry.options[CONF_CPU_SENSOR] is None  # untouched; CPU is measured by PSI
-    assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is None
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)
+        )
+        is None
+    )
     attributes = hass.states.get("sensor.system_ha_global_health_score").attributes
     assert attributes["cpu_ram_source"] == "sensors"
 
@@ -70,7 +86,12 @@ async def test_an_empty_submit_writes_nothing_and_the_repair_stays(hass: HomeAss
     reload.assert_called_once_with(entry.entry_id)
     assert done["type"] == "create_entry"
     assert dict(entry.options) == V230_OPTIONS
-    assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)
+        )
+        is not None
+    )
 
 
 async def test_after_an_empty_submit_the_next_cycle_keeps_the_repair(hass: HomeAssistant) -> None:
@@ -78,7 +99,10 @@ async def test_after_an_empty_submit_the_next_cycle_keeps_the_repair(hass: HomeA
     entry = await _update(hass, CPU_ONLY)
     await _submit(hass, entry, {})
     registry = ir.async_get(hass)
-    assert registry.async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    assert (
+        registry.async_get_issue(DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id))
+        is not None
+    )
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
     async def _read(_self):
@@ -87,5 +111,8 @@ async def test_after_an_empty_submit_the_next_cycle_keeps_the_repair(hass: HomeA
     with patch(_PSI_SYNC_PATH, return_value=CPU_ONLY), patch(_PSI_ASYNC_PATH, _read), patch_disk():
         await coordinator.async_refresh()
         await hass.async_block_till_done()
-    assert registry.async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is not None
+    assert (
+        registry.async_get_issue(DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id))
+        is not None
+    )
     assert coordinator.data["cpu_ram_source"] == "partial"

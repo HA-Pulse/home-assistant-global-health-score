@@ -86,13 +86,16 @@ DEAD_DEVICE_LIST_CAP = 100
 EMPTY_DEVICE_LIST_CAP = 100
 
 # Internal hass.data key holding the per-entity first-seen timestamps for
-# pending updates (#26). Only updates that have been available longer than
+# pending updates (#26), one dict per HAGHS config entry (#217). Only updates that have been available longer than
 # UPDATE_GRACE_DAYS contribute to the update_count penalty; this avoids
 # punishing normal user behaviour (most updates land within a few days).
 DATA_UPDATE_FIRST_SEEN = "_update_first_seen"
 # The same timestamps in .storage, so the grace window survives Home Assistant
 # restarts (doc audit v2.4.0b4): restarting at least weekly used to restart it.
+# One store per HAGHS config entry (#217): "<key>.<entry_id>". The shared store of
+# HAGHS 2.4 is copied once, when an existing entry migrates to config version 3.5.
 UPDATE_FIRST_SEEN_STORE_KEY = "haghs.update_first_seen"
+UPDATE_FIRST_SEEN_LEGACY_STORE_KEY = UPDATE_FIRST_SEEN_STORE_KEY
 UPDATE_FIRST_SEEN_STORE_VERSION = 1
 DATA_UPDATE_FIRST_SEEN_STORE = "_update_first_seen_store"
 DATA_UPDATE_FIRST_SEEN_LOADED = "_update_first_seen_loaded"
@@ -258,13 +261,23 @@ class VersionInformation:
 
 
 class IssueIds(StrEnum):
-    """Issue ids."""
+    """Issue ids; also the translation keys. The repairs carry the entry id, see ``entry_issue_id``."""
 
     FALLBACK_MISSING = "fallback_missing"
     UPDATE_FIRST_SEEN_UNREADABLE = "update_first_seen_unreadable"
 
 
+def entry_issue_id(issue: IssueIds, entry_id: str) -> str:
+    """The repair id of one HAGHS config entry, so several entries keep separate repairs (#217)."""
+    return f"{issue}_{entry_id}"
+
+
+def entry_store_key(entry_id: str) -> str:
+    """The first-seen store key of one HAGHS config entry (#217)."""
+    return f"{UPDATE_FIRST_SEEN_STORE_KEY}.{entry_id}"
+
+
 # Current config entry version. Bumped whenever entry.data/options need
 # migration. Keep this in const.py so both config_flow and the migration
 # logic in __init__.py reference the same source of truth.
-_CONFIG_VERSION = VersionInformation(major=3, minor=4)
+_CONFIG_VERSION = VersionInformation(major=3, minor=5)

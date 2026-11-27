@@ -23,12 +23,15 @@ from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.haghs import coordinator as coordinator_module
 from custom_components.haghs import repairs as repairs_module
-from custom_components.haghs.const import DOMAIN
+from custom_components.haghs.const import DOMAIN, IssueIds, entry_issue_id, entry_store_key
 from custom_components.haghs.repairs import async_create_fix_flow
 from tests.factories import make_coordinator
 
-KEY = "haghs.update_first_seen"
-ISSUE = "update_first_seen_unreadable"
+# One HAGHS entry with its own store and repair (#217); the translation key stays the shared one.
+ENTRY = "haghs_unreadable_entry"
+KEY = entry_store_key(ENTRY)
+ISSUE = entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, ENTRY)
+TRANSLATION_KEY = "update_first_seen_unreadable"
 ORIGINAL = b'{"version": 9, "minor_version": 1, "key": "haghs.update_first_seen", "data": {}}\n'
 MESSAGE = "update first-seen times unreadable"
 LOGGER = "custom_components.haghs.coordinator"
@@ -67,7 +70,7 @@ async def test_unreadable_store_keeps_a_copy_warns_once_and_raises_a_repair(
 ) -> None:
     path = _store_file(hass)
     hass.states.async_set("update.esphome", "on", {"friendly_name": "ESPHome"})
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     _break_load(monkeypatch, coordinator, error)
     caplog.set_level(logging.DEBUG, logger=LOGGER)
 
@@ -82,7 +85,7 @@ async def test_unreadable_store_keeps_a_copy_warns_once_and_raises_a_repair(
 
     issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
     assert issue is not None
-    assert issue.translation_key == ISSUE
+    assert issue.translation_key == TRANSLATION_KEY
     assert issue.severity == ir.IssueSeverity.WARNING
     assert issue.is_fixable is True
     assert issue.is_persistent is True
@@ -100,7 +103,7 @@ async def test_the_next_save_leaves_the_copy_untouched(
 ) -> None:
     _store_file(hass)
     hass.states.async_set("update.esphome", "on", {"friendly_name": "ESPHome"})
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     _break_load(monkeypatch, coordinator, OSError("permission denied"))
 
     await coordinator.async_refresh()
@@ -118,7 +121,7 @@ async def test_without_a_copy_saving_is_paused_and_the_repair_says_so(
 ) -> None:
     path = _store_file(hass)
     hass.states.async_set("update.esphome", "on", {"friendly_name": "ESPHome"})
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     error = OSError("permission denied")
     _break_load(monkeypatch, coordinator, error)
 
@@ -142,7 +145,7 @@ async def test_without_a_copy_saving_is_paused_and_the_repair_says_so(
 
     assert saves == []
     assert _read(path) == ORIGINAL
-    assert hass.data[DOMAIN]["_update_first_seen_save_blocked"] is True
+    assert hass.data[DOMAIN]["_update_first_seen_save_blocked"] == {ENTRY}
     records = _records(caplog)
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING
@@ -161,7 +164,7 @@ async def test_a_missing_file_is_named_as_the_reason_the_copy_failed(
 ) -> None:
     """A real failed copy (no monkeypatch of shutil): the store file does not exist."""
     path = Path(hass.config.path(".storage", KEY))
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     error = OSError("permission denied")
     _break_load(monkeypatch, coordinator, error)
     caplog.set_level(logging.DEBUG, logger=LOGGER)
@@ -178,7 +181,7 @@ async def test_a_missing_file_is_named_as_the_reason_the_copy_failed(
     issue = ir.async_get(hass).async_get_issue(DOMAIN, ISSUE)
     assert issue.translation_key == "update_first_seen_unreadable_no_backup"
     assert issue.translation_placeholders == {"store_path": str(path)}
-    assert hass.data[DOMAIN]["_update_first_seen_save_blocked"] is True
+    assert hass.data[DOMAIN]["_update_first_seen_save_blocked"] == {ENTRY}
 
 
 async def test_the_incident_changes_no_score_or_attribute(
@@ -188,7 +191,7 @@ async def test_the_incident_changes_no_score_or_attribute(
     _store_file(hass)
     hass.states.async_set("update.esphome", "on", {"friendly_name": "ESPHome"})
     hass.states.async_set("sensor.broken", "unavailable")
-    clean = make_coordinator(hass)
+    clean = make_coordinator(hass, entry_id=ENTRY)
 
     async def empty() -> None:
         return None
@@ -198,7 +201,7 @@ async def test_the_incident_changes_no_score_or_attribute(
     expected = dict(clean.data)
 
     hass.data.pop(DOMAIN)  # a new Home Assistant run, same states and clock
-    broken = make_coordinator(hass)
+    broken = make_coordinator(hass, entry_id=ENTRY)
     _break_load(monkeypatch, broken, OSError("permission denied"))
     await broken.async_refresh()
 
@@ -212,7 +215,7 @@ async def test_confirming_the_repair_removes_it(hass, monkeypatch) -> None:
     assert await async_setup_component(hass, "repairs", {})
     hass.config.components.add(DOMAIN)
     _store_file(hass)
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     _break_load(monkeypatch, coordinator, OSError("permission denied"))
     await coordinator.async_refresh()
     assert ir.async_get(hass).async_get_issue(DOMAIN, ISSUE) is not None
@@ -241,7 +244,7 @@ async def test_the_read_error_is_attached_when_the_copy_error_has_no_context(
     hass, caplog, monkeypatch
 ) -> None:
     """Called outside an `except`: the copy error gets the read error as its context explicitly."""
-    coordinator = make_coordinator(hass)
+    coordinator = make_coordinator(hass, entry_id=ENTRY)
     read_error = OSError("permission denied")
     copy_error = OSError("read-only file system")
 

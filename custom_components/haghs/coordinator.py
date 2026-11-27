@@ -86,18 +86,22 @@ from .const import (
     STALE_PENALTY_PER_ENTITY,
     UNREGISTERED_LIST_CAP,
     UPDATE_FIRST_SEEN_NO_BACKUP_KEY,
-    UPDATE_FIRST_SEEN_STORE_KEY,
     UPDATE_FIRST_SEEN_STORE_VERSION,
     UPDATE_GRACE_DAYS,
     ZOMBIE_LIST_CAP,
     ZOMBIE_REASONS,
     IssueIds,
+    entry_issue_id,
+    entry_store_key,
 )
 
 if TYPE_CHECKING:  # type only; not needed at runtime
     from homeassistant.core import EventStateChangedData
 
 _LOGGER = logging.getLogger(__name__)
+
+# Failure-streak name of the CPU/RAM repair sync in ``_failed_informational`` (#217).
+REPAIR_SYNC = "repair sync"
 
 PLATFORMS: list[str] = ["sensor"]
 
@@ -324,6 +328,62 @@ def _parent_of(dev_reg: dr.DeviceRegistry, device: Any) -> Any:
     return dev_reg.async_get(parent_id) if parent_id else None
 
 
+async def async_report_unreadable_first_seen_store(
+    hass: HomeAssistant, entry_id: str, store_path: str, err: Exception
+) -> bool:
+    """Keep a copy of an unreadable first-seen store, warn once and raise the entry's repair.
+
+    Returns whether a copy was kept; without one the caller must never overwrite the file.
+    HAGHS's own repairs do not count in the score, and a failing repair never stops the caller
+    (#217).
+    """
+    backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+    try:
+        await hass.async_add_executor_job(shutil.copy2, store_path, backup)
+    except OSError as copy_err:
+        # One traceback shows both: the copy error, with the load error as its context.
+        if copy_err.__context__ is None:
+            copy_err.__context__ = err
+        _LOGGER.warning(
+            "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
+            " pending updates start a new 7-day window and saving is paused for this run (%s)",
+            copy_err,
+            store_path,
+            exc_info=copy_err,
+        )
+        kept = False
+        translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
+        placeholders = {"store_path": store_path}
+    else:
+        _LOGGER.warning(
+            "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
+            " 7-day window; copy kept at %s",
+            backup,
+            exc_info=err,
+        )
+        kept = True
+        translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
+        placeholders = {"backup_path": backup}
+    try:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            entry_issue_id(IssueIds.UPDATE_FIRST_SEEN_UNREADABLE, entry_id),
+            is_fixable=True,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+        )
+    except Exception:
+        # The repair is a notice only: its failure must not stop the update cycle (#217).
+        _LOGGER.warning(
+            "HAGHS: Could not raise the repair for the unreadable update first-seen times",
+            exc_info=True,
+        )
+    return kept
+
+
 def _is_composite(device: dr.DeviceEntry) -> bool:
     """A merged (composite) device or one split from it (HA 2026.10+); never on older versions."""
     return bool(
@@ -439,19 +499,22 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass_data = hass.data.setdefault(DOMAIN, {})
         self._boot_time = hass_data.setdefault(DATA_BOOT_TIME, dt_util.utcnow())
 
-        # First-seen timestamps for pending update entities (#26). Shared in
-        # hass.data across reloads and config entries, and kept in a Store so
-        # the grace window also survives Home Assistant restarts (loaded once
-        # per run before the first update, saved when an entry changes).
+        # First-seen timestamps for pending update entities (#26). Kept per
+        # HAGHS config entry (#217) in hass.data, so they survive reloads of the
+        # entry, and in the entry's own Store, so the grace window also
+        # survives Home Assistant restarts (loaded once per run before the
+        # first update, saved when an entry changes).
         self._update_first_seen: dict[str, datetime] = hass_data.setdefault(
             DATA_UPDATE_FIRST_SEEN, {}
-        )
+        ).setdefault(entry.entry_id, {})
         self._update_seen_version: dict[str, str | None] = hass_data.setdefault(
             DATA_UPDATE_SEEN_VERSION, {}
-        )
+        ).setdefault(entry.entry_id, {})
         self._first_seen_store: Store[dict[str, dict[str, str | None]]] = hass_data.setdefault(
-            DATA_UPDATE_FIRST_SEEN_STORE,
-            Store(hass, UPDATE_FIRST_SEEN_STORE_VERSION, UPDATE_FIRST_SEEN_STORE_KEY),
+            DATA_UPDATE_FIRST_SEEN_STORE, {}
+        ).setdefault(
+            entry.entry_id,
+            Store(hass, UPDATE_FIRST_SEEN_STORE_VERSION, entry_store_key(entry.entry_id)),
         )
 
         # Track unregistered entities (no entity-registry entry) so we warn
@@ -1735,12 +1798,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         start their window now. Without a store (first start after updating
         HAGHS) every pending update starts now.
         """
-        # One shared load per run: every coordinator (several config entries)
-        # awaits the same task before its first update calculation.
-        hass_data = self.hass.data[DOMAIN]
-        task = hass_data.get(DATA_UPDATE_FIRST_SEEN_LOADED)
+        # One load per entry and run (#217): reloads of the entry await the
+        # same task before their first update calculation.
+        tasks = self.hass.data[DOMAIN].setdefault(DATA_UPDATE_FIRST_SEEN_LOADED, {})
+        task = tasks.get(self._entry_id)
         if task is None:
-            task = hass_data[DATA_UPDATE_FIRST_SEEN_LOADED] = self.hass.async_create_task(
+            task = tasks[self._entry_id] = self.hass.async_create_task(
                 self._async_merge_update_first_seen(), "haghs update first-seen load"
             )
         await asyncio.shield(task)
@@ -1783,48 +1846,14 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
     async def _async_report_unreadable_first_seen_store(self, err: Exception) -> None:
-        """Keep a copy of an unreadable store, warn once and raise a HAGHS repair.
-
-        Without a copy, saving stays paused for this run so the unreadable file
-        is never overwritten. HAGHS's own repairs do not count in the score.
-        """
-        store_path = self._first_seen_store.path
-        backup = f"{store_path}.unreadable.{dt_util.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
-        try:
-            await self.hass.async_add_executor_job(shutil.copy2, store_path, backup)
-        except OSError as copy_err:
-            self.hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED] = True
-            # One traceback shows both: the copy error, with the load error as its context.
-            if copy_err.__context__ is None:
-                copy_err.__context__ = err
-            _LOGGER.warning(
-                "HAGHS: Stored update first-seen times unreadable and no copy could be kept (%s);"
-                " pending updates start a new 7-day window and saving is paused for this run (%s)",
-                copy_err,
-                store_path,
-                exc_info=copy_err,
-            )
-            translation_key = UPDATE_FIRST_SEEN_NO_BACKUP_KEY
-            placeholders = {"store_path": store_path}
-        else:
-            _LOGGER.warning(
-                "HAGHS: Stored update first-seen times unreadable; pending updates start a new"
-                " 7-day window; copy kept at %s",
-                backup,
-                exc_info=err,
-            )
-            translation_key = IssueIds.UPDATE_FIRST_SEEN_UNREADABLE
-            placeholders = {"backup_path": backup}
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            IssueIds.UPDATE_FIRST_SEEN_UNREADABLE,
-            is_fixable=True,
-            is_persistent=True,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key=translation_key,
-            translation_placeholders=placeholders,
+        """Report the entry's unreadable store; without a copy, saving stays paused for this run."""
+        kept = await async_report_unreadable_first_seen_store(
+            self.hass, self._entry_id, self._first_seen_store.path, err
         )
+        if not kept:
+            self.hass.data[DOMAIN].setdefault(DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED, set()).add(
+                self._entry_id
+            )
 
     def _first_seen_data(self) -> dict[str, dict[str, str | None]]:
         """The first-seen times as stored (ISO 8601, UTC) with their offered version."""
@@ -1902,7 +1931,9 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             del self._update_first_seen[stale_id]
             self._update_seen_version.pop(stale_id, None)
             changed = True
-        if changed and not self.hass.data[DOMAIN].get(DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED):
+        if changed and self._entry_id not in self.hass.data[DOMAIN].get(
+            DATA_UPDATE_FIRST_SEEN_SAVE_BLOCKED, set()
+        ):
             self._first_seen_store.async_delay_save(self._first_seen_data, FIRST_SEEN_SAVE_DELAY)
 
         p_core_lag = 0
@@ -2184,26 +2215,47 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     def _sync_cpu_ram_issue(self, hw: _HardwareResult) -> None:
-        """Keep the non-blocking repair in step with the measured state; touch it only on a change (#123)."""
+        """Keep the non-blocking repair in step with the measured state; touch it only on a change (#123).
+
+        Each HAGHS entry has its own repair (#217). A failing issue registry must not stop the
+        update cycle: one WARNING per failure streak, and the remembered state changes only after
+        a successful sync, so the next cycle tries again.
+        """
         if "hardware" in self._pillar_fallbacks:
             return
         missing = self._cpu_ram_unmeasured(hw)
         if missing == self._cpu_ram_issue:
+            # Nothing to sync: a failure streak is over, so the next failure warns again.
+            self._failed_informational.discard(REPAIR_SYNC)
             return
+        issue_id = entry_issue_id(IssueIds.FALLBACK_MISSING, self._entry_id)
+        try:
+            if missing:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    data={"entry_id": self._entry_id},
+                    is_fixable=True,
+                    is_persistent=False,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key=IssueIds.FALLBACK_MISSING,
+                )
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+        except Exception:
+            if REPAIR_SYNC not in self._failed_informational:
+                self._failed_informational.add(REPAIR_SYNC)
+                _LOGGER.warning(
+                    "HAGHS: Could not update its CPU/RAM repair; the score is not affected and"
+                    " the next update tries again",
+                    exc_info=True,
+                )
+            else:
+                _LOGGER.debug("HAGHS: CPU/RAM repair update still failing", exc_info=True)
+            return
+        self._failed_informational.discard(REPAIR_SYNC)
         self._cpu_ram_issue = missing
-        if missing:
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                IssueIds.FALLBACK_MISSING,
-                data={"entry_id": self._entry_id},
-                is_fixable=True,
-                is_persistent=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=IssueIds.FALLBACK_MISSING,
-            )
-        else:
-            ir.async_delete_issue(self.hass, DOMAIN, IssueIds.FALLBACK_MISSING)
 
     def _cpu_ram_unmeasured(self, hw: _HardwareResult) -> bool:
         """CPU or RAM left out of a measured hardware pillar (not for the neutral fallback)."""
