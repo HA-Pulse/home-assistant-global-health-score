@@ -6,7 +6,7 @@ Setup, every option, external databases, ignore labels, dynamic exclusions, patt
 
 ## Configuration
 
-HAGHS is installed via the **Marketplace** (Home Assistant 2026.11 and later) or **HACS** (up to 2026.10) and configured via the **UI**.
+HAGHS needs Home Assistant 2026.6 or newer. It is installed via the **Marketplace** (Home Assistant 2026.11 and later) or **HACS** (2026.6 to 2026.10) and configured via the **UI**.
 
 ### 1. Prerequisites
 
@@ -46,8 +46,8 @@ After setup, go to **Settings > Devices & Services > Integrations > HAGHS > Conf
 | **CPU usage sensor** | none | – | Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Without PSI, an empty field is not measured and is left out of the hardware score; HAGHS still sets up. Select the sensor that reports CPU usage in percent (e.g. 'Processor Use'). |
 | **RAM usage sensor** | none | – | Smart fallback only. HAGHS uses high-precision Linux PSI (Pressure Stall Information) values from your host system by default to calculate the score. This manual sensor is only used if your system does not provide PSI data (e.g. Windows, older Docker setups, or non-Linux hosts). Without PSI, an empty field is not measured and is left out of the hardware score; HAGHS still sets up. Select the sensor that reports memory usage in percent (e.g. 'Memory usage'). |
 | **Storage type** | `sd-card` | `sd-card`, `ssd`, `emmc` | Choose the type of storage your HA instance runs on. SD card is the safe default for Raspberry Pi setups. SSD uses percentage-based thresholds instead of absolute free space. |
-| **Ignore labels** | none | – | Select one or more labels from your Home Assistant labels. Entities and devices carrying any of these labels are excluded from zombie detection and update penalties. Toggle exclusions dynamically from an automation with the 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions provided by the Spook custom integration (Home Assistant itself has no label service), e.g. switch a 'vacation' label on while you are away. Create the labels first under Settings → Labels if they do not exist yet. |
-| **Ignore entity-id patterns** | none | – | Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing and update penalties. Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported. |
+| **Ignore labels** | none | – | Select one or more labels from your Home Assistant labels. Entities, devices and areas carrying any of these labels are excluded from zombie detection, update penalties, stale reporting, the dead and empty device checks and Backup Health; a label on a parent device also covers its child devices. Toggle exclusions dynamically from an automation with the 'homeassistant.add_label_to_entity' and 'homeassistant.remove_label_from_entity' service actions provided by the Spook custom integration (Home Assistant itself has no label service), e.g. switch a 'vacation' label on while you are away. Create the labels first under Settings → Labels if they do not exist yet. |
+| **Ignore entity-id patterns** | none | – | Optional list of glob patterns matched against the entity_id (one per line). Entities whose id matches any pattern are excluded from zombie detection, the unregistered listing, update penalties, stale reporting, the dead device check and Backup Health (the only way to switch off the add-on's binary_sensor.backups_stale). Use this for entities without a unique ID, which cannot carry a label (e.g. 'sensor.docker_*'). Wildcards * and ? are supported. |
 | **Database size sensor (optional)** | none | – | Only needed for external databases (MariaDB, PostgreSQL). Leave empty to use the built-in SQLite auto-detection. The sensor must report database size in MB (e.g. 'sensor.mariadb_size'). |
 | **Stale threshold (hours)** | `24` | 1–8760 h | Time since the last state report, not the last value change. Whole hours from 1 to 8760; default: 24. Passive findings cover sensor and binary_sensor only and do not affect the score. |
 | **Stale watch labels** | none | – | Opt entities in to stale scoring using labels applied directly to entities in any domain. Device and area labels do not opt in. Ignore rules take priority. Each overdue watched entity costs 5 application points, capped at 10 before the configuration bonus; application score is at most 99 while any are overdue. Leave empty to disable stale scoring. |
@@ -192,12 +192,12 @@ HAGHS picks up the change automatically on its next refresh; no reload needed.
 
 Some integrations create entities without a unique ID. These exist only in the state machine, have no entity-registry entry, and therefore cannot carry a label. When such an entity is `unavailable` or `unknown` past the grace period in a monitored domain, it is reported as *unregistered* (informational only, no score impact, see [Sensor Attributes](https://github.com/HA-Pulse/home-assistant-global-health-score/blob/main/docs/attributes.md)) and never counted as zombies.
 
-Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from zombie detection, the unregistered listing and update penalties.
+Open **Settings > Devices & Services > HAGHS > Configure** and fill the **Ignore entity-id patterns** field with one glob pattern per line. Matching entities are excluded from zombie detection, the unregistered listing, update penalties, stale reporting, the dead device check and Backup Health (an ignore pattern is the only way to switch off the add-on's `binary_sensor.backups_stale`).
 
 Examples:
 - `sensor.docker_*` - every Docker monitor sensor
 - `sensor.torque_*` - every Torque OBD sensor
-- `binary_sensor.test_?` - `binary_sensor.test_1` through `binary_sensor.test_9`
+- `binary_sensor.test_?` - `binary_sensor.test_` followed by exactly one character (e.g. `binary_sensor.test_1`)
 
 Wildcards `*` and `?` are supported (standard glob syntax). A malformed pattern does not raise an error; it simply matches literally (e.g. an unclosed `[`), so a single typo never disables the rest of the list.
 

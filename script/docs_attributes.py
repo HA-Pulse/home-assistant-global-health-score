@@ -64,7 +64,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "zombie_count_per_reason": (
         "dict",
-        'Zombies per reason, keys in ranking order, only reasons that occur (e.g. {"integration_not_loaded": 3, "unavailable": 40}); always reflects the full count regardless of the list cap, the sum equals `zombie_count`; informational, no score impact',
+        'Zombies per reason, keys in ranking order, only reasons that occur (e.g. {"integration_not_loaded": 3, "unavailable": 40}); always reflects the full count regardless of the list cap, the sum equals `zombie_count` (both reason attributes stay empty if the reason check fails); informational, no score impact',
     ),
     "zombie_reasons": (
         "dict",
@@ -109,7 +109,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_status": (
         "string",
-        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, the backup sensors are unavailable, or the last success lies in the future after a clock change) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback; the 15-minute start delay of the recommendation does not change this status",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, the backup sensors are unavailable, or the last success lies in the future after a clock change) or `no_source` (no usable source: no working add-on, and the built-in backup sensors missing, disabled or ignored); a working add-on counts as `ok` without a schedule; `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback; the 15-minute start delay of the recommendation does not change this status",
     ),
     "backup_last_success": (
         "str/null",
