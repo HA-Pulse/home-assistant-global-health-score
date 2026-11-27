@@ -109,7 +109,7 @@ ATTRIBUTES: dict[str, tuple[str, str]] = {
     ),
     "backup_status": (
         "string",
-        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, or the backup sensors are unavailable) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback",
+        "`ok`, `stale` (costs 30 points once, whichever source reports it), `not_configured` (no automatic backup scheduled), `unknown` (no successful automatic backup known yet, the backup sensors are unavailable, or the last success lies in the future after a clock change) or `no_source` (neither source, or a backup sensor is disabled or ignored); `not_configured` and `unknown` only add a recommendation, no deduction; `unavailable` while the application pillar uses its neutral fallback; the 15-minute start delay of the recommendation does not change this status",
     ),
     "backup_last_success": (
         "str/null",

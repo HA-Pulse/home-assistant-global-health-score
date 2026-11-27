@@ -81,6 +81,12 @@ async def test_scheduled_backup_is_stale_after_eight_days(hass) -> None:
     assert stale.last_success == (dt_util.utcnow() - timedelta(hours=193)).isoformat()
 
 
+async def test_stale_means_more_whole_hours_than_the_limit(hass) -> None:
+    _core(hass, success=-192.5, next_run=23)  # 192 h 30 min: age_hours 192, not above the limit
+    result = _backup(hass)
+    assert (result.status, result.age_hours, result.max_age_hours) == ("ok", 192, 192)
+
+
 async def test_a_daily_schedule_uses_the_same_eight_days(hass) -> None:
     _core(hass, success=-100, next_run=23)  # four failed daily runs, within 8 days
     assert _summary(_backup(hass)) == (0, "core", "ok", False)

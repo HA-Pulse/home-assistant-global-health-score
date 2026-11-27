@@ -1943,6 +1943,12 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         last_success = as_time(success_state) if core_present else None
         if last_success is not None and last_success > now + timedelta(minutes=5):
             last_success = None  # a time in the future (clock moved back) is not trusted
+        # Whole hours, the same value as the attribute, so stale means age_hours > max_age_hours.
+        age_hours = (
+            max(0, int((now - last_success).total_seconds() // 3600))
+            if last_success is not None
+            else None
+        )
 
         core_status: str | None = None
         if core_present and next_state is not None:
@@ -1950,7 +1956,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 core_status = "not_configured"  # HA's schedule is "never"
             elif last_success is None:
                 core_status = "unknown"  # unavailable, or no successful automatic backup yet
-            elif (now - last_success).total_seconds() > BACKUP_MAX_AGE_HOURS * 3600:
+            elif age_hours is not None and age_hours > BACKUP_MAX_AGE_HOURS:
                 core_status = "stale"
             else:
                 core_status = "ok"
@@ -1973,11 +1979,7 @@ class HaghsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             source=source,
             status=status,
             last_success=last_success.isoformat() if last_success is not None else None,
-            age_hours=(
-                max(0, int((now - last_success).total_seconds() // 3600))
-                if last_success is not None
-                else None
-            ),
+            age_hours=age_hours,
             max_age_hours=BACKUP_MAX_AGE_HOURS if core_present else None,
             unverified=status in ("not_configured", "unknown") and not starting,
         )
