@@ -65,6 +65,14 @@ def test_own_domain_is_not_counted(hass) -> None:
     assert coord._calc_repairs() == (0, 0, [])
 
 
+def test_own_per_entry_repairs_are_not_counted(hass) -> None:
+    """Since #217 each HAGHS entry has its own repair ids; they never count either."""
+    _add_issue(hass, DOMAIN, "fallback_missing_01ABCDEF")
+    _add_issue(hass, DOMAIN, "update_first_seen_unreadable_01ABCDEF")
+    coord = make_coordinator(hass)
+    assert coord._calc_repairs() == (0, 0, [])
+
+
 def test_list_is_capped_but_count_is_full(hass) -> None:
     for index in range(REPAIR_LIST_CAP + 10):
         _add_issue(hass, "spook", f"issue_{index:03d}")

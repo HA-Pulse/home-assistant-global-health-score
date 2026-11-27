@@ -8,6 +8,9 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
+    issue_registry as ir,
+)
+from homeassistant.helpers import (
     label_registry as lr,
 )
 
@@ -16,7 +19,9 @@ from .const import (
     CONF_IGNORE_LABEL,
     CONF_IGNORE_LABELS,
     DOMAIN,
+    IssueIds,
     VersionInformation,
+    entry_issue_id,
 )
 from .coordinator import HaghsDataUpdateCoordinator
 
@@ -27,6 +32,9 @@ PLATFORMS: list[str] = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up HAGHS from a config entry."""
+
+    # HAGHS 2.4 kept one CPU/RAM repair for every entry; each entry now syncs its own (#217).
+    ir.async_delete_issue(hass, DOMAIN, IssueIds.FALLBACK_MISSING)
 
     coordinator = HaghsDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
@@ -52,6 +60,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the repairs of a deleted HAGHS entry; the other entries keep theirs (#217)."""
+    for issue in IssueIds:
+        ir.async_delete_issue(hass, DOMAIN, entry_issue_id(issue, entry.entry_id))
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

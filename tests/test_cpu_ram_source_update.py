@@ -18,7 +18,13 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant.common import MockConfigEntry
 
-from custom_components.haghs.const import CONF_CPU_SENSOR, CONF_RAM_SENSOR, DOMAIN, IssueIds
+from custom_components.haghs.const import (
+    CONF_CPU_SENSOR,
+    CONF_RAM_SENSOR,
+    DOMAIN,
+    IssueIds,
+    entry_issue_id,
+)
 from custom_components.haghs.coordinator import _PsiData
 from custom_components.haghs.repairs import MissingFallbackSensorRepairFlow
 from tests.factories import patch_disk
@@ -117,7 +123,9 @@ async def test_update_from_v230_loads_in_every_case(
         source,
         issue,
     )
-    found = ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING)
+    found = ir.async_get(hass).async_get_issue(
+        DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)
+    )
     assert (found is not None) is issue
     if issue:
         assert found.severity is ir.IssueSeverity.WARNING
@@ -150,7 +158,12 @@ async def test_repair_submit_writes_the_sensors_and_the_repair_goes(hass: HomeAs
     assert entry.options[CONF_CPU_SENSOR] == monitor[CONF_CPU_SENSOR]
     assert entry.options[CONF_RAM_SENSOR] == monitor[CONF_RAM_SENSOR]
     assert entry.state is ConfigEntryState.LOADED
-    assert ir.async_get(hass).async_get_issue(DOMAIN, IssueIds.FALLBACK_MISSING) is None
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)
+        )
+        is None
+    )
     attributes = hass.states.get("sensor.system_ha_global_health_score").attributes
     assert (attributes["cpu_ram_source"], attributes["rec_cpu_ram_unmeasured"]) == (
         "sensors",

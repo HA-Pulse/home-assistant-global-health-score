@@ -65,7 +65,11 @@ async def async_create_fix_flow(
     data: dict[str, str | int | float | None] | None,
 ) -> RepairsFlow:
     """Create flow."""
-    if issue_id == IssueIds.FALLBACK_MISSING:
+    # Since #217 each HAGHS entry has its own repair "fallback_missing_<entry_id>"; the shared id of
+    # HAGHS 2.4 still opens the same form.
+    if issue_id == IssueIds.FALLBACK_MISSING or issue_id.startswith(
+        f"{IssueIds.FALLBACK_MISSING}_"
+    ):
         # Without a usable entry id the flow aborts with "config_entry_missing" instead of raising.
         entry_id = (data or {}).get("entry_id")
         return MissingFallbackSensorRepairFlow(entry_id if isinstance(entry_id, str) else "")

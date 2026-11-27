@@ -22,6 +22,7 @@ from custom_components.haghs.const import (
     CONF_STORAGE_TYPE,
     DOMAIN,
     IssueIds,
+    entry_issue_id,
 )
 from custom_components.haghs.coordinator import _PsiData
 from tests.factories import patch_disk
@@ -64,12 +65,16 @@ async def _setup_entry(
     return entry
 
 
-def _fallback_issue_present(hass: HomeAssistant) -> bool:
-    return (DOMAIN, IssueIds.FALLBACK_MISSING) in ir.async_get(hass).issues
+def _fallback_issue_present(hass: HomeAssistant, entry: MockConfigEntry) -> bool:
+    return (DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id)) in ir.async_get(
+        hass
+    ).issues
 
 
-def _fallback_issue(hass: HomeAssistant) -> ir.IssueEntry:
-    return ir.async_get(hass).issues[(DOMAIN, IssueIds.FALLBACK_MISSING)]
+def _fallback_issue(hass: HomeAssistant, entry: MockConfigEntry) -> ir.IssueEntry:
+    return ir.async_get(hass).issues[
+        (DOMAIN, entry_issue_id(IssueIds.FALLBACK_MISSING, entry.entry_id))
+    ]
 
 
 async def test_setup_proceeds_when_psi_missing_and_both_fields_empty(
@@ -88,7 +93,7 @@ async def test_setup_proceeds_when_psi_missing_and_both_fields_empty(
     )
 
     assert entry.state is ConfigEntryState.LOADED
-    issue = _fallback_issue(hass)
+    issue = _fallback_issue(hass, entry)
     assert (issue.severity, issue.is_fixable, issue.is_persistent) == (
         ir.IssueSeverity.WARNING,
         True,
@@ -116,7 +121,7 @@ async def test_setup_proceeds_when_psi_missing_and_one_field_empty(
     )
 
     assert entry.state is ConfigEntryState.LOADED
-    assert _fallback_issue(hass).severity is ir.IssueSeverity.WARNING
+    assert _fallback_issue(hass, entry).severity is ir.IssueSeverity.WARNING
     attributes = hass.states.get("sensor.system_ha_global_health_score").attributes
     assert (attributes["cpu_ram_source"], attributes["rec_cpu_ram_unmeasured"]) == ("partial", True)
 
@@ -138,7 +143,7 @@ async def test_setup_proceeds_when_psi_missing_and_sensors_configured(
     )
 
     assert entry.state is ConfigEntryState.LOADED
-    assert not _fallback_issue_present(hass)
+    assert not _fallback_issue_present(hass, entry)
 
 
 async def test_setup_proceeds_with_psi_and_cleared_fields(
@@ -156,4 +161,4 @@ async def test_setup_proceeds_with_psi_and_cleared_fields(
     )
 
     assert entry.state is ConfigEntryState.LOADED
-    assert not _fallback_issue_present(hass)
+    assert not _fallback_issue_present(hass, entry)

@@ -32,10 +32,9 @@ def _set_first_seen(
     entity_id: str,
     days_ago: float,
 ) -> None:
-    """Force the recorded first-seen timestamp for an update entity."""
-    hass.data.setdefault(DOMAIN, {}).setdefault(DATA_UPDATE_FIRST_SEEN, {})[entity_id] = (
-        dt_util.utcnow() - timedelta(days=days_ago)
-    )
+    """Force the recorded first-seen timestamp for an update entity (in every HAGHS entry's record, #217)."""
+    for record in hass.data.setdefault(DOMAIN, {}).setdefault(DATA_UPDATE_FIRST_SEEN, {}).values():
+        record[entity_id] = dt_util.utcnow() - timedelta(days=days_ago)
 
 
 # ============================================================================
@@ -154,7 +153,7 @@ async def test_ignore_pattern_excludes_update(hass: HomeAssistant) -> None:
 
     coordinator = HaghsDataUpdateCoordinator(hass, entry)
     _set_first_seen(hass, "update.core", days_ago=UPDATE_GRACE_DAYS + 1)
-    coordinator._update_first_seen = hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN]
+    coordinator._update_first_seen = hass.data[DOMAIN][DATA_UPDATE_FIRST_SEEN][entry.entry_id]
 
     _p_backup, update_count, _p_updates, _p_core_lag, pending = coordinator._calc_updates()
 

@@ -36,17 +36,23 @@ def make_coordinator(
     data: dict | None = None,
     options: dict | None = None,
     boot_age_minutes: int = 120,
+    entry_id: str | None = None,
 ) -> HaghsDataUpdateCoordinator:
     """Create a coordinator wired to a mock config entry.
 
     boot_age_minutes backdates the boot baseline so zombie grace windows are
-    already elapsed without sleeping in tests.
+    already elapsed without sleeping in tests. With ``entry_id`` the same HAGHS
+    entry is reused across calls, like a Home Assistant restart keeps it (state
+    per entry since #217); without it every call is a new entry.
     """
     hass.data.setdefault(DOMAIN, {})[DATA_BOOT_TIME] = dt_util.utcnow() - timedelta(
         minutes=boot_age_minutes
     )
-    entry = MockConfigEntry(domain=DOMAIN, data=data or {}, options=options or {})
-    entry.add_to_hass(hass)
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if entry is None:
+        kwargs = {"entry_id": entry_id} if entry_id else {}
+        entry = MockConfigEntry(domain=DOMAIN, data=data or {}, options=options or {}, **kwargs)
+        entry.add_to_hass(hass)
     return HaghsDataUpdateCoordinator(hass, entry)
 
 

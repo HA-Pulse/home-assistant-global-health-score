@@ -21,7 +21,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.haghs import coordinator as coordinator_module
-from custom_components.haghs.const import DATA_UPDATE_FIRST_SEEN, DOMAIN, UPDATE_GRACE_DAYS
+from custom_components.haghs.const import DOMAIN, UPDATE_GRACE_DAYS
 from tests.factories import HAS_CHILD_DEVICES, make_coordinator
 
 needs_children = pytest.mark.skipif(
@@ -157,8 +157,8 @@ async def test_label_on_parent_excludes_pending_update_on_child(hass) -> None:
     )
     hass.states.async_set(entry.entity_id, "on", {"friendly_name": "Socket firmware"})
     coord = _coordinator(hass, [label])
-    hass.data.setdefault(DOMAIN, {}).setdefault(DATA_UPDATE_FIRST_SEEN, {})[entry.entity_id] = (
-        dt_util.utcnow() - timedelta(days=UPDATE_GRACE_DAYS + 1)
+    coord._update_first_seen[entry.entity_id] = dt_util.utcnow() - timedelta(
+        days=UPDATE_GRACE_DAYS + 1
     )
     assert coord._calc_updates() == (0, 1, 5, 0, ["Socket firmware"])
 
