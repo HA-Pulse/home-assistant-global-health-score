@@ -61,7 +61,8 @@ def _app_with_full_bonus() -> _ApplicationResult:
             ("config", "step", "user", "description"),
             "HAGHS monitors your Home Assistant instance and calculates a health "
             "score from 0 to 100. Database size, disk usage, and update status are "
-            "detected automatically, you only need to provide the two fields below.",
+            "detected automatically; only the storage type is required, all other "
+            "fields are optional.",
         ),
     ],
     ids=["power", "setup"],
